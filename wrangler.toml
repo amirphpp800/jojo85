@@ -1,0 +1,12 @@
+name = "wireguard-bot"
+compatibility_date = "2024-01-01"
+
+# KV Namespace binding
+[[kv_namespaces]]
+binding = "DB"
+id = "YOUR_KV_NAMESPACE_ID"  # Replace with your KV namespace ID after creating it
+
+# Environment variables (set these in Cloudflare dashboard or via wrangler secret)
+[vars]
+# BOT_TOKEN = "your_bot_token_here"  # Set via: wrangler secret put BOT_TOKEN
+# ADMIN_ID = "your_admin_id_here"    # Set via: wrangler secret put ADMIN_ID
