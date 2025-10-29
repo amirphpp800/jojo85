@@ -287,7 +287,7 @@ export async function handleUpdate(update, env, ctx) {
           '👋 به ربات WireGuard خوش آمدید!\n\n' +
           '🔐 <b>کانفیگ WireGuard</b>: دریافت کانفیگ کامل VPN\n' +
           '🌐 <b>DNS Server</b>: دریافت آدرس DNS سرور\n\n' +
-          '🔹 روی یکی از دکمه‌های زیر کلیک کنید:',
+          '🔹 روی یکی از دکمه های زیر کلیک کنید:',
           { reply_markup: keyboard }
         );
         return;
@@ -712,9 +712,7 @@ function getAdminPanelHTML() {
         <h2>📡 مدیریت Endpoints</h2>
         <div class="input-group">
           <label>Endpoints (هر خط یک آدرس - مثال: 1.2.3.4:51820)</label>
-          <textarea id="newEndpoints" placeholder="1.2.3.4:51820
-5.6.7.8:51820
-9.10.11.12:51820"></textarea>
+          <textarea id="newEndpoints" placeholder="هر خط یک endpoint&#10;مثال: 1.2.3.4:51820"></textarea>
         </div>
         <button class="btn" onclick="addEndpoints()">➕ افزودن Endpoints</button>
         
@@ -728,9 +726,7 @@ function getAdminPanelHTML() {
         <h2>🌍 مدیریت DNS List (برای توزیع DNS)</h2>
         <div class="input-group">
           <label>آدرس IP سرورهای DNS (هر خط یک IP)</label>
-          <textarea id="dnsListIPs" placeholder="1.1.1.1
-8.8.8.8
-9.9.9.9"></textarea>
+          <textarea id="dnsListIPs" placeholder="هر خط یک IP&#10;مثال: 1.1.1.1"></textarea>
         </div>
         <button class="btn" onclick="addDNSToList()">➕ افزودن به لیست DNS</button>
         
