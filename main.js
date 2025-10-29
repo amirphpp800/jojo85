@@ -80,7 +80,7 @@ class Database {
   }
 
   async getEndpoints() {
-    const data = await this.kv.get('endpoints', 'json');
+    const data = await this.kv.get('endpoints', { type: 'json' });
     return data || [];
   }
 
@@ -89,7 +89,7 @@ class Database {
   }
 
   async getDNSList() {
-    const data = await this.kv.get('dns_list', 'json');
+    const data = await this.kv.get('dns_list', { type: 'json' });
     return data || [];
   }
 
@@ -109,7 +109,7 @@ class Database {
   }
 
   async getAllUserIds() {
-    const data = await this.kv.get('all_users', 'json');
+    const data = await this.kv.get('all_users', { type: 'json' });
     return data || [];
   }
 
