@@ -256,7 +256,7 @@ export async function handleUpdate(update, env, ctx) {
           await bot.sendMessage(chatId, 
             `📊 <b>آمار ربات</b>\n\n` +
             `👥 تعداد کاربران: ${allUsers.length}\n` +
-            `📈 تعداد کانفیگ‌های تولید شده: ${userCount}\n\n` +
+            `📈 تعداد کانفیگ های تولید شده: ${userCount}\n\n` +
             `<b>وضعیت Endpoints:</b>${endpointStats}`,
             { parse_mode: 'HTML' }
           );
@@ -268,7 +268,7 @@ export async function handleUpdate(update, env, ctx) {
           for (const endpoint of endpoints) {
             await db.resetEndpointUsage(endpoint);
           }
-          await bot.sendMessage(chatId, '✅ شمارنده تمام endpoint‌ها ریست شد.');
+          await bot.sendMessage(chatId, '✅ شمارنده تمام endpoint ها ریست شد.');
           return;
         }
       }
@@ -330,7 +330,7 @@ async function showDNSSelection(bot, chatId, messageId) {
     chatId,
     messageId,
     '🌐 <b>انتخاب DNS</b>\n\n' +
-    'لطفاً یکی از سرویس‌های DNS زیر را انتخاب کنید:\n\n' +
+    'لطفاً یکی از سرویس های DNS زیر را انتخاب کنید:\n\n' +
     '💡 <b>توصیه:</b> برای سرعت بیشتر "کلودفلر + گوگل" را انتخاب کنید.',
     { reply_markup: keyboard, parse_mode: 'HTML' }
   );
@@ -366,7 +366,7 @@ async function handleGetConfig(bot, db, chatId, messageId, selectedDNS = '1.1.1.
       await bot.editMessageText(
         chatId,
         messageId,
-        '❌ تمام endpoint‌ها پر هستند. لطفاً بعداً تلاش کنید یا با ادمین تماس بگیرید.'
+        '❌ تمام endpoint ها پر هستند. لطفاً بعداً تلاش کنید یا با ادمین تماس بگیرید.'
       );
       return;
     }
@@ -477,7 +477,7 @@ async function handleGetDNS(bot, db, chatId, messageId) {
                    `${countryFlag} <b>کشور:</b> ${countryInfo.name}\n` +
                    `📍 <b>آدرس:</b> <code>${dnsIP}</code>\n\n` +
                    `━━━━━━━━━━━━━━━━━━━\n\n` +
-                   `💡 <b>برای تانل کردن می‌توانید از این DNS ها استفاده کنید:</b>\n\n` +
+                   `💡 <b>برای تانل کردن می توانید از این DNS ها استفاده کنید:</b>\n\n` +
                    tunnelDNS.map(dns => `▫️ <code>${dns}</code>`).join('\n') + '\n\n' +
                    `━━━━━━━━━━━━━━━━━━━\n\n` +
                    `📝 <b>نحوه استفاده:</b>\n` +
