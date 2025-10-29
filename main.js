@@ -97,6 +97,15 @@ class Database {
     await this.kv.put('dns_servers', JSON.stringify(dnsServers));
   }
 
+  async getDNSList() {
+    const data = await this.kv.get('dns_list', 'json');
+    return data || [];
+  }
+
+  async setDNSList(dnsList) {
+    await this.kv.put('dns_list', JSON.stringify(dnsList));
+  }
+
   async getUserCount() {
     const count = await this.kv.get('user_count');
     return parseInt(count || '0');
@@ -120,6 +129,49 @@ class Database {
       await this.kv.put('all_users', JSON.stringify(users));
     }
   }
+
+  async getEndpointUsage(endpoint) {
+    const key = `endpoint_usage_${endpoint.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const count = await this.kv.get(key);
+    return parseInt(count || '0');
+  }
+
+  async incrementEndpointUsage(endpoint) {
+    const key = `endpoint_usage_${endpoint.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const count = await this.getEndpointUsage(endpoint);
+    await this.kv.put(key, (count + 1).toString());
+    return count + 1;
+  }
+
+  async resetEndpointUsage(endpoint) {
+    const key = `endpoint_usage_${endpoint.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    await this.kv.put(key, '0');
+  }
+}
+
+// Generate random cool config name
+function generateCoolName() {
+  const adjectives = [
+    'Turbo', 'Mega', 'Ultra', 'Super', 'Hyper', 'Quantum', 'Cyber', 'Neon',
+    'Atomic', 'Cosmic', 'Epic', 'Legendary', 'Phoenix', 'Dragon', 'Thunder',
+    'Lightning', 'Storm', 'Blaze', 'Frost', 'Shadow', 'Ghost', 'Ninja',
+    'Samurai', 'Warrior', 'Knight', 'Titan', 'Vortex', 'Matrix', 'Nexus',
+    'Apex', 'Prime', 'Elite', 'Royal', 'Imperial', 'Supreme', 'Divine'
+  ];
+  
+  const nouns = [
+    'Wolf', 'Eagle', 'Falcon', 'Hawk', 'Lion', 'Tiger', 'Panther', 'Cheetah',
+    'Bear', 'Shark', 'Viper', 'Cobra', 'Python', 'Raven', 'Phoenix', 'Dragon',
+    'Demon', 'Angel', 'Wizard', 'Sorcerer', 'Mage', 'Hunter', 'Sniper',
+    'Warrior', 'Fighter', 'Racer', 'Rider', 'Pilot', 'Captain', 'Commander',
+    'Master', 'Legend', 'Hero', 'Champion', 'King', 'Emperor', 'Lord'
+  ];
+  
+  const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+  const randomNum = Math.floor(Math.random() * 9000) + 1000; // 1000-9999
+  
+  return `${randomAdj}${randomNoun}${randomNum}`;
 }
 
 // Get country from IP
@@ -127,11 +179,24 @@ async function getCountryFromIP(ip) {
   try {
     const response = await fetch(`https://api.iplocation.net/?cmd=ip-country&ip=${ip}`);
     const data = await response.json();
-    return data.country_name || data.country_code2 || 'Unknown';
+    return {
+      name: data.country_name || data.country_code2 || 'Unknown',
+      code: data.country_code2 || 'XX'
+    };
   } catch (error) {
     console.error('Error fetching country:', error);
-    return 'Unknown';
+    return { name: 'Unknown', code: 'XX' };
   }
+}
+
+// Get country flag emoji
+function getCountryFlag(countryCode) {
+  if (!countryCode || countryCode === 'XX') return '🏳️';
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map(char => 127397 + char.charCodeAt());
+  return String.fromCodePoint(...codePoints);
 }
 
 // Extract IP from endpoint
@@ -158,6 +223,8 @@ export async function handleUpdate(update, env, ctx) {
 
       if (data === 'get_config') {
         await handleGetConfig(bot, db, chatId, messageId);
+      } else if (data === 'get_dns') {
+        await handleGetDNS(bot, db, chatId, messageId);
       }
 
       return;
@@ -184,7 +251,30 @@ export async function handleUpdate(update, env, ctx) {
         if (text === '/stats') {
           const userCount = await db.getUserCount();
           const allUsers = await db.getAllUserIds();
-          await bot.sendMessage(chatId, `📊 آمار ربات:\n\n👥 تعداد کاربران: ${allUsers.length}\n📈 تعداد کانفیگ‌های تولید شده: ${userCount}`);
+          const endpoints = await db.getEndpoints();
+          
+          let endpointStats = '';
+          for (const endpoint of endpoints) {
+            const usage = await db.getEndpointUsage(endpoint);
+            endpointStats += `\n📡 ${endpoint}: ${usage}/5`;
+          }
+          
+          await bot.sendMessage(chatId, 
+            `📊 <b>آمار ربات</b>\n\n` +
+            `👥 تعداد کاربران: ${allUsers.length}\n` +
+            `📈 تعداد کانفیگ‌های تولید شده: ${userCount}\n\n` +
+            `<b>وضعیت Endpoints:</b>${endpointStats}`,
+            { parse_mode: 'HTML' }
+          );
+          return;
+        }
+
+        if (text === '/reset') {
+          const endpoints = await db.getEndpoints();
+          for (const endpoint of endpoints) {
+            await db.resetEndpointUsage(endpoint);
+          }
+          await bot.sendMessage(chatId, '✅ شمارنده تمام endpoint‌ها ریست شد.');
           return;
         }
       }
@@ -193,15 +283,17 @@ export async function handleUpdate(update, env, ctx) {
       if (text === '/start') {
         const keyboard = {
           inline_keyboard: [
-            [{ text: '🔐 دریافت کانفیگ WireGuard', callback_data: 'get_config' }]
+            [{ text: '🔐 دریافت کانفیگ WireGuard', callback_data: 'get_config' }],
+            [{ text: '🌐 دریافت DNS Server', callback_data: 'get_dns' }]
           ]
         };
 
         await bot.sendMessage(
           chatId,
           '👋 به ربات WireGuard خوش آمدید!\n\n' +
-          'با این ربات می‌توانید کانفیگ WireGuard دریافت کنید.\n\n' +
-          '🔹 روی دکمه زیر کلیک کنید تا کانفیگ خود را دریافت کنید.',
+          '🔐 <b>کانفیگ WireGuard</b>: دریافت کانفیگ کامل VPN\n' +
+          '🌐 <b>DNS Server</b>: دریافت آدرس DNS سرور\n\n' +
+          '🔹 روی یکی از دکمه‌های زیر کلیک کنید:',
           { reply_markup: keyboard }
         );
         return;
@@ -228,40 +320,70 @@ async function handleGetConfig(bot, db, chatId, messageId) {
       return;
     }
 
-    // Select random endpoint
-    const randomEndpoint = endpoints[Math.floor(Math.random() * endpoints.length)];
-    const endpointIP = extractIP(randomEndpoint);
+    // Find an endpoint with less than 5 users
+    let selectedEndpoint = null;
+    let availableEndpoints = [];
+    
+    for (const endpoint of endpoints) {
+      const usage = await db.getEndpointUsage(endpoint);
+      if (usage < 5) {
+        availableEndpoints.push(endpoint);
+      }
+    }
+
+    if (availableEndpoints.length === 0) {
+      await bot.editMessageText(
+        chatId,
+        messageId,
+        '❌ تمام endpoint‌ها پر هستند. لطفاً بعداً تلاش کنید یا با ادمین تماس بگیرید.'
+      );
+      return;
+    }
+
+    // Select random from available endpoints
+    selectedEndpoint = availableEndpoints[Math.floor(Math.random() * availableEndpoints.length)];
+    
+    // Increment endpoint usage
+    const currentUsage = await db.incrementEndpointUsage(selectedEndpoint);
+    
+    const endpointIP = extractIP(selectedEndpoint);
 
     // Get country
-    let country = 'Unknown';
+    let countryInfo = { name: 'Unknown', code: 'XX' };
     if (endpointIP) {
-      country = await getCountryFromIP(endpointIP);
+      countryInfo = await getCountryFromIP(endpointIP);
     }
+    const countryFlag = getCountryFlag(countryInfo.code);
+    const country = countryInfo.name;
 
     // Get DNS for country
     let dns = dnsServers[country] || dnsServers['default'] || '1.1.1.1, 1.0.0.1';
 
     // Generate config
-    const config = await generateWireGuardConfig(randomEndpoint, dns);
+    const config = await generateWireGuardConfig(selectedEndpoint, dns);
 
     // Increment user count
     await db.incrementUserCount();
 
-    // Create config file
+    // Generate cool random name
+    const coolName = generateCoolName();
+
+    // Create config file with cool name
     const configBlob = new Blob([config.config], { type: 'text/plain' });
-    const configFile = new File([configBlob], 'wireguard.conf', { type: 'text/plain' });
+    const configFile = new File([configBlob], `${coolName}.conf`, { type: 'text/plain' });
 
     // Send config as file
     await bot.sendDocument(
       chatId,
       configFile,
       {
-        caption: `🔐 <b>کانفیگ WireGuard شما</b>\n\n` +
-                 `🌍 کشور: ${country}\n` +
-                 `📡 Endpoint: ${randomEndpoint}\n` +
-                 `🔑 Public Key: <code>${config.publicKey}</code>\n` +
-                 `📍 IP: ${config.clientIP}\n` +
-                 `🌐 DNS: ${dns}`,
+        caption: `🔐 <b>کانفیگ ${coolName}</b>\n\n` +
+                 `${countryFlag} <b>کشور:</b> ${country}\n` +
+                 `📡 <b>Endpoint:</b> <code>${selectedEndpoint}</code>\n` +
+                 `👥 <b>ظرفیت:</b> ${currentUsage}/5\n` +
+                 `🔑 <b>Public Key:</b> <code>${config.publicKey}</code>\n` +
+                 `📍 <b>IP:</b> ${config.clientIP}\n` +
+                 `🌐 <b>DNS:</b> ${dns}`,
         parse_mode: 'HTML'
       }
     );
@@ -270,7 +392,7 @@ async function handleGetConfig(bot, db, chatId, messageId) {
     await bot.editMessageText(
       chatId,
       messageId,
-      '✅ کانفیگ شما ارسال شد!'
+      `✅ کانفیگ ${coolName} ارسال شد!`
     );
   } catch (error) {
     console.error('Error generating config:', error);
@@ -278,6 +400,65 @@ async function handleGetConfig(bot, db, chatId, messageId) {
       chatId,
       messageId,
       '❌ خطا در تولید کانفیگ. لطفاً دوباره تلاش کنید.'
+    );
+  }
+}
+
+// Handle DNS server request
+async function handleGetDNS(bot, db, chatId, messageId) {
+  try {
+    // Get DNS list
+    const dnsList = await db.getDNSList();
+
+    if (dnsList.length === 0) {
+      await bot.editMessageText(
+        chatId,
+        messageId,
+        '❌ هیچ DNS سروری ثبت نشده است. لطفاً بعداً تلاش کنید.'
+      );
+      return;
+    }
+
+    // Select random DNS
+    const randomDNS = dnsList[Math.floor(Math.random() * dnsList.length)];
+    const dnsIP = randomDNS.ip;
+
+    // Get country
+    let countryInfo = { name: 'Unknown', code: 'XX' };
+    if (dnsIP) {
+      countryInfo = await getCountryFromIP(dnsIP);
+    }
+    const countryFlag = getCountryFlag(countryInfo.code);
+
+    // Popular DNS servers for tunneling
+    const tunnelDNS = [
+      '8.8.8.8, 8.8.4.4 (Google)',
+      '1.1.1.1, 1.0.0.1 (Cloudflare)',
+      '9.9.9.9, 149.112.112.112 (Quad9)',
+      '208.67.222.222, 208.67.220.220 (OpenDNS)',
+      '10.202.10.202, 10.202.10.102 (Radar Game)',
+      '185.55.226.26, 185.55.225.25 (bogzar)',
+      '94.103.125.157, 94.103.125.158 (Shelter)',
+      '178.22.122.101, 185.51.200.1 (Shecan)'
+    ];
+
+    const message = `🌐 <b>DNS Server شما</b>\n\n` +
+                   `${countryFlag} <b>کشور:</b> ${countryInfo.name}\n` +
+                   `📍 <b>آدرس:</b> <code>${dnsIP}</code>\n\n` +
+                   `━━━━━━━━━━━━━━━━━━━\n\n` +
+                   `💡 <b>برای تانل کردن می‌توانید از این DNS ها استفاده کنید:</b>\n\n` +
+                   tunnelDNS.map(dns => `▫️ <code>${dns}</code>`).join('\n') + '\n\n' +
+                   `━━━━━━━━━━━━━━━━━━━\n\n` +
+                   `📝 <b>نحوه استفاده:</b>\n` +
+                   `این آدرس را در تنظیمات DNS دستگاه خود قرار دهید.`;
+
+    await bot.editMessageText(chatId, messageId, message);
+  } catch (error) {
+    console.error('Error getting DNS:', error);
+    await bot.editMessageText(
+      chatId,
+      messageId,
+      '❌ خطا در دریافت DNS. لطفاً دوباره تلاش کنید.'
     );
   }
 }
@@ -366,16 +547,22 @@ function getAdminPanelHTML() {
       font-weight: bold;
     }
     
-    .input-group input, .input-group select {
+    .input-group input, .input-group select, .input-group textarea {
       width: 100%;
       padding: 12px;
       border: 2px solid #ddd;
       border-radius: 8px;
       font-size: 14px;
       transition: border-color 0.3s;
+      font-family: 'Courier New', monospace;
     }
     
-    .input-group input:focus, .input-group select:focus {
+    .input-group textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    
+    .input-group input:focus, .input-group select:focus, .input-group textarea:focus {
       outline: none;
       border-color: #667eea;
     }
@@ -483,7 +670,7 @@ function getAdminPanelHTML() {
   <div class="container">
     <div class="header">
       <h1>🔐 پنل مدیریت WireGuard Bot</h1>
-      <p>مدیریت Endpoints و DNS Servers</p>
+      <p>مدیریت Endpoints، DNS Servers و DNS List</p>
     </div>
     
     <div class="content">
@@ -493,19 +680,21 @@ function getAdminPanelHTML() {
       <div class="section">
         <h2>📡 مدیریت Endpoints</h2>
         <div class="input-group">
-          <label>Endpoint جدید (مثال: 1.2.3.4:51820)</label>
-          <input type="text" id="newEndpoint" placeholder="IP:Port">
+          <label>Endpoints (هر خط یک آدرس - مثال: 1.2.3.4:51820)</label>
+          <textarea id="newEndpoints" placeholder="1.2.3.4:51820
+5.6.7.8:51820
+9.10.11.12:51820"></textarea>
         </div>
-        <button class="btn" onclick="addEndpoint()">➕ افزودن Endpoint</button>
+        <button class="btn" onclick="addEndpoints()">➕ افزودن Endpoints</button>
         
         <div class="list" id="endpointsList">
           <p style="text-align: center; color: #999;">در حال بارگذاری...</p>
         </div>
       </div>
       
-      <!-- DNS Servers Section -->
+      <!-- DNS Servers Section (for WireGuard configs) -->
       <div class="section">
-        <h2>🌐 مدیریت DNS Servers</h2>
+        <h2>🌐 مدیریت DNS Servers (برای کانفیگ WireGuard)</h2>
         <div class="input-group">
           <label>کشور</label>
           <input type="text" id="dnsCountry" placeholder="مثال: Iran یا default">
@@ -520,17 +709,35 @@ function getAdminPanelHTML() {
           <p style="text-align: center; color: #999;">در حال بارگذاری...</p>
         </div>
       </div>
+
+      <!-- DNS List Section (for DNS Server distribution) -->
+      <div class="section">
+        <h2>🌍 مدیریت DNS List (برای توزیع DNS)</h2>
+        <div class="input-group">
+          <label>آدرس IP سرورهای DNS (هر خط یک IP)</label>
+          <textarea id="dnsListIPs" placeholder="1.1.1.1
+8.8.8.8
+9.9.9.9"></textarea>
+        </div>
+        <button class="btn" onclick="addDNSToList()">➕ افزودن به لیست DNS</button>
+        
+        <div class="list" id="dnsListItems">
+          <p style="text-align: center; color: #999;">در حال بارگذاری...</p>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
     let endpoints = [];
     let dnsServers = {};
+    let dnsList = [];
 
     // Load data on page load
     window.addEventListener('DOMContentLoaded', async () => {
       await loadEndpoints();
       await loadDNS();
+      await loadDNSList();
     });
 
     // Show alert
@@ -573,39 +780,50 @@ function getAdminPanelHTML() {
       \`).join('');
     }
 
-    // Add endpoint
-    async function addEndpoint() {
-      const input = document.getElementById('newEndpoint');
-      const endpoint = input.value.trim();
+    // Add endpoints (multiple)
+    async function addEndpoints() {
+      const textarea = document.getElementById('newEndpoints');
+      const text = textarea.value.trim();
       
-      if (!endpoint) {
-        showAlert('لطفاً endpoint را وارد کنید', 'error');
+      if (!text) {
+        showAlert('لطفاً حداقل یک endpoint وارد کنید', 'error');
         return;
       }
       
-      // Validate format
-      if (!/^[\d\.:]+$/.test(endpoint)) {
-        showAlert('فرمت endpoint نامعتبر است', 'error');
+      // Split by newlines and filter empty lines
+      const newEndpoints = text.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+      
+      if (newEndpoints.length === 0) {
+        showAlert('لطفاً حداقل یک endpoint معتبر وارد کنید', 'error');
+        return;
+      }
+      
+      // Validate all endpoints
+      const invalidEndpoints = newEndpoints.filter(ep => !/^[\d\.:]+$/.test(ep));
+      if (invalidEndpoints.length > 0) {
+        showAlert('فرمت نامعتبر: ' + invalidEndpoints.join(', '), 'error');
         return;
       }
       
       try {
-        const response = await fetch('/api/endpoints', {
+        const response = await fetch('/api/endpoints/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint })
+          body: JSON.stringify({ endpoints: newEndpoints })
         });
         
         if (response.ok) {
-          input.value = '';
+          textarea.value = '';
           await loadEndpoints();
-          showAlert('Endpoint با موفقیت اضافه شد');
+          showAlert(newEndpoints.length + ' endpoint با موفقیت اضافه شد');
         } else {
-          showAlert('خطا در افزودن endpoint', 'error');
+          showAlert('خطا در افزودن endpoints', 'error');
         }
       } catch (error) {
-        console.error('Error adding endpoint:', error);
-        showAlert('خطا در افزودن endpoint', 'error');
+        console.error('Error adding endpoints:', error);
+        showAlert('خطا در افزودن endpoints', 'error');
       }
     }
 
@@ -719,6 +937,108 @@ function getAdminPanelHTML() {
         showAlert('خطا در حذف DNS server', 'error');
       }
     }
+
+    // Load DNS List
+    async function loadDNSList() {
+      try {
+        const response = await fetch('/api/dns-list');
+        const data = await response.json();
+        dnsList = data.dnsList || [];
+        renderDNSList();
+      } catch (error) {
+        console.error('Error loading DNS list:', error);
+        showAlert('خطا در بارگذاری DNS list', 'error');
+      }
+    }
+
+    // Render DNS List
+    function renderDNSList() {
+      const list = document.getElementById('dnsListItems');
+      
+      if (dnsList.length === 0) {
+        list.innerHTML = '<p style="text-align: center; color: #999;">هیچ DNS در لیست ثبت نشده است</p>';
+        return;
+      }
+      
+      list.innerHTML = dnsList.map((item, index) => \`
+        <div class="list-item">
+          <span class="list-item-text">
+            <strong>\${item.country || 'در حال بررسی...'}</strong> \${item.flag || '🏳️'} - <code>\${item.ip}</code>
+          </span>
+          <button class="list-item-btn" onclick="deleteDNSFromList(\${index})">🗑️ حذف</button>
+        </div>
+      \`).join('');
+    }
+
+    // Add DNS to List (multiple)
+    async function addDNSToList() {
+      const textarea = document.getElementById('dnsListIPs');
+      const text = textarea.value.trim();
+      
+      if (!text) {
+        showAlert('لطفاً حداقل یک IP وارد کنید', 'error');
+        return;
+      }
+      
+      // Split by newlines and filter empty lines
+      const ips = text.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+      
+      if (ips.length === 0) {
+        showAlert('لطفاً حداقل یک IP معتبر وارد کنید', 'error');
+        return;
+      }
+      
+      // Validate all IPs
+      const invalidIPs = ips.filter(ip => !/^(\d{1,3}\.){3}\d{1,3}$/.test(ip));
+      if (invalidIPs.length > 0) {
+        showAlert('فرمت IP نامعتبر: ' + invalidIPs.join(', '), 'error');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/dns-list/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ips })
+        });
+        
+        if (response.ok) {
+          textarea.value = '';
+          await loadDNSList();
+          showAlert(ips.length + ' DNS به لیست اضافه شد و کشورها در حال تشخیص هستند...');
+        } else {
+          showAlert('خطا در افزودن DNS', 'error');
+        }
+      } catch (error) {
+        console.error('Error adding DNS to list:', error);
+        showAlert('خطا در افزودن DNS', 'error');
+      }
+    }
+
+    // Delete DNS from List
+    async function deleteDNSFromList(index) {
+      if (!confirm('آیا مطمئن هستید؟')) return;
+      
+      try {
+        const response = await fetch('/api/dns-list', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index })
+        });
+        
+        if (response.ok) {
+          await loadDNSList();
+          showAlert('DNS از لیست حذف شد');
+        } else {
+          showAlert('خطا در حذف DNS', 'error');
+        }
+      } catch (error) {
+        console.error('Error deleting DNS from list:', error);
+        showAlert('خطا در حذف DNS', 'error');
+      }
+    }
   </script>
 </body>
 </html>`;
@@ -750,6 +1070,17 @@ export default {
       const { endpoint } = await request.json();
       const endpoints = await db.getEndpoints();
       endpoints.push(endpoint);
+      await db.setEndpoints(endpoints);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // API: Add multiple endpoints
+    if (url.pathname === '/api/endpoints/bulk' && request.method === 'POST') {
+      const { endpoints: newEndpoints } = await request.json();
+      const endpoints = await db.getEndpoints();
+      endpoints.push(...newEndpoints);
       await db.setEndpoints(endpoints);
       return new Response(JSON.stringify({ success: true }), {
         headers: { 'Content-Type': 'application/json' }
@@ -792,6 +1123,71 @@ export default {
       const dnsServers = await db.getDNSServers();
       delete dnsServers[country];
       await db.setDNSServers(dnsServers);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // API: Get DNS list
+    if (url.pathname === '/api/dns-list' && request.method === 'GET') {
+      const dnsList = await db.getDNSList();
+      return new Response(JSON.stringify({ dnsList }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // API: Add DNS to list
+    if (url.pathname === '/api/dns-list' && request.method === 'POST') {
+      const { ip } = await request.json();
+      const dnsList = await db.getDNSList();
+      
+      // Get country info
+      const countryInfo = await getCountryFromIP(ip);
+      const flag = getCountryFlag(countryInfo.code);
+      
+      dnsList.push({
+        ip: ip,
+        country: countryInfo.name,
+        countryCode: countryInfo.code,
+        flag: flag
+      });
+      
+      await db.setDNSList(dnsList);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // API: Add multiple DNS to list
+    if (url.pathname === '/api/dns-list/bulk' && request.method === 'POST') {
+      const { ips } = await request.json();
+      const dnsList = await db.getDNSList();
+      
+      // Get country info for all IPs
+      for (const ip of ips) {
+        const countryInfo = await getCountryFromIP(ip);
+        const flag = getCountryFlag(countryInfo.code);
+        
+        dnsList.push({
+          ip: ip,
+          country: countryInfo.name,
+          countryCode: countryInfo.code,
+          flag: flag
+        });
+      }
+      
+      await db.setDNSList(dnsList);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // API: Delete DNS from list
+    if (url.pathname === '/api/dns-list' && request.method === 'DELETE') {
+      const { index } = await request.json();
+      const dnsList = await db.getDNSList();
+      dnsList.splice(index, 1);
+      await db.setDNSList(dnsList);
       return new Response(JSON.stringify({ success: true }), {
         headers: { 'Content-Type': 'application/json' }
       });
