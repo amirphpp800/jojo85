@@ -88,15 +88,6 @@ class Database {
     await this.kv.put('endpoints', JSON.stringify(endpoints));
   }
 
-  async getDNSServers() {
-    const data = await this.kv.get('dns_servers', 'json');
-    return data || {};
-  }
-
-  async setDNSServers(dnsServers) {
-    await this.kv.put('dns_servers', JSON.stringify(dnsServers));
-  }
-
   async getDNSList() {
     const data = await this.kv.get('dns_list', 'json');
     return data || [];
@@ -222,9 +213,12 @@ export async function handleUpdate(update, env, ctx) {
       await bot.answerCallbackQuery(callbackQuery.id);
 
       if (data === 'get_config') {
-        await handleGetConfig(bot, db, chatId, messageId);
+        await showDNSSelection(bot, chatId, messageId);
       } else if (data === 'get_dns') {
         await handleGetDNS(bot, db, chatId, messageId);
+      } else if (data.startsWith('dns_')) {
+        const selectedDNS = data.substring(4); // حذف "dns_"
+        await handleGetConfig(bot, db, chatId, messageId, selectedDNS);
       }
 
       return;
@@ -304,12 +298,49 @@ export async function handleUpdate(update, env, ctx) {
   }
 }
 
+// Show DNS selection menu
+async function showDNSSelection(bot, chatId, messageId) {
+  const dnsOptions = [
+    { text: '🎮 رادار', data: 'dns_10.202.10.10, 10.202.10.11' },
+    { text: '🌐 کلودفلر + گوگل', data: 'dns_1.1.1.1, 8.8.8.8' },
+    { text: '🔒 OpenDNS', data: 'dns_208.67.222.222, 208.67.220.220' },
+    { text: '⚡ الکترو', data: 'dns_78.157.42.100, 78.157.42.101' },
+    { text: '🔓 شکن', data: 'dns_178.22.122.100, 185.51.200.2' },
+    { text: '🚀 پیشگامان', data: 'dns_5.202.100.100, 5.202.100.101' },
+    { text: '🛡️ شلتر', data: 'dns_94.103.125.157, 94.103.125.158' },
+    { text: '🌟 بگذر', data: 'dns_185.55.226.26, 185.55.225.25' },
+    { text: '🔹 شیکان', data: 'dns_10.202.10.202, 10.202.10.102' },
+    { text: '🎯 آسیاتک', data: 'dns_194.36.174.161, 178.22.122.100' },
+    { text: '🌍 هاست ایران', data: 'dns_172.29.0.100, 172.29.2.100' },
+    { text: '💎 رایتل', data: 'dns_10.202.10.10, 10.202.10.11' }
+  ];
+
+  const keyboard = {
+    inline_keyboard: [
+      [dnsOptions[0], dnsOptions[1]],
+      [dnsOptions[2], dnsOptions[3]],
+      [dnsOptions[4], dnsOptions[5]],
+      [dnsOptions[6], dnsOptions[7]],
+      [dnsOptions[8], dnsOptions[9]],
+      [dnsOptions[10], dnsOptions[11]]
+    ]
+  };
+
+  await bot.editMessageText(
+    chatId,
+    messageId,
+    '🌐 <b>انتخاب DNS</b>\n\n' +
+    'لطفاً یکی از سرویس‌های DNS زیر را انتخاب کنید:\n\n' +
+    '💡 <b>توصیه:</b> برای سرعت بیشتر "کلودفلر + گوگل" را انتخاب کنید.',
+    { reply_markup: keyboard, parse_mode: 'HTML' }
+  );
+}
+
 // Handle config generation
-async function handleGetConfig(bot, db, chatId, messageId) {
+async function handleGetConfig(bot, db, chatId, messageId, selectedDNS = '1.1.1.1, 1.0.0.1') {
   try {
-    // Get endpoints and DNS servers
+    // Get endpoints
     const endpoints = await db.getEndpoints();
-    const dnsServers = await db.getDNSServers();
 
     if (endpoints.length === 0) {
       await bot.editMessageText(
@@ -356,8 +387,8 @@ async function handleGetConfig(bot, db, chatId, messageId) {
     const countryFlag = getCountryFlag(countryInfo.code);
     const country = countryInfo.name;
 
-    // Get DNS for country
-    let dns = dnsServers[country] || dnsServers['default'] || '1.1.1.1, 1.0.0.1';
+    // Use selected DNS
+    const dns = selectedDNS;
 
     // Generate config
     const config = await generateWireGuardConfig(selectedEndpoint, dns);
@@ -670,7 +701,7 @@ function getAdminPanelHTML() {
   <div class="container">
     <div class="header">
       <h1>🔐 پنل مدیریت WireGuard Bot</h1>
-      <p>مدیریت Endpoints، DNS Servers و DNS List</p>
+      <p>مدیریت Endpoints و DNS List</p>
     </div>
     
     <div class="content">
@@ -692,24 +723,6 @@ function getAdminPanelHTML() {
         </div>
       </div>
       
-      <!-- DNS Servers Section (for WireGuard configs) -->
-      <div class="section">
-        <h2>🌐 مدیریت DNS Servers (برای کانفیگ WireGuard)</h2>
-        <div class="input-group">
-          <label>کشور</label>
-          <input type="text" id="dnsCountry" placeholder="مثال: Iran یا default">
-        </div>
-        <div class="input-group">
-          <label>DNS Servers (با کاما جدا کنید)</label>
-          <input type="text" id="dnsServers" placeholder="مثال: 1.1.1.1, 1.0.0.1">
-        </div>
-        <button class="btn" onclick="addDNS()">➕ افزودن DNS</button>
-        
-        <div class="list" id="dnsList">
-          <p style="text-align: center; color: #999;">در حال بارگذاری...</p>
-        </div>
-      </div>
-
       <!-- DNS List Section (for DNS Server distribution) -->
       <div class="section">
         <h2>🌍 مدیریت DNS List (برای توزیع DNS)</h2>
@@ -730,13 +743,11 @@ function getAdminPanelHTML() {
 
   <script>
     let endpoints = [];
-    let dnsServers = {};
     let dnsList = [];
 
     // Load data on page load
     window.addEventListener('DOMContentLoaded', async () => {
       await loadEndpoints();
-      await loadDNS();
       await loadDNSList();
     });
 
@@ -847,94 +858,6 @@ function getAdminPanelHTML() {
       } catch (error) {
         console.error('Error deleting endpoint:', error);
         showAlert('خطا در حذف endpoint', 'error');
-      }
-    }
-
-    // Load DNS servers
-    async function loadDNS() {
-      try {
-        const response = await fetch('/api/dns');
-        const data = await response.json();
-        dnsServers = data.dns || {};
-        renderDNS();
-      } catch (error) {
-        console.error('Error loading DNS:', error);
-        showAlert('خطا در بارگذاری DNS servers', 'error');
-      }
-    }
-
-    // Render DNS servers
-    function renderDNS() {
-      const list = document.getElementById('dnsList');
-      const entries = Object.entries(dnsServers);
-      
-      if (entries.length === 0) {
-        list.innerHTML = '<p style="text-align: center; color: #999;">هیچ DNS server ثبت نشده است</p>';
-        return;
-      }
-      
-      list.innerHTML = entries.map(([country, dns]) => \`
-        <div class="list-item">
-          <span class="list-item-text"><strong>\${country}:</strong> \${dns}</span>
-          <button class="list-item-btn" onclick="deleteDNS('\${country}')">🗑️ حذف</button>
-        </div>
-      \`).join('');
-    }
-
-    // Add DNS
-    async function addDNS() {
-      const countryInput = document.getElementById('dnsCountry');
-      const dnsInput = document.getElementById('dnsServers');
-      
-      const country = countryInput.value.trim();
-      const dns = dnsInput.value.trim();
-      
-      if (!country || !dns) {
-        showAlert('لطفاً تمام فیلدها را پر کنید', 'error');
-        return;
-      }
-      
-      try {
-        const response = await fetch('/api/dns', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ country, dns })
-        });
-        
-        if (response.ok) {
-          countryInput.value = '';
-          dnsInput.value = '';
-          await loadDNS();
-          showAlert('DNS server با موفقیت اضافه شد');
-        } else {
-          showAlert('خطا در افزودن DNS server', 'error');
-        }
-      } catch (error) {
-        console.error('Error adding DNS:', error);
-        showAlert('خطا در افزودن DNS server', 'error');
-      }
-    }
-
-    // Delete DNS
-    async function deleteDNS(country) {
-      if (!confirm('آیا مطمئن هستید؟')) return;
-      
-      try {
-        const response = await fetch('/api/dns', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ country })
-        });
-        
-        if (response.ok) {
-          await loadDNS();
-          showAlert('DNS server حذف شد');
-        } else {
-          showAlert('خطا در حذف DNS server', 'error');
-        }
-      } catch (error) {
-        console.error('Error deleting DNS:', error);
-        showAlert('خطا در حذف DNS server', 'error');
       }
     }
 
@@ -1093,36 +1016,6 @@ export default {
       const endpoints = await db.getEndpoints();
       endpoints.splice(index, 1);
       await db.setEndpoints(endpoints);
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // API: Get DNS servers
-    if (url.pathname === '/api/dns' && request.method === 'GET') {
-      const dns = await db.getDNSServers();
-      return new Response(JSON.stringify({ dns }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // API: Add DNS server
-    if (url.pathname === '/api/dns' && request.method === 'POST') {
-      const { country, dns } = await request.json();
-      const dnsServers = await db.getDNSServers();
-      dnsServers[country] = dns;
-      await db.setDNSServers(dnsServers);
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // API: Delete DNS server
-    if (url.pathname === '/api/dns' && request.method === 'DELETE') {
-      const { country } = await request.json();
-      const dnsServers = await db.getDNSServers();
-      delete dnsServers[country];
-      await db.setDNSServers(dnsServers);
       return new Response(JSON.stringify({ success: true }), {
         headers: { 'Content-Type': 'application/json' }
       });
