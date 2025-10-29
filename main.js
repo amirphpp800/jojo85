@@ -783,12 +783,12 @@ function getAdminPanelHTML() {
         return;
       }
       
-      list.innerHTML = endpoints.map((endpoint, index) => \`
-        <div class="list-item">
-          <span class="list-item-text">\${endpoint}</span>
-          <button class="list-item-btn" onclick="deleteEndpoint(\${index})">🗑️ حذف</button>
-        </div>
-      \`).join('');
+      list.innerHTML = endpoints.map((endpoint, index) => 
+        '<div class="list-item">' +
+          '<span class="list-item-text">' + endpoint + '</span>' +
+          '<button class="list-item-btn" onclick="deleteEndpoint(' + index + ')">🗑️ حذف</button>' +
+        '</div>'
+      ).join('');
     }
 
     // Add endpoints (multiple)
@@ -883,14 +883,14 @@ function getAdminPanelHTML() {
         return;
       }
       
-      list.innerHTML = dnsList.map((item, index) => \`
-        <div class="list-item">
-          <span class="list-item-text">
-            <strong>\${item.country || 'در حال بررسی...'}</strong> \${item.flag || '🏳️'} - <code>\${item.ip}</code>
-          </span>
-          <button class="list-item-btn" onclick="deleteDNSFromList(\${index})">🗑️ حذف</button>
-        </div>
-      \`).join('');
+      list.innerHTML = dnsList.map((item, index) => 
+        '<div class="list-item">' +
+          '<span class="list-item-text">' +
+            '<strong>' + (item.country || 'در حال بررسی...') + '</strong> ' + (item.flag || '🏳️') + ' - <code>' + item.ip + '</code>' +
+          '</span>' +
+          '<button class="list-item-btn" onclick="deleteDNSFromList(' + index + ')">🗑️ حذف</button>' +
+        '</div>'
+      ).join('');
     }
 
     // Add DNS to List (multiple)
