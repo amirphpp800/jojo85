@@ -76,19 +76,31 @@ async function decrementStock(kv, code) {
     return false;
 }
 
-// ذخیره استفاده از DNS (برای محدود کردن به 3 نفر)
-async function trackDnsUsage(kv, code, dnsAddress) {
-    const key = `usage:${code}:${dnsAddress}`;
+// ذخیره استفاده از DNS و حذف آدرس بعد از 3 استفاده
+async function trackDnsUsageAndRemove(kv, entry, dnsAddress) {
+    const key = `usage:${entry.code}:${dnsAddress}`;
     const raw = await kv.get(key);
-    const usage = raw ? JSON.parse(raw) : { count: 0, users: [] };
+    const usage = raw ? JSON.parse(raw) : { count: 0 };
 
     usage.count += 1;
 
-    await kv.put(key, JSON.stringify(usage), {
-        expirationTtl: 86400 // حذف بعد از 24 ساعت
-    });
-
-    return usage.count;
+    // اگر به 3 استفاده رسید، آدرس را از لیست حذف کن
+    if (usage.count >= 3) {
+        // حذف آدرس از لیست
+        if (Array.isArray(entry.addresses)) {
+            entry.addresses = entry.addresses.filter(addr => addr !== dnsAddress);
+            await putDnsEntry(kv, entry);
+        }
+        
+        // حذف کلید usage
+        await kv.delete(key);
+        
+        return { count: 3, removed: true };
+    } else {
+        // ذخیره تعداد استفاده
+        await kv.put(key, JSON.stringify(usage));
+        return { count: usage.count, removed: false };
+    }
 }
 
 // دریافت DNS که کمتر از 3 بار استفاده شده
@@ -111,22 +123,7 @@ async function getAvailableDns(kv, entry) {
         }
     }
 
-    // اگر همه DNS‌ها پر شدند، DNS با کمترین استفاده را برگردان
-    let minUsage = Infinity;
-    let selectedDns = shuffled[0];
-
-    for (const dns of shuffled) {
-        const key = `usage:${entry.code}:${dns}`;
-        const raw = await kv.get(key);
-        const usage = raw ? JSON.parse(raw) : { count: 0 };
-
-        if (usage.count < minUsage) {
-            minUsage = usage.count;
-            selectedDns = dns;
-        }
-    }
-
-    return selectedDns;
+    return null; // اگر همه DNS‌ها به 3 استفاده رسیدند
 }
 
 // === Web UI ===
@@ -643,20 +640,35 @@ function buildMainKeyboard() {
 
 // ساخت کیبورد لیست کشورها
 function buildDnsKeyboard(entries) {
-    const rows = entries.map(e => {
+    const rows = [];
+    
+    entries.forEach(e => {
         const flag = countryCodeToFlag(e.code);
         const stock = e.stock ?? 0;
-        const stockEmoji = stock > 5 ? '🟢' : stock > 0 ? '🟡' : '🔴';
-        return [{
-            text: `${flag} ${e.country}`,
+        const totalAddresses = Array.isArray(e.addresses) ? e.addresses.length : 0;
+        
+        let stockEmoji = '🔴';
+        let stockText = 'ناموجود';
+        
+        if (stock > 10) {
+            stockEmoji = '🟢';
+            stockText = `${stock} عدد`;
+        } else if (stock > 5) {
+            stockEmoji = '🟡';
+            stockText = `${stock} عدد`;
+        } else if (stock > 0) {
+            stockEmoji = '🔶';
+            stockText = `${stock} عدد`;
+        }
+        
+        // یک ردیف برای هر کشور
+        rows.push([{
+            text: `${flag} ${e.country} - ${stockEmoji} ${stockText}`,
             callback_data: `dns:${e.code.toUpperCase()}`
-        }, {
-            text: `${stockEmoji} ${stock}`,
-            callback_data: `stock:${e.code.toUpperCase()}`
-        }];
+        }]);
     });
 
-    rows.push([{ text: '🔙 بازگشت', callback_data: 'back_main' }]);
+    rows.push([{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]);
 
     return { inline_keyboard: rows };
 }
@@ -692,7 +704,7 @@ async function handleDnsSelection(chat, messageId, code, env) {
         return telegramApi(env, '/editMessageText', {
             chat_id: chat,
             message_id: messageId,
-            text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ *هیچ آدرس DNSی موجود نیست!*`,
+            text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ *تمام آدرس‌های DNS این کشور تمام شده!*\n\nلطفاً آدرس‌های جدید اضافه کنید یا کشور دیگری انتخاب کنید.`,
             parse_mode: 'Markdown',
             reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
         });
@@ -706,7 +718,7 @@ async function handleDnsSelection(chat, messageId, code, env) {
         return telegramApi(env, '/editMessageText', {
             chat_id: chat,
             message_id: messageId,
-            text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ *همه DNS‌ها در حال حاضر پر هستند!*\n\nلطفاً بعداً تلاش کنید.`,
+            text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ *تمام آدرس‌های DNS این کشور به حد مجاز رسیده‌اند!*\n\nلطفاً چند دقیقه صبر کنید تا آدرس‌های جدید اضافه شوند.`,
             parse_mode: 'Markdown',
             reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
         });
@@ -714,8 +726,8 @@ async function handleDnsSelection(chat, messageId, code, env) {
 
     const flag = countryCodeToFlag(entry.code);
 
-    // ثبت استفاده از این DNS
-    const usageCount = await trackDnsUsage(env.DB, code, selectedDns);
+    // ثبت استفاده از این DNS و احتمال حذف آن
+    const result = await trackDnsUsageAndRemove(env.DB, entry, selectedDns);
 
     // کاهش موجودی
     await decrementStock(env.DB, code);
@@ -727,7 +739,14 @@ async function handleDnsSelection(chat, messageId, code, env) {
     msg += `🎯 *DNS اختصاصی شما:*\n`;
     msg += `\`${selectedDns}\`\n\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-    msg += `👥 *تعداد استفاده از این DNS: ${usageCount}/3*\n\n`;
+    
+    if (result.removed) {
+        msg += `🔴 *این آدرس به حد مجاز رسید و حذف شد*\n`;
+        msg += `تعداد استفاده: *${result.count}/3* ✅\n\n`;
+    } else {
+        msg += `👥 *تعداد استفاده از این DNS: ${result.count}/3*\n\n`;
+    }
+    
     msg += `💡 *نکته مهم:*\n`;
     msg += `این DNS را می‌توانید با *8.8.8.8* یا\n`;
     msg += `*DNS‌های گیمینگ ایرانی* تانل کنید\n`;
@@ -801,14 +820,25 @@ export async function handleUpdate(update, env) {
             // نمایش لیست DNS
             else if (data === 'show_dns') {
                 const entries = await listDnsEntries(env.DB);
-                const kb = buildDnsKeyboard(entries);
-                await telegramApi(env, '/editMessageText', {
-                    chat_id: chat,
-                    message_id: messageId,
-                    text: '🌍 *لیست کشورها*\n\nکشور موردنظر را انتخاب کنید تا یک DNS رندوم دریافت کنید:\n\n🟢 موجودی زیاد\n🟡 موجودی کم\n🔴 ناموجود',
-                    parse_mode: 'Markdown',
-                    reply_markup: kb
-                });
+                if (entries.length === 0) {
+                    await telegramApi(env, '/editMessageText', {
+                        chat_id: chat,
+                        message_id: messageId,
+                        text: '❌ *هیچ DNSی موجود نیست*\n\nلطفاً ابتدا از پنل مدیریت، DNS‌های موردنظر را اضافه کنید.',
+                        parse_mode: 'Markdown',
+                        reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
+                    });
+                } else {
+                    const kb = buildDnsKeyboard(entries);
+                    const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
+                    await telegramApi(env, '/editMessageText', {
+                        chat_id: chat,
+                        message_id: messageId,
+                        text: `🌍 *لیست کشورهای موجود*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (6-10)\n🔶 موجودی کم (1-5)\n🔴 ناموجود`,
+                        parse_mode: 'Markdown',
+                        reply_markup: kb
+                    });
+                }
             }
 
             // انتخاب یک کشور و دریافت DNS رندوم
