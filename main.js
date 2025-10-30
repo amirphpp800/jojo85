@@ -833,7 +833,7 @@ function buildDnsKeyboard(entries, page = 0) {
         } else if (stock > 5) {
             stockEmoji = '🟡';
         } else if (stock > 0) {
-            stockEmoji = '🔶';
+            stockEmoji = '🟡';
         }
         
         // سه دکمه در یک ردیف - دایره رنگی سمت چپ، تعداد وسط، کشور سمت راست
