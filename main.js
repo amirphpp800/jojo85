@@ -648,22 +648,18 @@ function buildDnsKeyboard(entries) {
         const totalAddresses = Array.isArray(e.addresses) ? e.addresses.length : 0;
         
         let stockEmoji = '🔴';
-        let stockText = 'ناموجود';
         
         if (stock > 10) {
             stockEmoji = '🟢';
-            stockText = `${stock} عدد`;
         } else if (stock > 5) {
             stockEmoji = '🟡';
-            stockText = `${stock} عدد`;
         } else if (stock > 0) {
             stockEmoji = '🔶';
-            stockText = `${stock} عدد`;
         }
         
-        // یک ردیف برای هر کشور
+        // یک ردیف برای هر کشور - موجودی سمت چپ، کشور سمت راست
         rows.push([{
-            text: `${flag} ${e.country} - ${stockEmoji} ${stockText}`,
+            text: `${stock} ${stockEmoji}                    ${flag} ${e.country}`,
             callback_data: `dns:${e.code.toUpperCase()}`
         }]);
     });
