@@ -830,11 +830,21 @@ function buildDnsKeyboard(entries) {
             stockEmoji = '🔶';
         }
         
-        // یک ردیف برای هر کشور - موجودی سمت چپ، کشور سمت راست
-        rows.push([{
-            text: `${stock} ${stockEmoji}                    ${flag} ${e.country}`,
-            callback_data: `dns:${e.code.toUpperCase()}`
-        }]);
+        // سه دکمه در یک ردیف - کشور، تعداد، دایره رنگی
+        rows.push([
+            {
+                text: `${flag} ${e.country}`,
+                callback_data: `dns:${e.code.toUpperCase()}`
+            },
+            {
+                text: `${stock}`,
+                callback_data: `stock:${e.code.toUpperCase()}`
+            },
+            {
+                text: `${stockEmoji}`,
+                callback_data: `stock:${e.code.toUpperCase()}`
+            }
+        ]);
     });
 
     rows.push([{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]);
@@ -1003,7 +1013,7 @@ export async function handleUpdate(update, env) {
                     await telegramApi(env, '/editMessageText', {
                         chat_id: chat,
                         message_id: messageId,
-                        text: `🌍 *لیست کشورهای موجود*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (6-10)\n🔶 موجودی کم (1-5)\n🔴 ناموجود`,
+                        text: `🌍 *لیست کشورهای موجود*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (6-10)\n🔴 ناموجود`,
                         parse_mode: 'Markdown',
                         reply_markup: kb
                     });
