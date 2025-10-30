@@ -78,6 +78,59 @@ async function decrementStock(kv, code) {
   return false;
 }
 
+// ذخیره استفاده از DNS (برای محدود کردن به 3 نفر)
+async function trackDnsUsage(kv, code, dnsAddress) {
+  const key = `usage:${code}:${dnsAddress}`;
+  const raw = await kv.get(key);
+  const usage = raw ? JSON.parse(raw) : { count: 0, users: [] };
+  
+  usage.count += 1;
+  
+  await kv.put(key, JSON.stringify(usage), {
+    expirationTtl: 86400 // حذف بعد از 24 ساعت
+  });
+  
+  return usage.count;
+}
+
+// دریافت DNS که کمتر از 3 بار استفاده شده
+async function getAvailableDns(kv, entry) {
+  if (!Array.isArray(entry.addresses) || entry.addresses.length === 0) {
+    return null;
+  }
+  
+  // شافل کردن آدرس‌ها برای انتخاب رندوم
+  const shuffled = [...entry.addresses].sort(() => Math.random() - 0.5);
+  
+  // پیدا کردن اولین DNS که کمتر از 3 بار استفاده شده
+  for (const dns of shuffled) {
+    const key = `usage:${entry.code}:${dns}`;
+    const raw = await kv.get(key);
+    const usage = raw ? JSON.parse(raw) : { count: 0 };
+    
+    if (usage.count < 3) {
+      return dns;
+    }
+  }
+  
+  // اگر همه DNS‌ها پر شدند، DNS با کمترین استفاده را برگردان
+  let minUsage = Infinity;
+  let selectedDns = shuffled[0];
+  
+  for (const dns of shuffled) {
+    const key = `usage:${entry.code}:${dns}`;
+    const raw = await kv.get(key);
+    const usage = raw ? JSON.parse(raw) : { count: 0 };
+    
+    if (usage.count < minUsage) {
+      minUsage = usage.count;
+      selectedDns = dns;
+    }
+  }
+  
+  return selectedDns;
+}
+
 // === Web UI ===
 function renderMainPage(entries) {
   const rows = entries.map(e => {
@@ -647,9 +700,24 @@ async function handleDnsSelection(chat, messageId, code, env) {
     });
   }
   
-  // انتخاب رندوم یک DNS
-  const randomDns = getRandomItem(entry.addresses);
+  // انتخاب DNS که کمتر از 3 بار استفاده شده
+  const selectedDns = await getAvailableDns(env.DB, entry);
+  
+  if (!selectedDns) {
+    const flag = countryCodeToFlag(entry.code);
+    return telegramApi(env, '/editMessageText', {
+      chat_id: chat,
+      message_id: messageId,
+      text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ *همه DNS‌ها در حال حاضر پر هستند!*\n\nلطفاً بعداً تلاش کنید.`,
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
+    });
+  }
+  
   const flag = countryCodeToFlag(entry.code);
+  
+  // ثبت استفاده از این DNS
+  const usageCount = await trackDnsUsage(env.DB, code, selectedDns);
   
   // کاهش موجودی
   await decrementStock(env.DB, code);
@@ -659,8 +727,9 @@ async function handleDnsSelection(chat, messageId, code, env) {
   msg += `      ${flag} *DNS ${entry.country}*\n`;
   msg += `╚═══════════════════════╝\n\n`;
   msg += `🎯 *DNS اختصاصی شما:*\n`;
-  msg += `\`${randomDns}\`\n\n`;
+  msg += `\`${selectedDns}\`\n\n`;
   msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+  msg += `👥 *تعداد استفاده از این DNS: ${usageCount}/3*\n\n`;
   msg += `💡 *نکته مهم:*\n`;
   msg += `این DNS را می‌توانید با *8.8.8.8* یا\n`;
   msg += `*DNS‌های گیمینگ ایرانی* تانل کنید\n`;
