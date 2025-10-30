@@ -211,30 +211,72 @@ function renderMainPage(entries) {
 
   <section class="section">
     <div class="section-header">
-      <h2>➕ افزودن DNS جدید</h2>
+      <h2>➕ افزودن/ویرایش DNS</h2>
     </div>
-    <form method="POST" action="/api/admin/add-dns" class="dns-form">
-      <div class="form-row">
-        <div class="form-group">
-          <label>🌍 نام کشور (فارسی)</label>
-          <input name="country" placeholder="مثال: ایران" required autocomplete="off">
+    
+    <div class="form-tabs">
+      <button type="button" class="tab-btn active" onclick="showTab('new')">🆕 کشور جدید</button>
+      <button type="button" class="tab-btn" onclick="showTab('edit')">✏️ ویرایش کشور موجود</button>
+    </div>
+
+    <!-- فرم افزودن کشور جدید -->
+    <div id="new-form" class="tab-content active">
+      <form method="POST" action="/api/admin/add-dns" class="dns-form">
+        <input type="hidden" name="action" value="new">
+        <div class="form-row">
+          <div class="form-group">
+            <label>🌍 نام کشور (فارسی)</label>
+            <input name="country" placeholder="مثال: ایران" required autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label>🔤 کد کشور (2 حرفی)</label>
+            <input name="code" placeholder="IR" maxlength="2" required autocomplete="off" style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label>📦 موجودی</label>
+            <input name="stock" type="number" placeholder="0" min="0" value="0" required>
+          </div>
         </div>
-        <div class="form-group">
-          <label>🔤 کد کشور (2 حرفی)</label>
-          <input name="code" placeholder="IR" maxlength="2" required autocomplete="off" style="text-transform:uppercase;">
+        <div class="form-group full-width">
+          <label>📡 آدرس‌های DNS (هر خط یک آدرس)</label>
+          <textarea name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;8.8.4.4" rows="5"></textarea>
+          <small>هر آدرس DNS را در یک خط جداگانه وارد کنید</small>
         </div>
-        <div class="form-group">
-          <label>📦 موجودی</label>
-          <input name="stock" type="number" placeholder="0" min="0" value="0" required>
+        <button type="submit" class="btn-submit">💾 ایجاد کشور جدید</button>
+      </form>
+    </div>
+
+    <!-- فرم ویرایش کشور موجود -->
+    <div id="edit-form" class="tab-content">
+      <form method="POST" action="/api/admin/add-dns" class="dns-form">
+        <input type="hidden" name="action" value="edit">
+        <div class="form-row">
+          <div class="form-group">
+            <label>🌍 انتخاب کشور موجود</label>
+            <select name="existing_code" required onchange="loadCountryData(this.value)">
+              <option value="">-- انتخاب کشور --</option>
+              ${entries.map(e => `<option value="${escapeHtml(e.code)}">${countryCodeToFlag(e.code)} ${escapeHtml(e.country)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>📦 موجودی جدید</label>
+            <input id="edit-stock" name="stock" type="number" placeholder="0" min="0" value="0" required>
+          </div>
         </div>
-      </div>
-      <div class="form-group full-width">
-        <label>📡 آدرس‌های DNS (هر خط یک آدرس)</label>
-        <textarea name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;8.8.4.4" rows="5"></textarea>
-        <small>هر آدرس DNS را در یک خط جداگانه وارد کنید</small>
-      </div>
-      <button type="submit" class="btn-submit">💾 ذخیره اطلاعات</button>
-    </form>
+        <div class="form-group full-width">
+          <label>📡 آدرس‌های DNS جدید (برای اضافه کردن)</label>
+          <textarea name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;8.8.4.4" rows="5"></textarea>
+          <small>آدرس‌های جدید را وارد کنید - به آدرس‌های موجود اضافه خواهند شد</small>
+        </div>
+        <div class="form-group full-width">
+          <label>📋 آدرس‌های فعلی</label>
+          <div id="current-addresses" class="current-addresses">
+            انتخاب کشور را برای مشاهده آدرس‌های فعلی انجام دهید
+          </div>
+        </div>
+        <button type="submit" class="btn-submit">✏️ بروزرسانی کشور</button>
+      </form>
+    </div>
   </section>
 </div>
 
@@ -245,6 +287,47 @@ document.addEventListener('DOMContentLoaded', () => {
     card.style.animationDelay = (i * 0.05) + 's';
   });
 });
+
+// تابع تغییر تب
+function showTab(tabName) {
+  // حذف کلاس active از همه تب‌ها و محتویات
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+  
+  // اضافه کردن کلاس active به تب و محتوای انتخابی
+  document.querySelector(\`[onclick="showTab('\${tabName}')"]\`).classList.add('active');
+  document.getElementById(\`\${tabName}-form\`).classList.add('active');
+}
+
+// بارگذاری اطلاعات کشور برای ویرایش
+async function loadCountryData(code) {
+  if (!code) {
+    document.getElementById('current-addresses').innerHTML = 'انتخاب کشور را برای مشاهده آدرس‌های فعلی انجام دهید';
+    document.getElementById('edit-stock').value = '0';
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/dns');
+    const entries = await response.json();
+    const country = entries.find(e => e.code.toUpperCase() === code.toUpperCase());
+    
+    if (country) {
+      document.getElementById('edit-stock').value = country.stock || 0;
+      
+      const addressesDiv = document.getElementById('current-addresses');
+      if (country.addresses && country.addresses.length > 0) {
+        addressesDiv.innerHTML = country.addresses.map(addr => 
+          \`<code>\${addr}</code>\`
+        ).join('');
+      } else {
+        addressesDiv.innerHTML = '<em style="color: #64748b;">هیچ آدرسی برای این کشور ثبت نشده</em>';
+      }
+    }
+  } catch (error) {
+    console.error('خطا در بارگذاری اطلاعات:', error);
+  }
+}
 </script>
 </body>
 </html>`;
@@ -583,6 +666,81 @@ small {
   transform: translateY(0);
 }
 
+.form-tabs {
+  display: flex;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+  font-family: 'Vazirmatn', sans-serif;
+}
+
+.tab-btn.active {
+  color: #667eea;
+  border-bottom-color: #667eea;
+}
+
+.tab-btn:hover:not(.active) {
+  color: #475569;
+  background: #f8fafc;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+select {
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-family: 'Vazirmatn', sans-serif;
+  font-size: 15px;
+  transition: all 0.2s;
+  background: white;
+  cursor: pointer;
+}
+
+select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.current-addresses {
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 15px;
+  min-height: 60px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.current-addresses code {
+  display: block;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin: 4px 0;
+  font-family: 'Courier New', monospace;
+  color: #1e293b;
+  border-left: 3px solid #667eea;
+}
+
 @media (max-width: 768px) {
   .dns-grid {
     grid-template-columns: 1fr;
@@ -598,6 +756,21 @@ small {
   
   .stat-box {
     width: 100%;
+  }
+
+  .form-tabs {
+    flex-direction: column;
+  }
+  
+  .tab-btn {
+    text-align: center;
+    border-bottom: none;
+    border-right: 3px solid transparent;
+  }
+  
+  .tab-btn.active {
+    border-right-color: #667eea;
+    border-bottom-color: transparent;
   }
 }
 `;
@@ -886,21 +1059,65 @@ export default {
         // API: افزودن/ویرایش DNS
         if (url.pathname === '/api/admin/add-dns' && req.method === 'POST') {
             const form = await req.formData();
-            const entry = {
-                country: form.get('country').trim(),
-                code: form.get('code').toUpperCase().trim(),
-                stock: Number(form.get('stock')) || 0,
-                addresses: (form.get('addresses') || '')
+            const action = form.get('action') || 'new';
+
+            if (action === 'new') {
+                // ایجاد کشور جدید
+                const entry = {
+                    country: form.get('country').trim(),
+                    code: form.get('code').toUpperCase().trim(),
+                    stock: Number(form.get('stock')) || 0,
+                    addresses: (form.get('addresses') || '')
+                        .split(/\r?\n/)
+                        .map(s => s.trim())
+                        .filter(Boolean)
+                };
+
+                if (!entry.country || !entry.code || entry.code.length !== 2) {
+                    return html('<script>alert("اطلاعات نامعتبر است");history.back();</script>');
+                }
+
+                // بررسی عدم تکرار کد کشور
+                const existing = await getDnsEntry(env.DB, entry.code);
+                if (existing) {
+                    return html('<script>alert("این کد کشور قبلاً ثبت شده است");history.back();</script>');
+                }
+
+                await putDnsEntry(env.DB, entry);
+            } 
+            else if (action === 'edit') {
+                // ویرایش کشور موجود
+                const code = form.get('existing_code').toUpperCase().trim();
+                const newStock = Number(form.get('stock')) || 0;
+                const newAddresses = (form.get('addresses') || '')
                     .split(/\r?\n/)
                     .map(s => s.trim())
-                    .filter(Boolean)
-            };
+                    .filter(Boolean);
 
-            if (!entry.country || !entry.code || entry.code.length !== 2) {
-                return html('<script>alert("اطلاعات نامعتبر است");history.back();</script>');
+                if (!code || code.length !== 2) {
+                    return html('<script>alert("کد کشور نامعتبر است");history.back();</script>');
+                }
+
+                // دریافت اطلاعات فعلی
+                const existing = await getDnsEntry(env.DB, code);
+                if (!existing) {
+                    return html('<script>alert("کشور انتخابی یافت نشد");history.back();</script>');
+                }
+
+                // بروزرسانی موجودی
+                existing.stock = newStock;
+
+                // اضافه کردن آدرس‌های جدید به آدرس‌های موجود
+                if (newAddresses.length > 0) {
+                    const currentAddresses = Array.isArray(existing.addresses) ? existing.addresses : [];
+                    const combinedAddresses = [...currentAddresses, ...newAddresses];
+                    // حذف آدرس‌های تکراری
+                    existing.addresses = [...new Set(combinedAddresses)];
+                }
+
+                await putDnsEntry(env.DB, existing);
             }
 
-            await putDnsEntry(env.DB, entry);
             return html('<script>window.location.href="/";</script>');
         }
 
