@@ -830,19 +830,19 @@ function buildDnsKeyboard(entries) {
             stockEmoji = '🔶';
         }
         
-        // سه دکمه در یک ردیف - کشور، تعداد، دایره رنگی
+        // سه دکمه در یک ردیف - دایره رنگی سمت چپ، تعداد وسط، کشور سمت راست
         rows.push([
             {
-                text: `${flag} ${e.country}`,
-                callback_data: `dns:${e.code.toUpperCase()}`
+                text: `${stockEmoji}`,
+                callback_data: `stock:${e.code.toUpperCase()}`
             },
             {
                 text: `${stock}`,
                 callback_data: `stock:${e.code.toUpperCase()}`
             },
             {
-                text: `${stockEmoji}`,
-                callback_data: `stock:${e.code.toUpperCase()}`
+                text: `${flag} ${e.country}`,
+                callback_data: `dns:${e.code.toUpperCase()}`
             }
         ]);
     });
@@ -1026,12 +1026,12 @@ export async function handleUpdate(update, env) {
                 await handleDnsSelection(chat, messageId, code, env);
             }
 
-            // کلیک روی موجودی (فقط نمایش)
+            // کلیک روی موجودی (راهنمایی کاربر)
             else if (data.startsWith('stock:')) {
                 await telegramApi(env, '/answerCallbackQuery', {
                     callback_query_id: cb.id,
-                    text: 'این فقط نمایش موجودی است',
-                    show_alert: false
+                    text: 'برای دریافت آدرس، روی دکمه اسم کشور کلیک کنید',
+                    show_alert: true
                 });
             }
 
