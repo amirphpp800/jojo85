@@ -51,35 +51,349 @@ function renderMainPage(entries) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>مدیریت DNS</title>
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body{font-family:'Vazirmatn',sans-serif;background:radial-gradient(circle at 30% 30%,#1e293b,#0f172a);color:#f8fafc;margin:0;padding:24px;text-align:right}
-  h1{font-size:24px;margin-bottom:12px;color:#93c5fd}
-  ul{list-style:none;padding:0;margin:0;max-width:700px}
-  .row{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;margin:6px 0;background:rgba(255,255,255,0.05);border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,0.2);backdrop-filter:blur(6px)}
-  .left{color:#bae6fd;font-weight:600}
-  .right{display:flex;align-items:center;gap:8px}
-  form{margin-top:30px;max-width:700px;padding:16px;background:rgba(255,255,255,0.04);border-radius:12px;backdrop-filter:blur(8px)}
-  label{display:block;margin-top:8px;font-size:14px;color:#a5b4fc}
-  input,textarea{width:100%;padding:8px;border:none;border-radius:8px;background:rgba(255,255,255,0.1);color:white;margin-top:4px}
-  button{margin-top:14px;background:linear-gradient(90deg,#2563eb,#0ea5e9);border:none;color:white;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:600}
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Vazirmatn', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 40px 20px;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+      radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.3), transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(138, 43, 226, 0.2), transparent 50%);
+    pointer-events: none;
+  }
+
+  .container {
+    max-width: 1000px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 50px;
+    animation: fadeInDown 0.8s ease;
+  }
+
+  h1 {
+    font-size: 42px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 10px;
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .subtitle {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 16px;
+    font-weight: 300;
+  }
+
+  .dns-list {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    margin-bottom: 40px;
+    animation: fadeInUp 0.8s ease 0.2s backwards;
+  }
+
+  .section-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: #667eea;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title::before {
+    content: '';
+    width: 4px;
+    height: 24px;
+    background: linear-gradient(180deg, #667eea, #764ba2);
+    border-radius: 4px;
+  }
+
+  ul {
+    list-style: none;
+  }
+
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 24px;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
+    border-radius: 14px;
+    border: 1px solid rgba(102, 126, 234, 0.1);
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .row:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
+    border-color: rgba(102, 126, 234, 0.3);
+  }
+
+  .left {
+    color: #667eea;
+    font-weight: 600;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .country-flag {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 12px;
+  }
+
+  .right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    color: #64748b;
+    font-size: 14px;
+  }
+
+  .stock-badge {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  }
+
+  form {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 35px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: fadeInUp 0.8s ease 0.4s backwards;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  .form-group {
+    margin-bottom: 20px;
+  }
+
+  .form-group.full-width {
+    grid-column: 1 / -1;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #475569;
+  }
+
+  input, textarea {
+    width: 100%;
+    padding: 14px 18px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #1e293b;
+    font-size: 15px;
+    font-family: 'Vazirmatn', sans-serif;
+    transition: all 0.3s ease;
+  }
+
+  input:focus, textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 120px;
+    font-family: 'Courier New', monospace;
+  }
+
+  button {
+    width: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    padding: 16px 24px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  }
+
+  button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+  }
+
+  button:active {
+    transform: translateY(0);
+  }
+
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (max-width: 768px) {
+    h1 {
+      font-size: 32px;
+    }
+
+    .form-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .dns-list, form {
+      padding: 20px;
+    }
+
+    .row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .right {
+      width: 100%;
+      justify-content: space-between;
+    }
+  }
 </style>
 </head>
 <body>
-<h1>لیست DNS‌ها</h1>
-<ul>${rows}</ul>
-<form method="POST" action="/api/admin/add-dns">
-  <h3>افزودن یا ویرایش DNS</h3>
-  <label>نام کشور (فارسی)</label>
-  <input name="country" placeholder="مثلاً ایران" required>
-  <label>کد کشور (2 حرفی)</label>
-  <input name="code" placeholder="IR" required>
-  <label>موجودی</label>
-  <input name="stock" placeholder="12">
-  <label>آدرس‌ها (هر خط یک آدرس)</label>
-  <textarea name="addresses" rows="3" placeholder="1.1.1.1\n8.8.8.8"></textarea>
-  <button type="submit">ذخیره</button>
-</form>
+<div class="container">
+  <header>
+    <h1>🌐 مدیریت DNS</h1>
+    <p class="subtitle">مدیریت و پیکربندی سرورهای DNS</p>
+  </header>
+
+  <div class="dns-list">
+    <h2 class="section-title">لیست DNS‌های موجود</h2>
+    <ul>
+      <li class="row">
+        <div class="left">
+          <div class="country-flag">IR</div>
+          <span>ایران</span>
+        </div>
+        <div class="right">
+          <span class="stock-badge">موجودی: 12</span>
+          <span>2 آدرس</span>
+        </div>
+      </li>
+      <li class="row">
+        <div class="left">
+          <div class="country-flag">US</div>
+          <span>آمریکا</span>
+        </div>
+        <div class="right">
+          <span class="stock-badge">موجودی: 25</span>
+          <span>4 آدرس</span>
+        </div>
+      </li>
+      <li class="row">
+        <div class="left">
+          <div class="country-flag">DE</div>
+          <span>آلمان</span>
+        </div>
+        <div class="right">
+          <span class="stock-badge">موجودی: 8</span>
+          <span>3 آدرس</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <form method="POST" action="/api/admin/add-dns">
+    <h2 class="section-title">افزودن یا ویرایش DNS</h2>
+    
+    <div class="form-grid">
+      <div class="form-group">
+        <label>نام کشور (فارسی)</label>
+        <input name="country" placeholder="مثلاً ایران" required>
+      </div>
+
+      <div class="form-group">
+        <label>کد کشور (2 حرفی)</label>
+        <input name="code" placeholder="IR" maxlength="2" required>
+      </div>
+
+      <div class="form-group">
+        <label>موجودی</label>
+        <input name="stock" type="number" placeholder="12" min="0">
+      </div>
+
+      <div class="form-group full-width">
+        <label>آدرس‌های DNS (هر خط یک آدرس)</label>
+        <textarea name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;8.8.4.4"></textarea>
+      </div>
+    </div>
+
+    <button type="submit">💾 ذخیره اطلاعات</button>
+  </form>
+</div>
 </body>
 </html>`;
 }
