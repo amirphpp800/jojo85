@@ -1,144 +1,142 @@
-// main.js - Cloudflare Pages + Telegram Bot (DNS Manager)
-// نسخه بهینه شده با انتخاب رندوم DNS
 
 const TELEGRAM_BASE = (token) => `https://api.telegram.org/bot${token}`;
 
-const json = (obj, status = 200) => 
-  new Response(JSON.stringify(obj, null, 2), { 
-    status, 
-    headers: { 'Content-Type': 'application/json; charset=utf-8' } 
-  });
+const json = (obj, status = 200) =>
+    new Response(JSON.stringify(obj, null, 2), {
+        status,
+        headers: { 'Content-Type': 'application/json; charset=utf-8' }
+    });
 
-const html = (s) => 
-  new Response(s, { 
-    status: 200, 
-    headers: { 'Content-Type': 'text/html; charset=utf-8' } 
-  });
+const html = (s) =>
+    new Response(s, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    });
 
 // تبدیل کد کشور به پرچم
 function countryCodeToFlag(code) {
-  if (!code || code.length !== 2) return '🌐';
-  const A = 0x1F1E6;
-  return Array.from(code.toUpperCase())
-    .map(c => String.fromCodePoint(A + c.charCodeAt(0) - 65))
-    .join('');
+    if (!code || code.length !== 2) return '🌐';
+    const A = 0x1F1E6;
+    return Array.from(code.toUpperCase())
+        .map(c => String.fromCodePoint(A + c.charCodeAt(0) - 65))
+        .join('');
 }
 
 // انتخاب رندوم از آرایه
 function getRandomItem(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
+    return arr[Math.floor(Math.random() * arr.length)];
 }
 
 // === KV Helpers ===
 async function listDnsEntries(kv) {
-  const res = await kv.list({ prefix: 'dns:' });
-  const entries = [];
-  
-  for (const k of res.keys) {
-    const v = await kv.get(k.name);
-    try { 
-      const parsed = JSON.parse(v);
-      entries.push(parsed);
-    } catch (e) {
-      console.error(`خطا در پارس ${k.name}:`, e);
+    const res = await kv.list({ prefix: 'dns:' });
+    const entries = [];
+
+    for (const k of res.keys) {
+        const v = await kv.get(k.name);
+        try {
+            const parsed = JSON.parse(v);
+            entries.push(parsed);
+        } catch (e) {
+            console.error(`خطا در پارس ${k.name}:`, e);
+        }
     }
-  }
-  
-  entries.sort((a, b) => (a.country || '').localeCompare(b.country || ''));
-  return entries;
+
+    entries.sort((a, b) => (a.country || '').localeCompare(b.country || ''));
+    return entries;
 }
 
 async function getDnsEntry(kv, code) {
-  const raw = await kv.get(`dns:${code.toUpperCase()}`);
-  if (!raw) return null;
-  try { 
-    return JSON.parse(raw); 
-  } catch { 
-    return null; 
-  }
+    const raw = await kv.get(`dns:${code.toUpperCase()}`);
+    if (!raw) return null;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
 }
 
 async function putDnsEntry(kv, entry) {
-  await kv.put(`dns:${entry.code.toUpperCase()}`, JSON.stringify(entry));
+    await kv.put(`dns:${entry.code.toUpperCase()}`, JSON.stringify(entry));
 }
 
 async function deleteDnsEntry(kv, code) {
-  await kv.delete(`dns:${code.toUpperCase()}`);
+    await kv.delete(`dns:${code.toUpperCase()}`);
 }
 
 async function decrementStock(kv, code) {
-  const entry = await getDnsEntry(kv, code);
-  if (!entry) return false;
-  
-  if (entry.stock && entry.stock > 0) {
-    entry.stock -= 1;
-    await putDnsEntry(kv, entry);
-    return true;
-  }
-  return false;
+    const entry = await getDnsEntry(kv, code);
+    if (!entry) return false;
+
+    if (entry.stock && entry.stock > 0) {
+        entry.stock -= 1;
+        await putDnsEntry(kv, entry);
+        return true;
+    }
+    return false;
 }
 
 // ذخیره استفاده از DNS (برای محدود کردن به 3 نفر)
 async function trackDnsUsage(kv, code, dnsAddress) {
-  const key = `usage:${code}:${dnsAddress}`;
-  const raw = await kv.get(key);
-  const usage = raw ? JSON.parse(raw) : { count: 0, users: [] };
-  
-  usage.count += 1;
-  
-  await kv.put(key, JSON.stringify(usage), {
-    expirationTtl: 86400 // حذف بعد از 24 ساعت
-  });
-  
-  return usage.count;
+    const key = `usage:${code}:${dnsAddress}`;
+    const raw = await kv.get(key);
+    const usage = raw ? JSON.parse(raw) : { count: 0, users: [] };
+
+    usage.count += 1;
+
+    await kv.put(key, JSON.stringify(usage), {
+        expirationTtl: 86400 // حذف بعد از 24 ساعت
+    });
+
+    return usage.count;
 }
 
 // دریافت DNS که کمتر از 3 بار استفاده شده
 async function getAvailableDns(kv, entry) {
-  if (!Array.isArray(entry.addresses) || entry.addresses.length === 0) {
-    return null;
-  }
-  
-  // شافل کردن آدرس‌ها برای انتخاب رندوم
-  const shuffled = [...entry.addresses].sort(() => Math.random() - 0.5);
-  
-  // پیدا کردن اولین DNS که کمتر از 3 بار استفاده شده
-  for (const dns of shuffled) {
-    const key = `usage:${entry.code}:${dns}`;
-    const raw = await kv.get(key);
-    const usage = raw ? JSON.parse(raw) : { count: 0 };
-    
-    if (usage.count < 3) {
-      return dns;
+    if (!Array.isArray(entry.addresses) || entry.addresses.length === 0) {
+        return null;
     }
-  }
-  
-  // اگر همه DNS‌ها پر شدند، DNS با کمترین استفاده را برگردان
-  let minUsage = Infinity;
-  let selectedDns = shuffled[0];
-  
-  for (const dns of shuffled) {
-    const key = `usage:${entry.code}:${dns}`;
-    const raw = await kv.get(key);
-    const usage = raw ? JSON.parse(raw) : { count: 0 };
-    
-    if (usage.count < minUsage) {
-      minUsage = usage.count;
-      selectedDns = dns;
+
+    // شافل کردن آدرس‌ها برای انتخاب رندوم
+    const shuffled = [...entry.addresses].sort(() => Math.random() - 0.5);
+
+    // پیدا کردن اولین DNS که کمتر از 3 بار استفاده شده
+    for (const dns of shuffled) {
+        const key = `usage:${entry.code}:${dns}`;
+        const raw = await kv.get(key);
+        const usage = raw ? JSON.parse(raw) : { count: 0 };
+
+        if (usage.count < 3) {
+            return dns;
+        }
     }
-  }
-  
-  return selectedDns;
+
+    // اگر همه DNS‌ها پر شدند، DNS با کمترین استفاده را برگردان
+    let minUsage = Infinity;
+    let selectedDns = shuffled[0];
+
+    for (const dns of shuffled) {
+        const key = `usage:${entry.code}:${dns}`;
+        const raw = await kv.get(key);
+        const usage = raw ? JSON.parse(raw) : { count: 0 };
+
+        if (usage.count < minUsage) {
+            minUsage = usage.count;
+            selectedDns = dns;
+        }
+    }
+
+    return selectedDns;
 }
 
 // === Web UI ===
 function renderMainPage(entries) {
-  const rows = entries.map(e => {
-    const flag = countryCodeToFlag(e.code);
-    const count = Array.isArray(e.addresses) ? e.addresses.length : 0;
-    const stockColor = (e.stock || 0) > 5 ? '#10b981' : (e.stock || 0) > 0 ? '#f59e0b' : '#ef4444';
-    
-    return `
+    const rows = entries.map(e => {
+        const flag = countryCodeToFlag(e.code);
+        const count = Array.isArray(e.addresses) ? e.addresses.length : 0;
+        const stockColor = (e.stock || 0) > 5 ? '#10b981' : (e.stock || 0) > 0 ? '#f59e0b' : '#ef4444';
+
+        return `
     <div class="dns-card">
       <div class="card-header">
         <div class="country-info">
@@ -174,9 +172,9 @@ function renderMainPage(entries) {
         </details>
       </div>
     </div>`;
-  }).join('\n');
+    }).join('\n');
 
-  return `<!doctype html>
+    return `<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
@@ -256,7 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
 }
 
 function getWebCss() {
-  return `
+    return `
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -609,330 +607,330 @@ small {
 }
 
 function escapeHtml(s) {
-  return String(s || '').replace(/[&<>"']/g, c => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  }[c]));
+    return String(s || '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[c]));
 }
 
 // === Telegram Bot ===
 async function telegramApi(env, path, body) {
-  try {
-    const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    return await res.json();
-  } catch (e) {
-    console.error('خطا در Telegram API:', e);
-    return {};
-  }
+    try {
+        const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        return await res.json();
+    } catch (e) {
+        console.error('خطا در Telegram API:', e);
+        return {};
+    }
 }
 
 // ساخت کیبورد اصلی
 function buildMainKeyboard() {
-  return {
-    inline_keyboard: [
-      [{ text: '🌐 DNS', callback_data: 'show_dns' }],
-      [{ text: '🛰️ وایرگارد (غیرفعال)', callback_data: 'wireguard' }]
-    ]
-  };
+    return {
+        inline_keyboard: [
+            [{ text: '🌐 DNS', callback_data: 'show_dns' }],
+            [{ text: '🛰️ وایرگارد (غیرفعال)', callback_data: 'wireguard' }]
+        ]
+    };
 }
 
 // ساخت کیبورد لیست کشورها
 function buildDnsKeyboard(entries) {
-  const rows = entries.map(e => {
-    const flag = countryCodeToFlag(e.code);
-    const stock = e.stock ?? 0;
-    const stockEmoji = stock > 5 ? '🟢' : stock > 0 ? '🟡' : '🔴';
-    return [{
-      text: `${flag} ${e.country}`,
-      callback_data: `dns:${e.code.toUpperCase()}`
-    }, {
-      text: `${stockEmoji} ${stock}`,
-      callback_data: `stock:${e.code.toUpperCase()}`
-    }];
-  });
-  
-  rows.push([{ text: '🔙 بازگشت', callback_data: 'back_main' }]);
-  
-  return { inline_keyboard: rows };
+    const rows = entries.map(e => {
+        const flag = countryCodeToFlag(e.code);
+        const stock = e.stock ?? 0;
+        const stockEmoji = stock > 5 ? '🟢' : stock > 0 ? '🟡' : '🔴';
+        return [{
+            text: `${flag} ${e.country}`,
+            callback_data: `dns:${e.code.toUpperCase()}`
+        }, {
+            text: `${stockEmoji} ${stock}`,
+            callback_data: `stock:${e.code.toUpperCase()}`
+        }];
+    });
+
+    rows.push([{ text: '🔙 بازگشت', callback_data: 'back_main' }]);
+
+    return { inline_keyboard: rows };
 }
 
 // نمایش یک DNS رندوم از کشور انتخابی
 async function handleDnsSelection(chat, messageId, code, env) {
-  const entry = await getDnsEntry(env.DB, code);
-  
-  if (!entry) {
-    return telegramApi(env, '/editMessageText', {
-      chat_id: chat,
-      message_id: messageId,
-      text: '❌ هیچ DNSی برای این کشور یافت نشد.',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
-    });
-  }
-  
-  // بررسی موجودی
-  if (!entry.stock || entry.stock <= 0) {
-    const flag = countryCodeToFlag(entry.code);
-    return telegramApi(env, '/editMessageText', {
-      chat_id: chat,
-      message_id: messageId,
-      text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n❌ *موجودی تمام شده است!*\n\nلطفاً کشور دیگری را انتخاب کنید.`,
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
-    });
-  }
-  
-  // بررسی وجود آدرس
-  if (!Array.isArray(entry.addresses) || entry.addresses.length === 0) {
-    const flag = countryCodeToFlag(entry.code);
-    return telegramApi(env, '/editMessageText', {
-      chat_id: chat,
-      message_id: messageId,
-      text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ *هیچ آدرس DNSی موجود نیست!*`,
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
-    });
-  }
-  
-  // انتخاب DNS که کمتر از 3 بار استفاده شده
-  const selectedDns = await getAvailableDns(env.DB, entry);
-  
-  if (!selectedDns) {
-    const flag = countryCodeToFlag(entry.code);
-    return telegramApi(env, '/editMessageText', {
-      chat_id: chat,
-      message_id: messageId,
-      text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ *همه DNS‌ها در حال حاضر پر هستند!*\n\nلطفاً بعداً تلاش کنید.`,
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
-    });
-  }
-  
-  const flag = countryCodeToFlag(entry.code);
-  
-  // ثبت استفاده از این DNS
-  const usageCount = await trackDnsUsage(env.DB, code, selectedDns);
-  
-  // کاهش موجودی
-  await decrementStock(env.DB, code);
-  
-  // پیام با کپشن زیبا
-  let msg = `╔═══════════════════════╗\n`;
-  msg += `      ${flag} *DNS ${entry.country}*\n`;
-  msg += `╚═══════════════════════╝\n\n`;
-  msg += `🎯 *DNS اختصاصی شما:*\n`;
-  msg += `\`${selectedDns}\`\n\n`;
-  msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-  msg += `👥 *تعداد استفاده از این DNS: ${usageCount}/3*\n\n`;
-  msg += `💡 *نکته مهم:*\n`;
-  msg += `این DNS را می‌توانید با *8.8.8.8* یا\n`;
-  msg += `*DNS‌های گیمینگ ایرانی* تانل کنید\n`;
-  msg += `تا بهترین سرعت و پایداری را داشته باشید.\n\n`;
-  msg += `✅ *موفقیت همراه شما!*\n`;
-  msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-  msg += `📦 موجودی باقیمانده: *${entry.stock - 1}*`;
-  
-  return telegramApi(env, '/editMessageText', {
-    chat_id: chat,
-    message_id: messageId,
-    text: msg,
-    parse_mode: 'Markdown',
-    reply_markup: { 
-      inline_keyboard: [
-        [{ text: '🔄 دریافت DNS جدید', callback_data: `dns:${code}` }],
-        [{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]
-      ] 
+    const entry = await getDnsEntry(env.DB, code);
+
+    if (!entry) {
+        return telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: '❌ هیچ DNSی برای این کشور یافت نشد.',
+            reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
+        });
     }
-  });
+
+    // بررسی موجودی
+    if (!entry.stock || entry.stock <= 0) {
+        const flag = countryCodeToFlag(entry.code);
+        return telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n❌ *موجودی تمام شده است!*\n\nلطفاً کشور دیگری را انتخاب کنید.`,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
+        });
+    }
+
+    // بررسی وجود آدرس
+    if (!Array.isArray(entry.addresses) || entry.addresses.length === 0) {
+        const flag = countryCodeToFlag(entry.code);
+        return telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ *هیچ آدرس DNSی موجود نیست!*`,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
+        });
+    }
+
+    // انتخاب DNS که کمتر از 3 بار استفاده شده
+    const selectedDns = await getAvailableDns(env.DB, entry);
+
+    if (!selectedDns) {
+        const flag = countryCodeToFlag(entry.code);
+        return telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ *همه DNS‌ها در حال حاضر پر هستند!*\n\nلطفاً بعداً تلاش کنید.`,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
+        });
+    }
+
+    const flag = countryCodeToFlag(entry.code);
+
+    // ثبت استفاده از این DNS
+    const usageCount = await trackDnsUsage(env.DB, code, selectedDns);
+
+    // کاهش موجودی
+    await decrementStock(env.DB, code);
+
+    // پیام با کپشن زیبا
+    let msg = `╔═══════════════════════╗\n`;
+    msg += `      ${flag} *DNS ${entry.country}*\n`;
+    msg += `╚═══════════════════════╝\n\n`;
+    msg += `🎯 *DNS اختصاصی شما:*\n`;
+    msg += `\`${selectedDns}\`\n\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `👥 *تعداد استفاده از این DNS: ${usageCount}/3*\n\n`;
+    msg += `💡 *نکته مهم:*\n`;
+    msg += `این DNS را می‌توانید با *8.8.8.8* یا\n`;
+    msg += `*DNS‌های گیمینگ ایرانی* تانل کنید\n`;
+    msg += `تا بهترین سرعت و پایداری را داشته باشید.\n\n`;
+    msg += `✅ *موفقیت همراه شما!*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `📦 موجودی باقیمانده: *${entry.stock - 1}*`;
+
+    return telegramApi(env, '/editMessageText', {
+        chat_id: chat,
+        message_id: messageId,
+        text: msg,
+        parse_mode: 'Markdown',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '🔄 دریافت DNS جدید', callback_data: `dns:${code}` }],
+                [{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]
+            ]
+        }
+    });
 }
 
 // مدیریت آپدیت‌های تلگرام
 export async function handleUpdate(update, env) {
-  try {
-    // پیام‌های عادی
-    if (update.message) {
-      const msg = update.message;
-      const chat = msg.chat.id;
-      const text = msg.text || '';
-      
-      if (text.startsWith('/start')) {
-        const kb = buildMainKeyboard();
-        await telegramApi(env, '/sendMessage', {
-          chat_id: chat,
-          text: '👋 *سلام! خوش آمدید*\n\n🌐 برای دریافت DNS، گزینه موردنظر خود را انتخاب کنید:',
-          parse_mode: 'Markdown',
-          reply_markup: kb
-        });
-      } else {
-        await telegramApi(env, '/sendMessage', {
-          chat_id: chat,
-          text: '❌ دستور نامعتبر است.\n\nلطفاً /start را ارسال کنید.'
-        });
-      }
+    try {
+        // پیام‌های عادی
+        if (update.message) {
+            const msg = update.message;
+            const chat = msg.chat.id;
+            const text = msg.text || '';
+
+            if (text.startsWith('/start')) {
+                const kb = buildMainKeyboard();
+                await telegramApi(env, '/sendMessage', {
+                    chat_id: chat,
+                    text: '👋 *سلام! خوش آمدید*\n\n🌐 برای دریافت DNS، گزینه موردنظر خود را انتخاب کنید:',
+                    parse_mode: 'Markdown',
+                    reply_markup: kb
+                });
+            } else {
+                await telegramApi(env, '/sendMessage', {
+                    chat_id: chat,
+                    text: '❌ دستور نامعتبر است.\n\nلطفاً /start را ارسال کنید.'
+                });
+            }
+        }
+
+        // Callback Query
+        if (update.callback_query) {
+            const cb = update.callback_query;
+            const data = cb.data || '';
+            const chat = cb.message.chat.id;
+            const messageId = cb.message.message_id;
+
+            await telegramApi(env, '/answerCallbackQuery', {
+                callback_query_id: cb.id
+            });
+
+            // نمایش منوی اصلی
+            if (data === 'back_main') {
+                const kb = buildMainKeyboard();
+                await telegramApi(env, '/editMessageText', {
+                    chat_id: chat,
+                    message_id: messageId,
+                    text: '👋 *سلام! خوش آمدید*\n\n🌐 برای دریافت DNS، گزینه موردنظر خود را انتخاب کنید:',
+                    parse_mode: 'Markdown',
+                    reply_markup: kb
+                });
+            }
+
+            // نمایش لیست DNS
+            else if (data === 'show_dns') {
+                const entries = await listDnsEntries(env.DB);
+                const kb = buildDnsKeyboard(entries);
+                await telegramApi(env, '/editMessageText', {
+                    chat_id: chat,
+                    message_id: messageId,
+                    text: '🌍 *لیست کشورها*\n\nکشور موردنظر را انتخاب کنید تا یک DNS رندوم دریافت کنید:\n\n🟢 موجودی زیاد\n🟡 موجودی کم\n🔴 ناموجود',
+                    parse_mode: 'Markdown',
+                    reply_markup: kb
+                });
+            }
+
+            // انتخاب یک کشور و دریافت DNS رندوم
+            else if (data.startsWith('dns:')) {
+                const code = data.split(':')[1];
+                await handleDnsSelection(chat, messageId, code, env);
+            }
+
+            // کلیک روی موجودی (فقط نمایش)
+            else if (data.startsWith('stock:')) {
+                await telegramApi(env, '/answerCallbackQuery', {
+                    callback_query_id: cb.id,
+                    text: 'این فقط نمایش موجودی است',
+                    show_alert: false
+                });
+            }
+
+            // وایرگارد (غیرفعال)
+            else if (data === 'wireguard') {
+                await telegramApi(env, '/answerCallbackQuery', {
+                    callback_query_id: cb.id,
+                    text: '🛰️ بخش وایرگارد فعلاً غیرفعال است',
+                    show_alert: true
+                });
+            }
+        }
+    } catch (e) {
+        console.error('خطا در handleUpdate:', e);
     }
-    
-    // Callback Query
-    if (update.callback_query) {
-      const cb = update.callback_query;
-      const data = cb.data || '';
-      const chat = cb.message.chat.id;
-      const messageId = cb.message.message_id;
-      
-      await telegramApi(env, '/answerCallbackQuery', { 
-        callback_query_id: cb.id 
-      });
-      
-      // نمایش منوی اصلی
-      if (data === 'back_main') {
-        const kb = buildMainKeyboard();
-        await telegramApi(env, '/editMessageText', {
-          chat_id: chat,
-          message_id: messageId,
-          text: '👋 *سلام! خوش آمدید*\n\n🌐 برای دریافت DNS، گزینه موردنظر خود را انتخاب کنید:',
-          parse_mode: 'Markdown',
-          reply_markup: kb
-        });
-      }
-      
-      // نمایش لیست DNS
-      else if (data === 'show_dns') {
-        const entries = await listDnsEntries(env.DB);
-        const kb = buildDnsKeyboard(entries);
-        await telegramApi(env, '/editMessageText', {
-          chat_id: chat,
-          message_id: messageId,
-          text: '🌍 *لیست کشورها*\n\nکشور موردنظر را انتخاب کنید تا یک DNS رندوم دریافت کنید:\n\n🟢 موجودی زیاد\n🟡 موجودی کم\n🔴 ناموجود',
-          parse_mode: 'Markdown',
-          reply_markup: kb
-        });
-      }
-      
-      // انتخاب یک کشور و دریافت DNS رندوم
-      else if (data.startsWith('dns:')) {
-        const code = data.split(':')[1];
-        await handleDnsSelection(chat, messageId, code, env);
-      }
-      
-      // کلیک روی موجودی (فقط نمایش)
-      else if (data.startsWith('stock:')) {
-        await telegramApi(env, '/answerCallbackQuery', {
-          callback_query_id: cb.id,
-          text: 'این فقط نمایش موجودی است',
-          show_alert: false
-        });
-      }
-      
-      // وایرگارد (غیرفعال)
-      else if (data === 'wireguard') {
-        await telegramApi(env, '/answerCallbackQuery', {
-          callback_query_id: cb.id,
-          text: '🛰️ بخش وایرگارد فعلاً غیرفعال است',
-          show_alert: true
-        });
-      }
-    }
-  } catch (e) {
-    console.error('خطا در handleUpdate:', e);
-  }
 }
 
 // === Fetch Handler ===
 export default {
-  async fetch(req, env) {
-    const url = new URL(req.url);
-    
-    // صفحه اصلی
-    if (url.pathname === '/' && req.method === 'GET') {
-      const entries = await listDnsEntries(env.DB);
-      return html(renderMainPage(entries));
+    async fetch(req, env) {
+        const url = new URL(req.url);
+
+        // صفحه اصلی
+        if (url.pathname === '/' && req.method === 'GET') {
+            const entries = await listDnsEntries(env.DB);
+            return html(renderMainPage(entries));
+        }
+
+        // API: لیست DNS‌ها
+        if (url.pathname === '/api/dns' && req.method === 'GET') {
+            const entries = await listDnsEntries(env.DB);
+            return json(entries);
+        }
+
+        // API: افزودن/ویرایش DNS
+        if (url.pathname === '/api/admin/add-dns' && req.method === 'POST') {
+            const form = await req.formData();
+            const entry = {
+                country: form.get('country').trim(),
+                code: form.get('code').toUpperCase().trim(),
+                stock: Number(form.get('stock')) || 0,
+                addresses: (form.get('addresses') || '')
+                    .split(/\r?\n/)
+                    .map(s => s.trim())
+                    .filter(Boolean)
+            };
+
+            if (!entry.country || !entry.code || entry.code.length !== 2) {
+                return html('<script>alert("اطلاعات نامعتبر است");history.back();</script>');
+            }
+
+            await putDnsEntry(env.DB, entry);
+            return html('<script>window.location.href="/";</script>');
+        }
+
+        // API: حذف DNS
+        if (url.pathname === '/api/admin/delete-dns' && req.method === 'POST') {
+            const form = await req.formData();
+            const code = form.get('code');
+
+            if (code) {
+                await deleteDnsEntry(env.DB, code);
+            }
+
+            return html('<script>window.location.href="/";</script>');
+        }
+
+        // Webhook تلگرام
+        if (url.pathname === '/webhook' && req.method === 'POST') {
+            try {
+                const update = await req.json();
+                await handleUpdate(update, env);
+                return json({ ok: true });
+            } catch (e) {
+                console.error('خطا در webhook:', e);
+                return json({ ok: false, error: e.message }, 500);
+            }
+        }
+
+        // تنظیم webhook
+        if (url.pathname === '/api/set-webhook' && req.method === 'GET') {
+            const webhookUrl = `${url.origin}/webhook`;
+            const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/setWebhook`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: webhookUrl })
+            });
+            const result = await res.json();
+            return json(result);
+        }
+
+        // حذف webhook
+        if (url.pathname === '/api/delete-webhook' && req.method === 'GET') {
+            const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/deleteWebhook`, {
+                method: 'POST'
+            });
+            const result = await res.json();
+            return json(result);
+        }
+
+        // وضعیت webhook
+        if (url.pathname === '/api/webhook-info' && req.method === 'GET') {
+            const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/getWebhookInfo`);
+            const result = await res.json();
+            return json(result);
+        }
+
+        // 404
+        return html('<h1>404 - صفحه یافت نشد</h1>');
     }
-    
-    // API: لیست DNS‌ها
-    if (url.pathname === '/api/dns' && req.method === 'GET') {
-      const entries = await listDnsEntries(env.DB);
-      return json(entries);
-    }
-    
-    // API: افزودن/ویرایش DNS
-    if (url.pathname === '/api/admin/add-dns' && req.method === 'POST') {
-      const form = await req.formData();
-      const entry = {
-        country: form.get('country').trim(),
-        code: form.get('code').toUpperCase().trim(),
-        stock: Number(form.get('stock')) || 0,
-        addresses: (form.get('addresses') || '')
-          .split(/\r?\n/)
-          .map(s => s.trim())
-          .filter(Boolean)
-      };
-      
-      if (!entry.country || !entry.code || entry.code.length !== 2) {
-        return html('<script>alert("اطلاعات نامعتبر است");history.back();</script>');
-      }
-      
-      await putDnsEntry(env.DB, entry);
-      return html('<script>window.location.href="/";</script>');
-    }
-    
-    // API: حذف DNS
-    if (url.pathname === '/api/admin/delete-dns' && req.method === 'POST') {
-      const form = await req.formData();
-      const code = form.get('code');
-      
-      if (code) {
-        await deleteDnsEntry(env.DB, code);
-      }
-      
-      return html('<script>window.location.href="/";</script>');
-    }
-    
-    // Webhook تلگرام
-    if (url.pathname === '/webhook' && req.method === 'POST') {
-      try {
-        const update = await req.json();
-        await handleUpdate(update, env);
-        return json({ ok: true });
-      } catch (e) {
-        console.error('خطا در webhook:', e);
-        return json({ ok: false, error: e.message }, 500);
-      }
-    }
-    
-    // تنظیم webhook
-    if (url.pathname === '/api/set-webhook' && req.method === 'GET') {
-      const webhookUrl = `${url.origin}/webhook`;
-      const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/setWebhook`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: webhookUrl })
-      });
-      const result = await res.json();
-      return json(result);
-    }
-    
-    // حذف webhook
-    if (url.pathname === '/api/delete-webhook' && req.method === 'GET') {
-      const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/deleteWebhook`, {
-        method: 'POST'
-      });
-      const result = await res.json();
-      return json(result);
-    }
-    
-    // وضعیت webhook
-    if (url.pathname === '/api/webhook-info' && req.method === 'GET') {
-      const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/getWebhookInfo`);
-      const result = await res.json();
-      return json(result);
-    }
-    
-    // 404
-    return html('<h1>404 - صفحه یافت نشد</h1>');
-  }
 };
