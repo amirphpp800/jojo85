@@ -1,5 +1,5 @@
 // main.js - Cloudflare Pages + Telegram Bot (DNS Manager)
-// نسخه بهینه شده با UI حرفه‌ای
+// نسخه بهینه شده با انتخاب رندوم DNS
 
 const TELEGRAM_BASE = (token) => `https://api.telegram.org/bot${token}`;
 
@@ -24,6 +24,11 @@ function countryCodeToFlag(code) {
     .join('');
 }
 
+// انتخاب رندوم از آرایه
+function getRandomItem(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 // === KV Helpers ===
 async function listDnsEntries(kv) {
   const res = await kv.list({ prefix: 'dns:' });
@@ -39,7 +44,6 @@ async function listDnsEntries(kv) {
     }
   }
   
-  // مرتب‌سازی بر اساس نام کشور
   entries.sort((a, b) => (a.country || '').localeCompare(b.country || ''));
   return entries;
 }
@@ -60,6 +64,18 @@ async function putDnsEntry(kv, entry) {
 
 async function deleteDnsEntry(kv, code) {
   await kv.delete(`dns:${code.toUpperCase()}`);
+}
+
+async function decrementStock(kv, code) {
+  const entry = await getDnsEntry(kv, code);
+  if (!entry) return false;
+  
+  if (entry.stock && entry.stock > 0) {
+    entry.stock -= 1;
+    await putDnsEntry(kv, entry);
+    return true;
+  }
+  return false;
 }
 
 // === Web UI ===
@@ -175,7 +191,6 @@ function renderMainPage(entries) {
 </div>
 
 <script>
-// انیمیشن ورود کارت‌ها
 document.addEventListener('DOMContentLoaded', () => {
   const cards = document.querySelectorAll('.dns-card');
   cards.forEach((card, i) => {
@@ -565,7 +580,7 @@ async function telegramApi(env, path, body) {
   }
 }
 
-// ساخت کیبورد اصلی (دو دکمه DNS و Wireguard)
+// ساخت کیبورد اصلی
 function buildMainKeyboard() {
   return {
     inline_keyboard: [
@@ -595,7 +610,7 @@ function buildDnsKeyboard(entries) {
   return { inline_keyboard: rows };
 }
 
-// نمایش اطلاعات DNS یک کشور
+// نمایش یک DNS رندوم از کشور انتخابی
 async function handleDnsSelection(chat, messageId, code, env) {
   const entry = await getDnsEntry(env.DB, code);
   
@@ -608,27 +623,63 @@ async function handleDnsSelection(chat, messageId, code, env) {
     });
   }
   
-  const flag = countryCodeToFlag(entry.code);
-  let msg = `${flag} *DNS کشور ${entry.country}*\n`;
-  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
-  msg += `📦 *موجودی:* ${entry.stock ?? 0}\n`;
-  msg += `🔢 *کد کشور:* \`${entry.code}\`\n\n`;
-  
-  if (Array.isArray(entry.addresses) && entry.addresses.length > 0) {
-    msg += `📡 *آدرس‌های DNS:*\n`;
-    entry.addresses.forEach((addr, i) => {
-      msg += `${i + 1}. \`${addr}\`\n`;
+  // بررسی موجودی
+  if (!entry.stock || entry.stock <= 0) {
+    const flag = countryCodeToFlag(entry.code);
+    return telegramApi(env, '/editMessageText', {
+      chat_id: chat,
+      message_id: messageId,
+      text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n❌ *موجودی تمام شده است!*\n\nلطفاً کشور دیگری را انتخاب کنید.`,
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
     });
-  } else {
-    msg += '📡 *آدرس‌های DNS:* خالی';
   }
+  
+  // بررسی وجود آدرس
+  if (!Array.isArray(entry.addresses) || entry.addresses.length === 0) {
+    const flag = countryCodeToFlag(entry.code);
+    return telegramApi(env, '/editMessageText', {
+      chat_id: chat,
+      message_id: messageId,
+      text: `${flag} *DNS کشور ${entry.country}*\n━━━━━━━━━━━━━━━━━━━━\n\n⚠️ *هیچ آدرس DNSی موجود نیست!*`,
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
+    });
+  }
+  
+  // انتخاب رندوم یک DNS
+  const randomDns = getRandomItem(entry.addresses);
+  const flag = countryCodeToFlag(entry.code);
+  
+  // کاهش موجودی
+  await decrementStock(env.DB, code);
+  
+  // پیام با کپشن زیبا
+  let msg = `╔═══════════════════════╗\n`;
+  msg += `      ${flag} *DNS ${entry.country}*\n`;
+  msg += `╚═══════════════════════╝\n\n`;
+  msg += `🎯 *DNS اختصاصی شما:*\n`;
+  msg += `\`${randomDns}\`\n\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+  msg += `💡 *نکته مهم:*\n`;
+  msg += `این DNS را می‌توانید با *8.8.8.8* یا\n`;
+  msg += `*DNS‌های گیمینگ ایرانی* تانل کنید\n`;
+  msg += `تا بهترین سرعت و پایداری را داشته باشید.\n\n`;
+  msg += `✅ *موفقیت همراه شما!*\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+  msg += `📦 موجودی باقیمانده: *${entry.stock - 1}*`;
   
   return telegramApi(env, '/editMessageText', {
     chat_id: chat,
     message_id: messageId,
     text: msg,
     parse_mode: 'Markdown',
-    reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]] }
+    reply_markup: { 
+      inline_keyboard: [
+        [{ text: '🔄 دریافت DNS جدید', callback_data: `dns:${code}` }],
+        [{ text: '🔙 بازگشت به لیست', callback_data: 'show_dns' }]
+      ] 
+    }
   });
 }
 
@@ -645,7 +696,7 @@ export async function handleUpdate(update, env) {
         const kb = buildMainKeyboard();
         await telegramApi(env, '/sendMessage', {
           chat_id: chat,
-          text: '👋 *خوش آمدید!*\n\nلطفاً یکی از گزینه‌های زیر را انتخاب کنید:',
+          text: '👋 *سلام! خوش آمدید*\n\n🌐 برای دریافت DNS، گزینه موردنظر خود را انتخاب کنید:',
           parse_mode: 'Markdown',
           reply_markup: kb
         });
@@ -674,7 +725,7 @@ export async function handleUpdate(update, env) {
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: '👋 *خوش آمدید!*\n\nلطفاً یکی از گزینه‌های زیر را انتخاب کنید:',
+          text: '👋 *سلام! خوش آمدید*\n\n🌐 برای دریافت DNS، گزینه موردنظر خود را انتخاب کنید:',
           parse_mode: 'Markdown',
           reply_markup: kb
         });
@@ -687,13 +738,13 @@ export async function handleUpdate(update, env) {
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: '🌐 *لیست کشورها و موجودی DNS*\n\nکشور موردنظر خود را انتخاب کنید:',
+          text: '🌍 *لیست کشورها*\n\nکشور موردنظر را انتخاب کنید تا یک DNS رندوم دریافت کنید:\n\n🟢 موجودی زیاد\n🟡 موجودی کم\n🔴 ناموجود',
           parse_mode: 'Markdown',
           reply_markup: kb
         });
       }
       
-      // انتخاب یک کشور
+      // انتخاب یک کشور و دریافت DNS رندوم
       else if (data.startsWith('dns:')) {
         const code = data.split(':')[1];
         await handleDnsSelection(chat, messageId, code, env);
@@ -766,7 +817,7 @@ export default {
       const code = form.get('code');
       
       if (code) {
-        await deleteDnsEntry(env.DB, code.toUpperCase());
+        await deleteDnsEntry(env.DB, code);
       }
       
       return html('<script>window.location.href="/";</script>');
@@ -774,11 +825,45 @@ export default {
     
     // Webhook تلگرام
     if (url.pathname === '/webhook' && req.method === 'POST') {
-      const update = await req.json();
-      await handleUpdate(update, env);
-      return json({ ok: true });
+      try {
+        const update = await req.json();
+        await handleUpdate(update, env);
+        return json({ ok: true });
+      } catch (e) {
+        console.error('خطا در webhook:', e);
+        return json({ ok: false, error: e.message }, 500);
+      }
     }
     
-    return new Response('Not Found', { status: 404 });
+    // تنظیم webhook
+    if (url.pathname === '/api/set-webhook' && req.method === 'GET') {
+      const webhookUrl = `${url.origin}/webhook`;
+      const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/setWebhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: webhookUrl })
+      });
+      const result = await res.json();
+      return json(result);
+    }
+    
+    // حذف webhook
+    if (url.pathname === '/api/delete-webhook' && req.method === 'GET') {
+      const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/deleteWebhook`, {
+        method: 'POST'
+      });
+      const result = await res.json();
+      return json(result);
+    }
+    
+    // وضعیت webhook
+    if (url.pathname === '/api/webhook-info' && req.method === 'GET') {
+      const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/getWebhookInfo`);
+      const result = await res.json();
+      return json(result);
+    }
+    
+    // 404
+    return html('<h1>404 - صفحه یافت نشد</h1>');
   }
 };
