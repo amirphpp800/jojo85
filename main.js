@@ -811,11 +811,17 @@ function buildMainKeyboard() {
     };
 }
 
-// ساخت کیبورد لیست کشورها
-function buildDnsKeyboard(entries) {
+// ساخت کیبورد لیست کشورها با صفحه‌بندی
+function buildDnsKeyboard(entries, page = 0) {
+    const ITEMS_PER_PAGE = 12;
+    const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
+    const startIndex = page * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const currentEntries = entries.slice(startIndex, endIndex);
+    
     const rows = [];
     
-    entries.forEach(e => {
+    currentEntries.forEach(e => {
         const flag = countryCodeToFlag(e.code);
         const stock = e.stock ?? 0;
         const totalAddresses = Array.isArray(e.addresses) ? e.addresses.length : 0;
@@ -846,6 +852,35 @@ function buildDnsKeyboard(entries) {
             }
         ]);
     });
+
+    // اضافه کردن دکمه‌های صفحه‌بندی
+    if (totalPages > 1) {
+        const paginationRow = [];
+        
+        // دکمه صفحه قبل
+        if (page > 0) {
+            paginationRow.push({
+                text: '⬅️ قبلی',
+                callback_data: `page:${page - 1}`
+            });
+        }
+        
+        // نمایش شماره صفحه فعلی
+        paginationRow.push({
+            text: `${page + 1}/${totalPages}`,
+            callback_data: `current_page`
+        });
+        
+        // دکمه صفحه بعد
+        if (page < totalPages - 1) {
+            paginationRow.push({
+                text: 'بعدی ➡️',
+                callback_data: `page:${page + 1}`
+            });
+        }
+        
+        rows.push(paginationRow);
+    }
 
     rows.push([{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]);
 
@@ -997,7 +1032,7 @@ export async function handleUpdate(update, env) {
             }
 
             // نمایش لیست DNS
-            else if (data === 'show_dns') {
+            else if (data === 'show_dns' || data.startsWith('page:')) {
                 const entries = await listDnsEntries(env.DB);
                 if (entries.length === 0) {
                     await telegramApi(env, '/editMessageText', {
@@ -1008,12 +1043,17 @@ export async function handleUpdate(update, env) {
                         reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
                     });
                 } else {
-                    const kb = buildDnsKeyboard(entries);
+                    // تعیین شماره صفحه
+                    const page = data.startsWith('page:') ? parseInt(data.split(':')[1]) || 0 : 0;
+                    const kb = buildDnsKeyboard(entries, page);
                     const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
+                    const totalPages = Math.ceil(entries.length / 12);
+                    const currentPage = page + 1;
+                    
                     await telegramApi(env, '/editMessageText', {
                         chat_id: chat,
                         message_id: messageId,
-                        text: `🌍 *لیست کشورهای موجود*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (6-10)\n🔴 ناموجود`,
+                        text: `🌍 *لیست کشورهای موجود*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n📄 صفحه: *${currentPage}/${totalPages}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (6-10)\n🔴 ناموجود`,
                         parse_mode: 'Markdown',
                         reply_markup: kb
                     });
@@ -1032,6 +1072,15 @@ export async function handleUpdate(update, env) {
                     callback_query_id: cb.id,
                     text: 'برای دریافت آدرس، روی دکمه اسم کشور کلیک کنید',
                     show_alert: true
+                });
+            }
+
+            // کلیک روی شماره صفحه فعلی
+            else if (data === 'current_page') {
+                await telegramApi(env, '/answerCallbackQuery', {
+                    callback_query_id: cb.id,
+                    text: 'این صفحه فعلی است',
+                    show_alert: false
                 });
             }
 
