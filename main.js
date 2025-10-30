@@ -84,8 +84,8 @@ async function trackDnsUsageAndRemove(kv, entry, dnsAddress) {
 
     usage.count += 1;
 
-    // اگر به 3 استفاده رسید، آدرس را از لیست حذف کن
-    if (usage.count >= 3) {
+    // اگر به 2 استفاده رسید، آدرس را از لیست حذف کن
+    if (usage.count >= 2) {
         // حذف آدرس از لیست
         if (Array.isArray(entry.addresses)) {
             entry.addresses = entry.addresses.filter(addr => addr !== dnsAddress);
@@ -95,7 +95,7 @@ async function trackDnsUsageAndRemove(kv, entry, dnsAddress) {
         // حذف کلید usage
         await kv.delete(key);
         
-        return { count: 3, removed: true };
+        return { count: 2, removed: true };
     } else {
         // ذخیره تعداد استفاده
         await kv.put(key, JSON.stringify(usage));
@@ -118,12 +118,12 @@ async function getAvailableDns(kv, entry) {
         const raw = await kv.get(key);
         const usage = raw ? JSON.parse(raw) : { count: 0 };
 
-        if (usage.count < 3) {
+        if (usage.count < 2) {
             return dns;
         }
     }
 
-    return null; // اگر همه DNS‌ها به 3 استفاده رسیدند
+    return null; // اگر همه DNS‌ها به 2 استفاده رسیدند
 }
 
 // === Web UI ===
@@ -956,9 +956,9 @@ async function handleDnsSelection(chat, messageId, code, env) {
     
     if (result.removed) {
         msg += `🔴 *این آدرس به حد مجاز رسید و حذف شد*\n`;
-        msg += `تعداد استفاده: *${result.count}/3* ✅\n\n`;
+        msg += `تعداد استفاده: *${result.count}/2* ✅\n\n`;
     } else {
-        msg += `👥 *تعداد استفاده از این DNS: ${result.count}/3*\n\n`;
+        msg += `👥 *تعداد استفاده از این DNS: ${result.count}/2*\n\n`;
     }
     
     msg += `🎮 *DNS‌های پیشنهادی برای تانل:*\n\n`;
