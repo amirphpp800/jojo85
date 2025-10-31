@@ -1931,18 +1931,13 @@ export async function handleUpdate(update, env) {
                 await clearWgState(env.DB, from.id);
                 
                 // پیام موفقیت
-                const wgAddresses = addresses.join(', ');
-                const firstAddress = addresses[0].split('/')[0]; // استخراج IP از CIDR
-                const checkWgUrl = `https://check-host.net/check-ping?host=${firstAddress}`;
-                
                 await telegramApi(env, '/editMessageText', {
                   chat_id: chat,
                   message_id: messageId,
-                  text: `✅ فایل وایرگارد با موفقیت ارسال شد!\n\n📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}\n\n💡 *نکته:* برای بررسی فیلتر آدرس، فقط سرورهای ایران را چک کنید و باید 4/4 باشد.`,
+                  text: `✅ فایل وایرگارد با موفقیت ارسال شد!\n\n📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}`,
                   parse_mode: 'Markdown',
                   reply_markup: { 
                     inline_keyboard: [
-                      [{ text: '🔍 بررسی فیلتر آدرس', url: checkWgUrl }],
                       [{ text: '🔄 دریافت فایل جدید', callback_data: 'wireguard' }],
                       [{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]
                     ]
