@@ -33,7 +33,9 @@ async function getUserQuota(kv, userId, type) {
   const key = `quota:${type}:${userId}:${todayKey()}`;
   const raw = await kv.get(key);
   const count = raw ? Number(raw) || 0 : 0;
-  return { count, limit: 3 };
+  // ادمین محدودیت ندارد
+  const limit = Number(userId) === Number(ADMIN_ID) ? 999999 : 3;
+  return { count, limit };
 }
 
 async function incUserQuota(kv, userId, type) {
@@ -294,6 +296,43 @@ function getRandomDns(entry) {
   return entry.addresses[Math.floor(Math.random() * entry.addresses.length)];
 }
 
+// تشخیص کشور از IP با استفاده از API
+async function detectCountryFromIP(ip) {
+  try {
+    const res = await fetch(`https://api.iplocation.net/?cmd=ip-country&ip=${ip}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    const data = await res.json();
+    if (data && data.country_code2) {
+      return {
+        code: data.country_code2.toUpperCase(),
+        name: data.country_name || getCountryNameFromCode(data.country_code2)
+      };
+    }
+    return null;
+  } catch (e) {
+    console.error('خطا در تشخیص کشور:', e);
+    return null;
+  }
+}
+
+// نقشه نام کشورها به فارسی
+function getCountryNameFromCode(code) {
+  const map = {
+    'US': 'آمریکا', 'GB': 'انگلستان', 'DE': 'آلمان', 'FR': 'فرانسه', 'NL': 'هلند',
+    'CA': 'کانادا', 'AU': 'استرالیا', 'JP': 'ژاپن', 'SG': 'سنگاپور', 'IN': 'هند',
+    'IR': 'ایران', 'TR': 'ترکیه', 'AE': 'امارات', 'SE': 'سوئد', 'CH': 'سوئیس',
+    'IT': 'ایتالیا', 'ES': 'اسپانیا', 'BR': 'برزیل', 'RU': 'روسیه', 'CN': 'چین',
+    'KR': 'کره جنوبی', 'FI': 'فنلاند', 'NO': 'نروژ', 'DK': 'دانمارک', 'PL': 'لهستان',
+    'CZ': 'چک', 'AT': 'اتریش', 'BE': 'بلژیک', 'IE': 'ایرلند', 'PT': 'پرتغال',
+    'GR': 'یونان', 'HU': 'مجارستان', 'RO': 'رومانی', 'BG': 'بلغارستان', 'UA': 'اوکراین',
+    'IL': 'اسرائیل', 'SA': 'عربستان', 'EG': 'مصر', 'ZA': 'آفریقای جنوبی', 'MX': 'مکزیک',
+    'AR': 'آرژانتین', 'CL': 'شیلی', 'CO': 'کلمبیا', 'VN': 'ویتنام', 'TH': 'تایلند',
+    'ID': 'اندونزی', 'MY': 'مالزی', 'PH': 'فیلیپین', 'NZ': 'نیوزیلند', 'HK': 'هنگ کنگ'
+  };
+  return map[code.toUpperCase()] || code.toUpperCase();
+}
+
 // === Web UI ===
 async function countUsers(kv) {
   try {
@@ -399,6 +438,24 @@ function renderMainPage(entries, userCount) {
 
   <section class="section">
     <div class="section-header">
+      <h2>🚀 افزودن گروهی آدرس‌ها (تشخیص خودکار کشور)</h2>
+    </div>
+    <form method="POST" action="/api/admin/bulk-add" class="dns-form">
+      <div class="form-group full-width">
+        <label>📡 آدرس‌های IP (هر خط یک آدرس)</label>
+        <textarea name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;185.55.226.26" rows="8" required></textarea>
+        <small>هر آدرس IP را در یک خط جداگانه وارد کنید. کشور هر آدرس به‌صورت خودکار تشخیص داده می‌شود.</small>
+      </div>
+      <div id="bulk-progress" class="bulk-progress" style="display:none;">
+        <div class="progress-bar"><div class="progress-fill"></div></div>
+        <p class="progress-text">در حال پردازش...</p>
+      </div>
+      <button type="submit" class="btn-submit" id="bulk-submit">🔍 تشخیص و افزودن</button>
+    </form>
+  </section>
+
+  <section class="section">
+    <div class="section-header">
       <h2>➕ افزودن DNS جدید</h2>
     </div>
     <form method="POST" action="/api/admin/add-dns" class="dns-form">
@@ -449,6 +506,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const ok = !q || name.includes(q) || code.includes(q) || addrs.includes(q);
         card.style.display = ok ? '' : 'none';
       });
+    });
+  }
+
+  // Bulk add form with progress
+  const bulkForm = document.querySelector('form[action="/api/admin/bulk-add"]');
+  if (bulkForm) {
+    bulkForm.addEventListener('submit', (e) => {
+      const progress = document.getElementById('bulk-progress');
+      const btn = document.getElementById('bulk-submit');
+      if (progress && btn) {
+        progress.style.display = 'block';
+        btn.disabled = true;
+        btn.textContent = '⏳ در حال پردازش...';
+      }
     });
   }
 });
@@ -1065,6 +1136,46 @@ body.dark .current-addresses {
 body.dark .badge { box-shadow: none; }
 body.dark .btn-submit { box-shadow: none; }
 body.dark .btn-delete { box-shadow: none; }
+
+.bulk-progress {
+  margin: 15px 0;
+  padding: 15px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 2px solid #e2e8f0;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 14px;
+  color: #64748b;
+  text-align: center;
+  margin: 0;
+}
+
+body.dark .bulk-progress {
+  background: #0f172a;
+  border-color: #1f2937;
+}
+
+body.dark .progress-bar {
+  background: #1f2937;
+}
 `;
 }
 
@@ -1105,7 +1216,10 @@ function buildMainKeyboard(userId) {
   rows.push([{ text: '👤 حساب کاربری', callback_data: 'account' }]);
   // سطر سوم: ادمین (در صورت نیاز)
   if (Number(userId) === Number(ADMIN_ID)) {
-    rows.push([{ text: '📢 پیام همگانی', callback_data: 'broadcast' }]);
+    rows.push([
+      { text: '📢 پیام همگانی', callback_data: 'broadcast' },
+      { text: '🎁 ریست محدودیت', callback_data: 'reset_quota' }
+    ]);
   }
   return { inline_keyboard: rows };
 }
@@ -1478,23 +1592,33 @@ export async function handleUpdate(update, env) {
               fd.append('caption', captionHtml);
               fd.append('parse_mode', 'HTML');
               
-              // استفاده از Blob به جای File
-              const blob = new Blob([conf], { type: 'text/plain' });
-              fd.append('document', blob, filename);
+              // استفاده از File برای اطمینان از وجود نام فایل در multipart
+              const file = new File([conf], filename, { type: 'text/plain' });
+              fd.append('document', file);
               
-              await telegramUpload(env, 'sendDocument', fd);
-              await incUserQuota(env.DB, from.id, 'wg');
-              const newQuota = await getUserQuota(env.DB, from.id, 'wg');
-              await addUserHistory(env.DB, from.id, 'wg', `${state.country}|${dnsList.join('+')}|${mtu}|${listenPort}`);
-              await clearWgState(env.DB, from.id);
-              
-              // پیام موفقیت
-              await telegramApi(env, '/editMessageText', {
-                chat_id: chat,
-                message_id: messageId,
-                text: `✅ فایل وایرگارد با موفقیت ارسال شد!\n\n📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}`,
-                reply_markup: { inline_keyboard: [[{ text: '🔄 دریافت فایل جدید', callback_data: 'wireguard' }],[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
-              });
+              const uploadRes = await telegramUpload(env, 'sendDocument', fd);
+              if (!uploadRes || uploadRes.ok !== true) {
+                const err = uploadRes && uploadRes.description ? uploadRes.description : 'ارسال فایل ناموفق بود';
+                await telegramApi(env, '/editMessageText', {
+                  chat_id: chat,
+                  message_id: messageId,
+                  text: `❌ ارسال فایل انجام نشد\n\n${err}`,
+                  reply_markup: { inline_keyboard: [[{ text: '🔁 تلاش مجدد', callback_data: `wg_op:${opCode}` }], [{ text: '🔙 بازگشت', callback_data: 'wireguard' }]] }
+                });
+              } else {
+                await incUserQuota(env.DB, from.id, 'wg');
+                const newQuota = await getUserQuota(env.DB, from.id, 'wg');
+                await addUserHistory(env.DB, from.id, 'wg', `${state.country}|${dnsList.join('+')}|${mtu}|${listenPort}`);
+                await clearWgState(env.DB, from.id);
+                
+                // پیام موفقیت
+                await telegramApi(env, '/editMessageText', {
+                  chat_id: chat,
+                  message_id: messageId,
+                  text: `✅ فایل وایرگارد با موفقیت ارسال شد!\n\n📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}`,
+                  reply_markup: { inline_keyboard: [[{ text: '🔄 دریافت فایل جدید', callback_data: 'wireguard' }],[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
+                });
+              }
             }
           }
         }
@@ -1633,13 +1757,86 @@ export async function handleUpdate(update, env) {
         if (Number(from.id) === Number(ADMIN_ID)) {
           await env.DB.delete(`admin_state:${ADMIN_ID}`);
         }
-        const kb = buildMainKeyboard(from.id);
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: 'بازگشت به منوی اصلی.',
-          reply_markup: kb
+          text: '❌ لغو شد',
+          reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'back_main' }]] }
         });
+      }
+
+      // ریست محدودیت (فقط ادمین)
+      else if (data === 'reset_quota') {
+        if (Number(from.id) !== Number(ADMIN_ID)) {
+          await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اجازه دسترسی ندارید', show_alert: true });
+        } else {
+          await telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: '🎁 *ریست محدودیت کاربران*\n\nآیا مطمئن هستید که می‌خواهید محدودیت روزانه تمام کاربران را صفر کنید؟\n\n⚠️ این عمل قابل بازگشت نیست و به همه کاربران اطلاع داده می‌شود.',
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [
+              [{ text: '✅ بله، ریست کن', callback_data: 'confirm_reset_quota' }],
+              [{ text: '❌ لغو', callback_data: 'back_main' }]
+            ]}
+          });
+        }
+      }
+
+      // تایید ریست محدودیت
+      else if (data === 'confirm_reset_quota') {
+        if (Number(from.id) !== Number(ADMIN_ID)) {
+          await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اجازه دسترسی ندارید', show_alert: true });
+        } else {
+          // حذف تمام کلیدهای quota
+          const today = todayKey();
+          const dnsKeys = await env.DB.list({ prefix: `quota:dns:` });
+          const wgKeys = await env.DB.list({ prefix: `quota:wg:` });
+          
+          let deleted = 0;
+          for (const k of dnsKeys.keys) {
+            if (k.name.includes(today)) {
+              await env.DB.delete(k.name);
+              deleted++;
+            }
+          }
+          for (const k of wgKeys.keys) {
+            if (k.name.includes(today)) {
+              await env.DB.delete(k.name);
+              deleted++;
+            }
+          }
+
+          // ارسال پیام به همه کاربران
+          const users = await env.DB.list({ prefix: 'users:' });
+          let notified = 0;
+          const giftMsg = '🎁 *خبر خوش!*\n\nمحدودیت روزانه شما توسط مدیریت ربات ریست شد!\n\n✨ می‌توانید مجدداً از خدمات استفاده کنید.\n\n💝 از صبر و همراهی شما سپاسگزاریم.';
+          
+          for (const k of users.keys) {
+            try {
+              const userId = k.name.replace('users:', '');
+              if (Number(userId) !== Number(ADMIN_ID)) {
+                await telegramApi(env, '/sendMessage', {
+                  chat_id: userId,
+                  text: giftMsg,
+                  parse_mode: 'Markdown'
+                });
+                notified++;
+                await new Promise(r => setTimeout(r, 50)); // جلوگیری از rate limit
+              }
+            } catch (e) {
+              console.error('خطا در ارسال به کاربر:', e);
+            }
+          }
+
+          await telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: `✅ *ریست محدودیت انجام شد*\n\n🗑️ ${deleted} محدودیت حذف شد\n📨 ${notified} کاربر مطلع شدند`,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'back_main' }]] }
+          });
+        }
       }
     }
   } catch (e) {
@@ -1740,6 +1937,65 @@ export default {
       }
 
       return html('<script>window.location.href="/";</script>');
+    }
+
+    // API: افزودن گروهی با تشخیص خودکار کشور
+    if (url.pathname === '/api/admin/bulk-add' && req.method === 'POST') {
+      const form = await req.formData();
+      const addressesRaw = form.get('addresses');
+      
+      if (!addressesRaw) {
+        return html('<script>alert("لطفاً آدرس‌ها را وارد کنید");history.back();</script>');
+      }
+
+      const addresses = addressesRaw.split('\n')
+        .map(a => a.trim())
+        .filter(a => a && /^\d+\.\d+\.\d+\.\d+$/.test(a));
+
+      if (addresses.length === 0) {
+        return html('<script>alert("هیچ آدرس IP معتبری یافت نشد");history.back();</script>');
+      }
+
+      const results = { success: 0, failed: 0, byCountry: {} };
+
+      for (const ip of addresses) {
+        const country = await detectCountryFromIP(ip);
+        if (!country || !country.code) {
+          results.failed++;
+          continue;
+        }
+
+        const code = country.code.toUpperCase();
+        const existing = await getDnsEntry(env.DB, code);
+
+        if (existing) {
+          // اضافه کردن به کشور موجود
+          if (!existing.addresses.includes(ip)) {
+            existing.addresses.push(ip);
+            existing.stock = existing.addresses.length;
+            await putDnsEntry(env.DB, existing);
+            results.success++;
+            results.byCountry[code] = (results.byCountry[code] || 0) + 1;
+          }
+        } else {
+          // ایجاد کشور جدید
+          const newEntry = {
+            code: code,
+            country: country.name,
+            addresses: [ip],
+            stock: 1
+          };
+          await putDnsEntry(env.DB, newEntry);
+          results.success++;
+          results.byCountry[code] = 1;
+        }
+      }
+
+      const summary = Object.entries(results.byCountry)
+        .map(([code, count]) => `${code}: ${count}`)
+        .join(', ');
+      const msg = `✅ ${results.success} آدرس اضافه شد\\n❌ ${results.failed} آدرس ناموفق\\n\\n📊 ${summary}`;
+      return html(`<script>alert("${msg}");window.location.href="/";</script>`);
     }
 
     // Webhook تلگرام
