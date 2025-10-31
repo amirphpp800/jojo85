@@ -117,13 +117,20 @@ async function generateWireGuardKeys() {
 }
 
 function buildWgConf({ privateKey, addresses, dns, mtu, listenPort }) {
-  const addrLines = addresses.map(a => `Address = ${a}`).join('\n');
+  let addrLines = '';
+  if (Array.isArray(addresses) && addresses.length > 1) {
+    addrLines = `Address = ${addresses[0]}\nAddress = ${addresses.join(', ')}`;
+  } else if (Array.isArray(addresses) && addresses.length === 1) {
+    addrLines = `Address = ${addresses[0]}`;
+  } else {
+    addrLines = '';
+  }
   return `[Interface]
 PrivateKey = ${privateKey}
+ListenPort = ${listenPort}
 ${addrLines}
 DNS = ${dns}
 MTU = ${mtu}
-ListenPort = ${listenPort}
 `;
 }
 
@@ -357,6 +364,13 @@ function renderMainPage(entries, userCount) {
       <h1>🌐 پنل مدیریت DNS</h1>
       <p class="subtitle">مدیریت و پیکربندی سرورهای DNS در سراسر دنیا</p>
     </div>
+    <div class="header-actions">
+      <div class="search-box">
+        <input id="search" type="text" placeholder="جستجو: نام یا کد کشور..." autocomplete="off">
+        <span class="search-icon">🔎</span>
+      </div>
+      <button id="theme-toggle" class="btn-toggle" aria-label="تغییر تم">🌙</button>
+    </div>
     <div class="header-stats">
       <div class="stat-box">
         <span class="stat-number">${entries.length}</span>
@@ -378,7 +392,7 @@ function renderMainPage(entries, userCount) {
       <h2>📋 لیست DNS‌های موجود</h2>
       <span class="badge">${entries.length} مورد</span>
     </div>
-    <div class="dns-grid">
+    <div id="dns-grid" class="dns-grid">
       ${rows || '<div class="empty-state">هنوز هیچ DNS ثبت نشده است</div>'}
     </div>
   </section>
@@ -411,30 +425,47 @@ function renderMainPage(entries, userCount) {
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const cards = document.querySelectorAll('.dns-card');
-  cards.forEach((card, i) => {
-    card.style.animationDelay = (i * 0.05) + 's';
+  cards.forEach((card, i) => { card.style.animationDelay = (i * 0.05) + 's'; });
+
+  const toggleBtn = document.getElementById('theme-toggle');
+  const savedTheme = localStorage.getItem('theme');
+  if (savedTheme === 'dark') { document.body.classList.add('dark'); toggleBtn.textContent = '☀️'; }
+  toggleBtn.addEventListener('click', () => {
+    document.body.classList.toggle('dark');
+    const dark = document.body.classList.contains('dark');
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+    toggleBtn.textContent = dark ? '☀️' : '🌙';
   });
+
+  const search = document.getElementById('search');
+  const grid = document.getElementById('dns-grid');
+  if (search && grid) {
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      grid.querySelectorAll('.dns-card').forEach(card => {
+        const name = card.querySelector('.country-details h3')?.textContent?.toLowerCase() || '';
+        const code = card.querySelector('.country-code')?.textContent?.toLowerCase() || '';
+        const addrs = Array.from(card.querySelectorAll('.addresses-list code')).map(c => c.textContent.toLowerCase()).join(' ');
+        const ok = !q || name.includes(q) || code.includes(q) || addrs.includes(q);
+        card.style.display = ok ? '' : 'none';
+      });
+    });
+  }
 });
 
-// تابع تغییر تب
 function showTab(tabName) {
-  // حذف کلاس active از همه تب‌ها و محتویات
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-  
-  // اضافه کردن کلاس active به تب و محتوای انتخابی
   document.querySelector(\`[onclick="showTab('\${tabName}')"]\`).classList.add('active');
   document.getElementById(\`\${tabName}-form\`).classList.add('active');
 }
 
-// بارگذاری اطلاعات کشور برای ویرایش
 async function loadCountryData(code) {
   if (!code) {
     document.getElementById('current-addresses').innerHTML = 'انتخاب کشور را برای مشاهده آدرس‌های فعلی انجام دهید';
     document.getElementById('edit-stock').value = '0';
     return;
   }
-  
   try {
     const response = await fetch('/api/dns');
     const entries = await response.json();
@@ -486,6 +517,45 @@ body {
   padding: 30px;
   margin-bottom: 30px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+.header-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.search-box {
+  position: relative;
+  flex: 1;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 12px 40px 12px 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.search-box .search-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+}
+
+.btn-toggle {
+  border: none;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
 }
 
 .header-content h1 {
@@ -956,6 +1026,45 @@ select:focus {
     border-bottom-color: transparent;
   }
 }
+
+/* Dark mode */
+body.dark {
+  background: linear-gradient(135deg, #0f172a 0%, #111827 50%, #1f2937 100%);
+}
+
+body.dark .main-header,
+body.dark .section {
+  background: rgba(17, 24, 39, 0.9);
+  color: #e5e7eb;
+}
+
+body.dark .subtitle,
+body.dark .stat-text,
+body.dark .empty,
+body.dark small,
+body.dark label {
+  color: #94a3b8;
+}
+
+body.dark .dns-card { background: #0b1220; }
+body.dark .card-body { color: #e5e7eb; }
+body.dark .country-details h3 { color: #e5e7eb; }
+body.dark .country-code { background: #111827; color: #93c5fd; }
+body.dark .card-footer { border-top-color: #1f2937; }
+body.dark .addresses-list code { background: #0f172a; color: #e5e7eb; }
+
+body.dark input,
+body.dark textarea,
+body.dark select,
+body.dark .current-addresses {
+  background: #0f172a;
+  color: #e5e7eb;
+  border-color: #1f2937;
+}
+
+body.dark .badge { box-shadow: none; }
+body.dark .btn-submit { box-shadow: none; }
+body.dark .btn-delete { box-shadow: none; }
 `;
 }
 
@@ -1365,7 +1474,9 @@ export async function handleUpdate(update, env) {
               
               const fd = new FormData();
               fd.append('chat_id', String(chat));
-              fd.append('caption', `نام: ${filename}\n• اپراتور: ${OPERATORS[opCode].title}\n• دی ان اس: ${dnsList.join(' , ')}\n• MTU: ${mtu}\n• پورت: ${listenPort}\n\nنکته: ListenPort بین 40000 تا 60000 باشد.`);
+              const captionHtml = `<blockquote><b>نام:</b> ${filename}<br>• <b>اپراتور:</b> ${OPERATORS[opCode].title}<br>• <b>دی ان اس:</b> ${dnsList.join(' , ')}<br>• <b>MTU:</b> ${mtu}<br>• <b>پورت:</b> ${listenPort}<br><br><i>نکته:</i> ListenPort بین 40000 تا 60000 باشد.</blockquote>`;
+              fd.append('caption', captionHtml);
+              fd.append('parse_mode', 'HTML');
               
               // استفاده از Blob به جای File
               const blob = new Blob([conf], { type: 'text/plain' });
