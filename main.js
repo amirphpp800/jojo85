@@ -115,6 +115,15 @@ async function generateWireGuardKeys() {
   // Generate a WireGuard-compatible private key (32 random bytes, base64)
   const rawPriv = new Uint8Array(32);
   crypto.getRandomValues(rawPriv);
+  
+  // Apply WireGuard key clamping:
+  // - Clear the 3 least significant bits of the first byte
+  // - Clear the most significant bit of the last byte
+  // - Set the second most significant bit of the last byte
+  rawPriv[0] &= 248;  // 11111000 - clear bottom 3 bits
+  rawPriv[31] &= 127; // 01111111 - clear top bit
+  rawPriv[31] |= 64;  // 01000000 - set second top bit
+  
   return { privateKey: b64(rawPriv), publicKey: null };
 }
 
