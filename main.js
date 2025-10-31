@@ -104,10 +104,15 @@ function randName8() {
   return s;
 }
 
+function generateWgFilename() {
+  const randomNum = String(randInt(10000, 99999));
+  return `JOJO${randomNum}`;
+}
+
 function b64(bytes) {
   let bin = '';
   bytes.forEach(b => bin += String.fromCharCode(b));
-  const base = btoa(bin).replace(/=+$/,'');
+  const base = btoa(bin);
   return base;
 }
 
@@ -1903,7 +1908,7 @@ export async function handleUpdate(update, env) {
               const listenPort = randInt(40000, 60000);
               const dnsList = Array.isArray(state.dns) ? state.dns : [state.dns];
               const conf = buildWgConf({ privateKey: keys.privateKey, addresses, dns: dnsList.join(', '), mtu, listenPort });
-              const filename = `${randName8()}.conf`;
+              const filename = `${generateWgFilename()}.conf`;
               
               const fd = new FormData();
               fd.append('chat_id', String(chat));
