@@ -227,18 +227,18 @@ function getRandomItem(arr) {
 // === KV Helpers ===
 async function listDnsEntries(kv) {
   const res = await kv.list({ prefix: 'dns:' });
-  const entries = [];
-
-  for (const k of res.keys) {
-    const v = await kv.get(k.name);
-    try {
-      const parsed = JSON.parse(v);
-      entries.push(parsed);
-    } catch (e) {
-      console.error(`خطا در پارس ${k.name}:`, e);
+  // بارگذاری موازی برای سرعت بیشتر
+  const promises = res.keys.map(async k => {
+    const raw = await kv.get(k.name);
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch {}
     }
-  }
-
+    return null;
+  });
+  const results = await Promise.all(promises);
+  const entries = results.filter(e => e !== null);
   entries.sort((a, b) => (a.country || '').localeCompare(b.country || ''));
   return entries;
 }
@@ -296,22 +296,50 @@ function getRandomDns(entry) {
   return entry.addresses[Math.floor(Math.random() * entry.addresses.length)];
 }
 
-// تشخیص کشور از IP با استفاده از API
+// Cache برای تشخیص کشور IP ها (برای جلوگیری از درخواست‌های تکراری)
+const ipCountryCache = new Map();
+
+// تشخیص کشور از IP با استفاده از API (با timeout و cache برای سرعت بیشتر)
 async function detectCountryFromIP(ip) {
+  // بررسی cache
+  if (ipCountryCache.has(ip)) {
+    return ipCountryCache.get(ip);
+  }
+  
   try {
+    // timeout 5 ثانیه برای جلوگیری از تاخیر زیاد
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
     const res = await fetch(`https://api.iplocation.net/?cmd=ip-country&ip=${ip}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
     const data = await res.json();
+    
     if (data && data.country_code2) {
-      return {
+      const result = {
         code: data.country_code2.toUpperCase(),
         name: data.country_name || getCountryNameFromCode(data.country_code2)
       };
+      // ذخیره در cache
+      ipCountryCache.set(ip, result);
+      return result;
     }
+    
+    // ذخیره null در cache برای جلوگیری از تلاش مجدد
+    ipCountryCache.set(ip, null);
     return null;
   } catch (e) {
-    console.error('خطا در تشخیص کشور:', e);
+    if (e.name === 'AbortError') {
+      console.error('Timeout در تشخیص کشور:', ip);
+    } else {
+      console.error('خطا در تشخیص کشور:', e);
+    }
+    // ذخیره null در cache
+    ipCountryCache.set(ip, null);
     return null;
   }
 }
@@ -509,17 +537,91 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Bulk add form with progress
+  // Bulk add form with live progress
   const bulkForm = document.querySelector('form[action="/api/admin/bulk-add"]');
   if (bulkForm) {
-    bulkForm.addEventListener('submit', (e) => {
+    bulkForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
       const progress = document.getElementById('bulk-progress');
+      const progressFill = progress.querySelector('.progress-fill');
+      const progressText = progress.querySelector('.progress-text');
       const btn = document.getElementById('bulk-submit');
-      if (progress && btn) {
-        progress.style.display = 'block';
-        btn.disabled = true;
-        btn.textContent = '⏳ در حال پردازش...';
+      const textarea = bulkForm.querySelector('textarea[name="addresses"]');
+      
+      if (!textarea.value.trim()) {
+        alert('لطفاً آدرس‌ها را وارد کنید');
+        return;
       }
+      
+      const addresses = textarea.value.split('\\n')
+        .map(a => a.trim())
+        .filter(a => a && /^\\d+\\.\\d+\\.\\d+\\.\\d+$/.test(a));
+      
+      if (addresses.length === 0) {
+        alert('هیچ آدرس IP معتبری یافت نشد');
+        return;
+      }
+      
+      progress.style.display = 'block';
+      btn.disabled = true;
+      btn.textContent = '⏳ در حال پردازش...';
+      
+      let processed = 0;
+      let success = 0;
+      let failed = 0;
+      const byCountry = {};
+      
+      // پردازش موازی با batch های 5 تایی برای سرعت بیشتر
+      const BATCH_SIZE = 5;
+      
+      for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
+        const batch = addresses.slice(i, i + BATCH_SIZE);
+        const percent = Math.round((processed / addresses.length) * 100);
+        progressText.textContent = \`⚡ پردازش موازی... (\${processed}/\${addresses.length}) - \${percent}% | ✅ \${success} | ❌ \${failed}\`;
+        
+        // پردازش همزمان 5 IP
+        const promises = batch.map(async ip => {
+          try {
+            const res = await fetch('/api/admin/bulk-add-single', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ip })
+            });
+            
+            const result = await res.json();
+            return { ip, result };
+          } catch (e) {
+            return { ip, result: { success: false, error: e.message } };
+          }
+        });
+        
+        const results = await Promise.all(promises);
+        
+        // بروزرسانی آمار
+        results.forEach(({ ip, result }) => {
+          if (result.success) {
+            success++;
+            if (result.country) {
+              byCountry[result.country] = (byCountry[result.country] || 0) + 1;
+            }
+          } else {
+            failed++;
+          }
+          processed++;
+        });
+        
+        const newPercent = Math.round((processed / addresses.length) * 100);
+        progressFill.style.width = newPercent + '%';
+        progressText.textContent = \`پردازش شد: \${processed}/\${addresses.length} - \${newPercent}% | ✅ \${success} | ❌ \${failed}\`;
+      }
+      
+      const summary = Object.entries(byCountry)
+        .map(([code, count]) => \`\${code}: \${count}\`)
+        .join(', ');
+      
+      alert(\`✅ \${success} آدرس اضافه شد\\n❌ \${failed} آدرس ناموفق\\n\\n📊 \${summary}\`);
+      window.location.href = '/';
     });
   }
 });
@@ -569,11 +671,17 @@ function getWebCss() {
 
 body {
   font-family: 'Vazirmatn', sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #ff9a9e 75%, #fecfef 100%);
   background-attachment: fixed;
   min-height: 100vh;
   padding: 20px;
   line-height: 1.6;
+  animation: gradientShift 15s ease infinite;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
 .container {
@@ -582,12 +690,25 @@ body {
 }
 
 .main-header {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  padding: 30px;
-  margin-bottom: 30px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 40px;
+  margin-bottom: 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12), 0 8px 32px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.main-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
 }
 
 .header-actions {
@@ -604,29 +725,47 @@ body {
 
 .search-box input {
   width: 100%;
-  padding: 12px 40px 12px 14px;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
+  padding: 14px 45px 14px 16px;
+  border: 2px solid rgba(226, 232, 240, 0.6);
+  border-radius: 16px;
   font-size: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.search-box input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .search-box .search-icon {
   position: absolute;
-  right: 12px;
+  right: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: #64748b;
   pointer-events: none;
+  font-size: 16px;
 }
 
 .btn-toggle {
   border: none;
   background: linear-gradient(135deg, #667eea, #764ba2);
   color: white;
-  padding: 10px 14px;
-  border-radius: 10px;
+  padding: 12px 16px;
+  border-radius: 14px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+  font-size: 16px;
+  min-width: 50px;
+}
+
+.btn-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
 }
 
 .header-content h1 {
@@ -650,46 +789,63 @@ body {
 .stat-box {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   color: white;
-  padding: 15px 25px;
-  border-radius: 12px;
+  padding: 20px 30px;
+  border-radius: 18px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 120px;
-  box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
-  transition: transform 0.3s ease;
+  min-width: 140px;
+  box-shadow: 0 8px 32px rgba(245, 87, 108, 0.25);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
 }
 
 .stat-box:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(245, 87, 108, 0.4);
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 16px 48px rgba(245, 87, 108, 0.35);
+}
+
+.stat-box:hover::before {
+  left: 100%;
 }
 
 .stat-box:nth-child(1) {
   background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
+  box-shadow: 0 8px 32px rgba(79, 172, 254, 0.25);
 }
 
 .stat-box:nth-child(1):hover {
-  box-shadow: 0 8px 25px rgba(79, 172, 254, 0.4);
+  box-shadow: 0 16px 48px rgba(79, 172, 254, 0.35);
 }
 
 .stat-box:nth-child(2) {
   background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-  box-shadow: 0 4px 15px rgba(67, 233, 123, 0.3);
+  box-shadow: 0 8px 32px rgba(67, 233, 123, 0.25);
 }
 
 .stat-box:nth-child(2):hover {
-  box-shadow: 0 8px 25px rgba(67, 233, 123, 0.4);
+  box-shadow: 0 16px 48px rgba(67, 233, 123, 0.35);
 }
 
 .stat-box:nth-child(3) {
   background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-  box-shadow: 0 4px 15px rgba(250, 112, 154, 0.3);
+  box-shadow: 0 8px 32px rgba(250, 112, 154, 0.25);
 }
 
 .stat-box:nth-child(3):hover {
-  box-shadow: 0 8px 25px rgba(250, 112, 154, 0.4);
+  box-shadow: 0 16px 48px rgba(250, 112, 154, 0.35);
 }
 
 .stat-number {
@@ -703,12 +859,25 @@ body {
 }
 
 .section {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  padding: 30px;
-  margin-bottom: 30px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 35px;
+  margin-bottom: 35px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.1), 0 6px 20px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
 }
 
 .section-header {
@@ -743,23 +912,43 @@ body {
 }
 
 .dns-card {
-  background: white;
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  animation: slideIn 0.4s ease forwards;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: slideIn 0.6s ease forwards;
   opacity: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  position: relative;
 }
 
 @keyframes slideIn {
-  to { opacity: 1; transform: translateY(0); }
-  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
 }
 
 .dns-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+}
+
+.dns-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.dns-card:hover::after {
+  opacity: 1;
 }
 
 .card-header {
@@ -941,19 +1130,22 @@ label {
 }
 
 input, textarea {
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
-  border-radius: 10px;
+  padding: 16px 20px;
+  border: 2px solid rgba(226, 232, 240, 0.6);
+  border-radius: 16px;
   font-family: 'Vazirmatn', sans-serif;
   font-size: 15px;
-  transition: all 0.2s;
-  background: white;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
 }
 
 input:focus, textarea:focus {
   outline: none;
   border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  background: rgba(255, 255, 255, 0.98);
+  transform: translateY(-1px);
 }
 
 textarea {
@@ -970,24 +1162,41 @@ small {
 .btn-submit {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   color: white;
-  padding: 14px 28px;
+  padding: 18px 36px;
   border: none;
-  border-radius: 12px;
+  border-radius: 16px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 8px 32px rgba(245, 87, 108, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-submit::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
 }
 
 .btn-submit:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 25px rgba(245, 87, 108, 0.5);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 12px 40px rgba(245, 87, 108, 0.4);
   background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
 }
 
+.btn-submit:hover::before {
+  left: 100%;
+}
+
 .btn-submit:active {
-  transform: translateY(0);
+  transform: translateY(-1px) scale(1.01);
 }
 
 .form-tabs {
@@ -1100,13 +1309,29 @@ select:focus {
 
 /* Dark mode */
 body.dark {
-  background: linear-gradient(135deg, #0f172a 0%, #111827 50%, #1f2937 100%);
+  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 25%, #16213e 50%, #0f3460 75%, #533483 100%);
+  animation: darkGradientShift 20s ease infinite;
+}
+
+@keyframes darkGradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
 body.dark .main-header,
 body.dark .section {
-  background: rgba(17, 24, 39, 0.9);
-  color: #e5e7eb;
+  background: rgba(15, 23, 42, 0.95);
+  color: #e2e8f0;
+  border-color: rgba(51, 65, 85, 0.3);
+}
+
+body.dark .main-header::before,
+body.dark .section::before {
+  background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.2), transparent);
+}
+
+body.dark .header-content h1 {
+  color: #f1f5f9;
 }
 
 body.dark .subtitle,
@@ -1117,55 +1342,114 @@ body.dark label {
   color: #94a3b8;
 }
 
-body.dark .dns-card { background: #0b1220; }
-body.dark .card-body { color: #e5e7eb; }
-body.dark .country-details h3 { color: #e5e7eb; }
-body.dark .country-code { background: #111827; color: #93c5fd; }
-body.dark .card-footer { border-top-color: #1f2937; }
-body.dark .addresses-list code { background: #0f172a; color: #e5e7eb; }
+body.dark .dns-card { 
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(51, 65, 85, 0.3);
+}
+body.dark .card-body { color: #e2e8f0; }
+body.dark .country-details h3 { color: #f1f5f9; }
+body.dark .country-code { background: #1e293b; color: #93c5fd; }
+body.dark .card-footer { border-top-color: #334155; }
+body.dark .addresses-list code { background: #1e293b; color: #e2e8f0; border-color: #475569; }
 
 body.dark input,
 body.dark textarea,
 body.dark select,
-body.dark .current-addresses {
-  background: #0f172a;
-  color: #e5e7eb;
-  border-color: #1f2937;
+body.dark .current-addresses,
+body.dark .search-box input {
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+  border-color: rgba(51, 65, 85, 0.6);
 }
 
-body.dark .badge { box-shadow: none; }
-body.dark .btn-submit { box-shadow: none; }
-body.dark .btn-delete { box-shadow: none; }
+body.dark input:focus,
+body.dark textarea:focus,
+body.dark .search-box input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  background: rgba(15, 23, 42, 0.95);
+}
+
+body.dark .search-box .search-icon {
+  color: #94a3b8;
+}
+
+body.dark .section-header {
+  border-bottom-color: #334155;
+}
+
+body.dark .bulk-progress {
+  background: rgba(15, 23, 42, 0.9);
+  border-color: #334155;
+}
+
+body.dark .progress-bar {
+  background: #334155;
+}
 
 .bulk-progress {
   margin: 15px 0;
-  padding: 15px;
-  background: #f8fafc;
-  border-radius: 10px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8fafc, #ffffff);
+  border-radius: 16px;
   border: 2px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .progress-bar {
   width: 100%;
-  height: 8px;
+  height: 12px;
   background: #e2e8f0;
-  border-radius: 4px;
+  border-radius: 8px;
   overflow: hidden;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  position: relative;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+  background-size: 200% 100%;
   width: 0%;
-  transition: width 0.3s ease;
+  transition: width 0.4s ease;
+  animation: shimmer 2s infinite;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: shine 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes shine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 .progress-text {
   font-size: 14px;
-  color: #64748b;
+  color: #475569;
   text-align: center;
   margin: 0;
+  font-weight: 500;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 body.dark .bulk-progress {
@@ -1175,6 +1459,10 @@ body.dark .bulk-progress {
 
 body.dark .progress-bar {
   background: #1f2937;
+}
+
+body.dark .progress-text {
+  color: #94a3b8;
 }
 `;
 }
@@ -1202,6 +1490,24 @@ async function telegramApi(env, path, body) {
     console.error('خطا در Telegram API:', e);
     return {};
   }
+}
+
+// Cache برای لیست DNS (5 دقیقه)
+let dnsListCache = { data: null, timestamp: 0 };
+const DNS_CACHE_TTL = 300000; // 5 minutes
+
+async function getCachedDnsList(kv) {
+  const now = Date.now();
+  if (dnsListCache.data && (now - dnsListCache.timestamp) < DNS_CACHE_TTL) {
+    return dnsListCache.data;
+  }
+  const entries = await listDnsEntries(kv);
+  dnsListCache = { data: entries, timestamp: now };
+  return entries;
+}
+
+function invalidateDnsCache() {
+  dnsListCache = { data: null, timestamp: 0 };
 }
 
 // ساخت کیبورد اصلی
@@ -1385,7 +1691,10 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
   msg += `• \`8.8.8.8\` - گوگل\n`;
   msg += `• \`1.1.1.1\` - کلودفلر\n`;
   msg += `• \`4.2.2.4\` - لول 3\n`;
-  msg += `• \`78.157.42.100\` - الکترو`;
+  msg += `• \`78.157.42.100\` - الکترو\n\n`;
+  msg += `💡 *نکته مهم:* برای بررسی فیلتر، فقط سرورهای ایران را چک کنید و باید 4/4 باشد.`;
+
+  const checkUrl = `https://check-host.net/check-ping?host=${selectedDns}`;
 
   return telegramApi(env, '/editMessageText', {
     chat_id: chat,
@@ -1394,6 +1703,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
     parse_mode: 'Markdown',
     reply_markup: {
       inline_keyboard: [
+        [{ text: '🔍 بررسی فیلتر آدرس', url: checkUrl }],
         [{ text: '🔄 دریافت DNS جدید', callback_data: `dns:${code}` }],
         [{ text: '🔙 بازگشت', callback_data: 'show_dns' }]
       ]
@@ -1474,7 +1784,7 @@ export async function handleUpdate(update, env) {
 
       // نمایش لیست DNS
       else if (data === 'show_dns' || data.startsWith('page:')) {
-        const entries = await listDnsEntries(env.DB);
+        const entries = await getCachedDnsList(env.DB);
         if (entries.length === 0) {
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
@@ -1537,7 +1847,7 @@ export async function handleUpdate(update, env) {
       // وایرگارد: شروع => انتخاب کشور
       else if (data === 'wireguard') {
         await clearWgState(env.DB, from.id);
-        const entries = await listDnsEntries(env.DB);
+        const entries = await getCachedDnsList(env.DB);
         const kb = buildWireguardCountryKb(entries);
         const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
         
@@ -1588,8 +1898,8 @@ export async function handleUpdate(update, env) {
               
               const fd = new FormData();
               fd.append('chat_id', String(chat));
-              const captionHtml = `<blockquote><b>نام:</b> ${filename}<br>• <b>اپراتور:</b> ${OPERATORS[opCode].title}<br>• <b>دی ان اس:</b> ${dnsList.join(' , ')}<br>• <b>MTU:</b> ${mtu}<br>• <b>پورت شنونده:</b> ${listenPort}<br><br><i>نکته:</i> ListenPort بین 40000 تا 60000 باشد.</blockquote>`;
-              fd.append('caption', captionHtml);
+              const captionText = `📄 <b>نام:</b> ${filename}\n• <b>اپراتور:</b> ${OPERATORS[opCode].title}\n• <b>دی ان اس:</b> ${dnsList.join(' , ')}\n• <b>MTU:</b> ${mtu}\n• <b>پورت شنونده:</b> ${listenPort}\n\n💡 <i>نکته:</i> ListenPort بین 40000 تا 60000 باشد.`;
+              fd.append('caption', captionText);
               fd.append('parse_mode', 'HTML');
               
               // استفاده از File برای اطمینان از وجود نام فایل در multipart
@@ -1612,11 +1922,22 @@ export async function handleUpdate(update, env) {
                 await clearWgState(env.DB, from.id);
                 
                 // پیام موفقیت
+                const wgAddresses = addresses.join(', ');
+                const firstAddress = addresses[0].split('/')[0]; // استخراج IP از CIDR
+                const checkWgUrl = `https://check-host.net/check-ping?host=${firstAddress}`;
+                
                 await telegramApi(env, '/editMessageText', {
                   chat_id: chat,
                   message_id: messageId,
-                  text: `✅ فایل وایرگارد با موفقیت ارسال شد!\n\n📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}`,
-                  reply_markup: { inline_keyboard: [[{ text: '🔄 دریافت فایل جدید', callback_data: 'wireguard' }],[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
+                  text: `✅ فایل وایرگارد با موفقیت ارسال شد!\n\n📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}\n\n💡 *نکته:* برای بررسی فیلتر آدرس، فقط سرورهای ایران را چک کنید و باید 4/4 باشد.`,
+                  parse_mode: 'Markdown',
+                  reply_markup: { 
+                    inline_keyboard: [
+                      [{ text: '🔍 بررسی فیلتر آدرس', url: checkWgUrl }],
+                      [{ text: '🔄 دریافت فایل جدید', callback_data: 'wireguard' }],
+                      [{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]
+                    ]
+                  }
                 });
               }
             }
@@ -1626,7 +1947,7 @@ export async function handleUpdate(update, env) {
 
       // وایرگارد: بازگشت از انتخاب DNS به لیست کشورها
       else if (data === 'wireguard_dns_back') {
-        const entries = await listDnsEntries(env.DB);
+        const entries = await getCachedDnsList(env.DB);
         const kb = buildWireguardCountryKb(entries);
         const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
         
@@ -1641,7 +1962,7 @@ export async function handleUpdate(update, env) {
 
       // وایرگارد: نمایش کشورها (میانبر)
       else if (data === 'wg_dns_country') {
-        const entries = await listDnsEntries(env.DB);
+        const entries = await getCachedDnsList(env.DB);
         const kb = buildWireguardCountryKb(entries);
         const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
         
@@ -1656,6 +1977,9 @@ export async function handleUpdate(update, env) {
 
       // وایرگارد: انتخاب کشور => ذخیره و نمایش دی ان اس‌های ثابت برای انتخاب
       else if (data.startsWith('wg_dns_country_pick:')) {
+        // پاسخ سریع به callback
+        await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id });
+        
         const code = data.split(':')[1];
         const entry = await getDnsEntry(env.DB, code);
         const flag = countryCodeToFlag(code);
@@ -1922,6 +2246,7 @@ export default {
         }
 
         await putDnsEntry(env.DB, existing);
+        invalidateDnsCache(); // بروزرسانی cache
       }
 
       return html('<script>window.location.href="/";</script>');
@@ -1934,12 +2259,57 @@ export default {
 
       if (code) {
         await deleteDnsEntry(env.DB, code);
+        invalidateDnsCache(); // بروزرسانی cache
       }
 
       return html('<script>window.location.href="/";</script>');
     }
 
-    // API: افزودن گروهی با تشخیص خودکار کشور
+    // API: افزودن تک IP (برای نمایش پیشرفت زنده)
+    if (url.pathname === '/api/admin/bulk-add-single' && req.method === 'POST') {
+      try {
+        const body = await req.json();
+        const ip = body.ip;
+        
+        if (!ip || !/^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
+          return json({ success: false, error: 'IP نامعتبر' });
+        }
+        
+        const country = await detectCountryFromIP(ip);
+        if (!country || !country.code) {
+          return json({ success: false, error: 'تشخیص کشور ناموفق' });
+        }
+        
+        const code = country.code.toUpperCase();
+        const existing = await getDnsEntry(env.DB, code);
+        
+        if (existing) {
+          if (!existing.addresses.includes(ip)) {
+            existing.addresses.push(ip);
+            existing.stock = existing.addresses.length;
+            await putDnsEntry(env.DB, existing);
+            invalidateDnsCache();
+            return json({ success: true, country: code, action: 'updated' });
+          } else {
+            return json({ success: false, error: 'آدرس تکراری' });
+          }
+        } else {
+          const newEntry = {
+            code: code,
+            country: country.name,
+            addresses: [ip],
+            stock: 1
+          };
+          await putDnsEntry(env.DB, newEntry);
+          invalidateDnsCache();
+          return json({ success: true, country: code, action: 'created' });
+        }
+      } catch (e) {
+        return json({ success: false, error: e.message });
+      }
+    }
+
+    // API: افزودن گروهی با تشخیص خودکار کشور (legacy - برای فرم‌های قدیمی)
     if (url.pathname === '/api/admin/bulk-add' && req.method === 'POST') {
       const form = await req.formData();
       const addressesRaw = form.get('addresses');
@@ -1991,6 +2361,7 @@ export default {
         }
       }
 
+      invalidateDnsCache(); // بروزرسانی cache
       const summary = Object.entries(results.byCountry)
         .map(([code, count]) => `${code}: ${count}`)
         .join(', ');
