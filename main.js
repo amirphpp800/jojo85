@@ -70,7 +70,7 @@ async function telegramUpload(env, method, formData) {
 // === WireGuard Helpers ===
 const WG_MTUS = [1280, 1320, 1360, 1380, 1400, 1420, 1440, 1480, 1500];
 const WG_FIXED_DNS = [
-  '1.1.1.1','1.0.0.1','8.8.8.8','8.8.4.4','9.9.9.9','10.202.10.10','78.157.42.100','208.67.222.222'
+  '1.1.1.1','1.0.0.1','8.8.8.8','8.8.4.4','9.9.9.9','10.202.10.10','78.157.42.100','208.67.222.222','208.67.220.220','185.55.226.26','185.55.225.25','185.51.200.2'
 ];
 const OPERATORS = {
   irancell: { title: 'ایرانسل', addresses: ['2.144.0.0/16'] },
@@ -139,7 +139,6 @@ function buildWireguardDnsKb() {
     if (b) row.push({ text: b, callback_data: `wg_dns_fixed:${b}` });
     rows.push(row);
   }
-  rows.push([{ text: '🌍 DNS از کشور', callback_data: 'wg_dns_country' }]);
   rows.push([{ text: '🔙 بازگشت', callback_data: 'wireguard' }]);
   return { inline_keyboard: rows };
 }
@@ -154,8 +153,39 @@ async function getWgState(kv, userId) {
 async function clearWgState(kv, userId) { await kv.delete(`wg_state:${userId}`); }
 
 function buildWireguardCountryKb(entries) {
-  const rows = entries.map(e => ([{ text: `${countryCodeToFlag(e.code)} ${e.country}`, callback_data: `wg_dns_country_pick:${e.code.toUpperCase()}` }]));
-  rows.push([{ text: '🔙 بازگشت', callback_data: 'wireguard_dns_back' }]);
+  const rows = [];
+  
+  entries.forEach(e => {
+    const flag = countryCodeToFlag(e.code);
+    const stock = e.stock ?? 0;
+
+    let stockEmoji = '🔴';
+    if (stock > 10) {
+      stockEmoji = '🟢';
+    } else if (stock > 5) {
+      stockEmoji = '🟡';
+    } else if (stock > 0) {
+      stockEmoji = '🟡';
+    }
+
+    // سه دکمه در یک ردیف - دایره رنگی سمت چپ، تعداد وسط، کشور سمت راست
+    rows.push([
+      {
+        text: `${stockEmoji}`,
+        callback_data: `wg_stock:${e.code.toUpperCase()}`
+      },
+      {
+        text: `${stock}`,
+        callback_data: `wg_stock:${e.code.toUpperCase()}`
+      },
+      {
+        text: `${flag} ${e.country}`,
+        callback_data: `wg_dns_country_pick:${e.code.toUpperCase()}`
+      }
+    ]);
+  });
+
+  rows.push([{ text: '🔙 بازگشت', callback_data: 'back_main' }]);
   return { inline_keyboard: rows };
 }
 
@@ -210,6 +240,22 @@ async function deleteDnsEntry(kv, code) {
   await kv.delete(`dns:${code.toUpperCase()}`);
 }
 
+// حذف یک آدرس از لیست آدرس‌های کشور و بروزرسانی موجودی
+async function removeAddressFromEntry(kv, code, address) {
+  const entry = await getDnsEntry(kv, code);
+  if (!entry) return false;
+
+  if (Array.isArray(entry.addresses)) {
+    // حذف آدرس از لیست
+    entry.addresses = entry.addresses.filter(addr => addr !== address);
+    // بروزرسانی خودکار موجودی بر اساس تعداد آدرس‌های باقیمانده
+    entry.stock = entry.addresses.length;
+    await putDnsEntry(kv, entry);
+    return true;
+  }
+  return false;
+}
+
 async function saveUser(kv, from) {
   if (!from || !from.id) return;
   const data = {
@@ -221,61 +267,12 @@ async function saveUser(kv, from) {
   await kv.put(`users:${from.id}`, JSON.stringify(data));
 }
 
-async function decrementStock(kv, code) {
-  const entry = await getDnsEntry(kv, code);
-  if (!entry) return false;
-
-  if (entry.stock && entry.stock > 0) {
-    entry.stock -= 1;
-    await putDnsEntry(kv, entry);
-    return true;
-  }
-  return false;
-}
-
-// ذخیره استفاده از DNS (سقف 3 استفاده در 24 ساعت)
-async function trackDnsUsage(kv, code, dnsAddress) {
-  const key = `usage:${code}:${dnsAddress}`;
-  const raw = await kv.get(key);
-  const usage = raw ? JSON.parse(raw) : { count: 0 };
-  usage.count += 1;
-  await kv.put(key, JSON.stringify(usage), { expirationTtl: 86400 });
-  return usage.count;
-}
-
-// دریافت DNS که کمتر از 3 بار استفاده شده
-async function getAvailableDns(kv, entry) {
+// انتخاب یک DNS رندوم از لیست
+function getRandomDns(entry) {
   if (!Array.isArray(entry.addresses) || entry.addresses.length === 0) {
     return null;
   }
-
-  // شافل کردن آدرس‌ها برای انتخاب رندوم
-  const shuffled = [...entry.addresses].sort(() => Math.random() - 0.5);
-
-  // پیدا کردن اولین DNS که کمتر از 3 بار استفاده شده
-  for (const dns of shuffled) {
-    const key = `usage:${entry.code}:${dns}`;
-    const raw = await kv.get(key);
-    const usage = raw ? JSON.parse(raw) : { count: 0 };
-
-    if (usage.count < 3) {
-      return dns;
-    }
-  }
-
-  // اگر همه پر شدند، کم‌مصرف‌ترین را انتخاب کن
-  let minUsage = Infinity;
-  let selectedDns = shuffled[0];
-  for (const dns of shuffled) {
-    const key = `usage:${entry.code}:${dns}`;
-    const raw = await kv.get(key);
-    const usage = raw ? JSON.parse(raw) : { count: 0 };
-    if (usage.count < minUsage) {
-      minUsage = usage.count;
-      selectedDns = dns;
-    }
-  }
-  return selectedDns;
+  return entry.addresses[Math.floor(Math.random() * entry.addresses.length)];
 }
 
 // === Web UI ===
@@ -388,15 +385,11 @@ function renderMainPage(entries, userCount) {
           <label>🔤 کد کشور (2 حرفی)</label>
           <input name="code" placeholder="IR" maxlength="2" required autocomplete="off" style="text-transform:uppercase;">
         </div>
-        <div class="form-group">
-          <label>📦 موجودی</label>
-          <input name="stock" type="number" placeholder="0" min="0" value="0" required>
-        </div>
       </div>
       <div class="form-group full-width">
         <label>📡 آدرس‌های DNS (هر خط یک آدرس)</label>
-        <textarea name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;8.8.4.4" rows="5"></textarea>
-        <small>هر آدرس DNS را در یک خط جداگانه وارد کنید</small>
+        <textarea name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;8.8.4.4" rows="5" required></textarea>
+        <small>هر آدرس DNS را در یک خط جداگانه وارد کنید. موجودی به صورت خودکار بر اساس تعداد آدرس‌ها محاسبه می‌شود.</small>
       </div>
       <button type="submit" class="btn-submit">💾 ذخیره اطلاعات</button>
     </form>
@@ -720,7 +713,7 @@ details[open] summary::before {
 
 .form-row {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr;
   gap: 15px;
 }
 
@@ -927,10 +920,10 @@ async function telegramApi(env, path, body) {
 // ساخت کیبورد اصلی
 function buildMainKeyboard(userId) {
   const rows = [];
-  // سطر اول: دی ان اس و وایرگارد کنار هم
+  // سطر اول: وایرگارد و دی ان اس کنار هم
   rows.push([
-    { text: '🧭 دی ان اس', callback_data: 'show_dns' },
-    { text: '🛰️ وایرگارد', callback_data: 'wireguard' }
+    { text: '🛰️ وایرگارد', callback_data: 'wireguard' },
+    { text: '🧭 دی ان اس', callback_data: 'show_dns' }
   ]);
   // سطر دوم: حساب کاربری
   rows.push([{ text: '👤 حساب کاربری', callback_data: 'account' }]);
@@ -1063,35 +1056,37 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
     });
   }
 
-  // انتخاب DNS که کمتر از 3 بار استفاده شده
-  const selectedDns = await getAvailableDns(env.DB, entry);
+  // انتخاب یک DNS رندوم
+  const selectedDns = getRandomDns(entry);
 
   if (!selectedDns) {
     const flag = countryCodeToFlag(entry.code);
     return telegramApi(env, '/editMessageText', {
       chat_id: chat,
       message_id: messageId,
-      text: `${flag} دی ان اس ${entry.country}\n\nفعلاً ظرفیت آدرس‌ها تکمیل است.`,
+      text: `${flag} دی ان اس ${entry.country}\n\nهیچ آدرسی موجود نیست.`,
       reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
     });
   }
 
   const flag = countryCodeToFlag(entry.code);
 
-  // ثبت استفاده از این DNS (سقف 3 بار)
-  const usageCount = await trackDnsUsage(env.DB, code, selectedDns);
-
-  // افزایش مصرف کاربر و کاهش موجودی
+  // افزایش مصرف کاربر و حذف آدرس از لیست
   await incUserQuota(env.DB, userId, 'dns');
+  const newQuota = await getUserQuota(env.DB, userId, 'dns');
   await addUserHistory(env.DB, userId, 'dns', `${entry.code}:${selectedDns}`);
-  // کاهش موجودی
-  await decrementStock(env.DB, code);
+  // حذف آدرس استفاده شده از لیست و بروزرسانی خودکار موجودی
+  await removeAddressFromEntry(env.DB, code, selectedDns);
+  
+  // دریافت موجودی جدید
+  const updatedEntry = await getDnsEntry(env.DB, code);
+  const remainingStock = updatedEntry ? updatedEntry.stock : 0;
 
   // پیام مینیمال
   let msg = `${flag} دی ان اس ${entry.country}\n\n`;
   msg += `آدرس اختصاصی شما:\n\`${selectedDns}\`\n\n`;
-  msg += `تعداد دفعات مجاز دریافت شما:\n${usageCount}/3\n\n`;
-  msg += `موجودی باقی‌مانده ${entry.country}:\n${entry.stock - 1}\n\n`;
+  msg += `📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}\n`;
+  msg += `📦 موجودی باقی‌مانده ${entry.country}: ${remainingStock}\n\n`;
   msg += `🎮 DNS‌های پیشنهادی برای تانل:\n`;
   msg += `• \`178.22.122.100\` - شاتل\n`;
   msg += `• \`185.51.200.2\` - ایرانسل\n`;
@@ -1221,11 +1216,20 @@ export async function handleUpdate(update, env) {
         await handleDnsSelection(chat, messageId, code, env, from.id);
       }
 
-      // کلیک روی موجودی (راهنمایی کاربر)
+      // کلیک روی موجودی DNS (راهنمایی کاربر)
       else if (data.startsWith('stock:')) {
         await telegramApi(env, '/answerCallbackQuery', {
           callback_query_id: cb.id,
           text: 'برای دریافت آدرس، روی دکمه اسم کشور کلیک کنید',
+          show_alert: true
+        });
+      }
+
+      // کلیک روی موجودی WireGuard (راهنمایی کاربر)
+      else if (data.startsWith('wg_stock:')) {
+        await telegramApi(env, '/answerCallbackQuery', {
+          callback_query_id: cb.id,
+          text: 'برای انتخاب کشور، روی دکمه اسم کشور کلیک کنید',
           show_alert: true
         });
       }
@@ -1244,10 +1248,13 @@ export async function handleUpdate(update, env) {
         await clearWgState(env.DB, from.id);
         const entries = await listDnsEntries(env.DB);
         const kb = buildWireguardCountryKb(entries);
+        const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
+        
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: '🛰️ وایرگارد\n\nکشور را انتخاب کنید:',
+          text: `🛰️ *وایرگارد*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (1-10)\n🔴 ناموجود`,
+          parse_mode: 'Markdown',
           reply_markup: kb
         });
       }
@@ -1268,7 +1275,8 @@ export async function handleUpdate(update, env) {
               await telegramApi(env, '/editMessageText', {
                 chat_id: chat,
                 message_id: messageId,
-                text: '⏳ سهمیه امروز وایرگارد شما تمام شد (3/3)'
+                text: '⏳ سهمیه امروز وایرگارد شما تمام شد (3/3)',
+                reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
               });
             } else {
               // ساخت و ارسال فایل
@@ -1285,8 +1293,17 @@ export async function handleUpdate(update, env) {
               fd.append('document', new File([conf], filename, { type: 'text/plain' }));
               await telegramUpload(env, 'sendDocument', fd);
               await incUserQuota(env.DB, from.id, 'wg');
+              const newQuota = await getUserQuota(env.DB, from.id, 'wg');
               await addUserHistory(env.DB, from.id, 'wg', `${state.country}|${dnsList.join('+')}|${mtu}|${listenPort}`);
               await clearWgState(env.DB, from.id);
+              
+              // پیام موفقیت
+              await telegramApi(env, '/editMessageText', {
+                chat_id: chat,
+                message_id: messageId,
+                text: `✅ فایل وایرگارد با موفقیت ارسال شد!\n\n📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}`,
+                reply_markup: { inline_keyboard: [[{ text: '🔄 دریافت فایل جدید', callback_data: 'wireguard' }],[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
+              });
             }
           }
         }
@@ -1296,10 +1313,13 @@ export async function handleUpdate(update, env) {
       else if (data === 'wireguard_dns_back') {
         const entries = await listDnsEntries(env.DB);
         const kb = buildWireguardCountryKb(entries);
+        const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
+        
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: 'کشور را انتخاب کنید:',
+          text: `🛰️ *وایرگارد*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (1-10)\n🔴 ناموجود`,
+          parse_mode: 'Markdown',
           reply_markup: kb
         });
       }
@@ -1308,10 +1328,13 @@ export async function handleUpdate(update, env) {
       else if (data === 'wg_dns_country') {
         const entries = await listDnsEntries(env.DB);
         const kb = buildWireguardCountryKb(entries);
+        const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
+        
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: '🌍 کشور را انتخاب کنید:',
+          text: `🛰️ *وایرگارد*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (1-10)\n🔴 ناموجود`,
+          parse_mode: 'Markdown',
           reply_markup: kb
         });
       }
@@ -1319,12 +1342,16 @@ export async function handleUpdate(update, env) {
       // وایرگارد: انتخاب کشور => ذخیره و نمایش دی ان اس‌های ثابت برای انتخاب
       else if (data.startsWith('wg_dns_country_pick:')) {
         const code = data.split(':')[1];
+        const entry = await getDnsEntry(env.DB, code);
+        const flag = countryCodeToFlag(code);
+        const countryName = entry ? entry.country : code;
+        
         await setWgState(env.DB, from.id, { country: code, step: 'dns' });
         const kb = buildWireguardDnsKb();
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: `کشور انتخابی: ${code}\n\nیکی از دی ان اس‌های زیر را انتخاب کنید:`,
+          text: `کشور انتخابی: ${flag} ${countryName} (${code})\n\nیکی از دی ان اس‌های زیر را انتخاب کنید:`,
           reply_markup: kb
         });
       }
@@ -1338,8 +1365,8 @@ export async function handleUpdate(update, env) {
         } else {
           const entry = await getDnsEntry(env.DB, state.country);
           let randomDns = null;
-          if (entry && Array.isArray(entry.addresses) && entry.addresses.length > 0) {
-            randomDns = await getAvailableDns(env.DB, entry) || entry.addresses[0];
+          if (entry) {
+            randomDns = getRandomDns(entry);
           }
           const dnsList = randomDns && randomDns !== fixedDns ? [fixedDns, randomDns] : [fixedDns];
           await setWgState(env.DB, from.id, { country: state.country, dns: dnsList, step: 'op' });
@@ -1347,10 +1374,53 @@ export async function handleUpdate(update, env) {
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
             message_id: messageId,
-            text: `دی ان اس انتخاب شد:\n• ${dnsList.join(' , ')}\n\nاپراتور را انتخاب کنید:`,
+            text: `اپراتور خود را انتخاب کنید:`,
             reply_markup: kb
           });
         }
+      }
+
+      // حساب کاربری
+      else if (data === 'account') {
+        const dnsQuota = await getUserQuota(env.DB, from.id, 'dns');
+        const wgQuota = await getUserQuota(env.DB, from.id, 'wg');
+        const dnsHistory = await getUserHistory(env.DB, from.id, 'dns');
+        const wgHistory = await getUserHistory(env.DB, from.id, 'wg');
+
+        let msg = '👤 *حساب کاربری*\n';
+        msg += '━━━━━━━━━━━━━━━━━━━━\n\n';
+        msg += `👋 نام: ${from.first_name || 'کاربر'}\n`;
+        if (from.username) msg += `🆔 یوزرنیم: @${from.username}\n`;
+        msg += `🔢 شناسه: \`${from.id}\`\n\n`;
+        
+        msg += '📊 *سهمیه روزانه:*\n';
+        msg += `🧭 DNS: ${dnsQuota.count}/${dnsQuota.limit}\n`;
+        msg += `🛰️ WireGuard: ${wgQuota.count}/${wgQuota.limit}\n\n`;
+
+        if (dnsHistory.length > 0) {
+          msg += '📜 *آخرین دریافت‌های DNS:*\n';
+          dnsHistory.slice(0, 5).forEach((h, i) => {
+            const parts = h.item.split(':');
+            msg += `${i + 1}. ${parts[0]} - \`${parts[1]}\`\n`;
+          });
+          msg += '\n';
+        }
+
+        if (wgHistory.length > 0) {
+          msg += '📜 *آخرین فایل‌های WireGuard:*\n';
+          wgHistory.slice(0, 3).forEach((h, i) => {
+            const parts = h.item.split('|');
+            msg += `${i + 1}. ${parts[0]} - MTU: ${parts[2]}\n`;
+          });
+        }
+
+        await telegramApi(env, '/editMessageText', {
+          chat_id: chat,
+          message_id: messageId,
+          text: msg,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
+        });
       }
 
       // پیام همگانی (فقط ادمین)
@@ -1411,14 +1481,16 @@ export default {
 
       if (action === 'new') {
         // ایجاد کشور جدید
+        const addresses = (form.get('addresses') || '')
+          .split(/\r?\n/)
+          .map(s => s.trim())
+          .filter(Boolean);
+
         const entry = {
           country: form.get('country').trim(),
           code: form.get('code').toUpperCase().trim(),
-          stock: Number(form.get('stock')) || 0,
-          addresses: (form.get('addresses') || '')
-            .split(/\r?\n/)
-            .map(s => s.trim())
-            .filter(Boolean)
+          addresses: addresses,
+          stock: addresses.length  // موجودی خودکار بر اساس تعداد آدرس‌ها
         };
 
         if (!entry.country || !entry.code || entry.code.length !== 2) {
@@ -1434,9 +1506,8 @@ export default {
         await putDnsEntry(env.DB, entry);
       }
       else if (action === 'edit') {
-        // ویرایش کشور موجود
+        // ویرایش کشور موجود - اضافه کردن آدرس‌های جدید
         const code = form.get('existing_code').toUpperCase().trim();
-        const newStock = Number(form.get('stock')) || 0;
         const newAddresses = (form.get('addresses') || '')
           .split(/\r?\n/)
           .map(s => s.trim())
@@ -1452,15 +1523,14 @@ export default {
           return html('<script>alert("کشور انتخابی یافت نشد");history.back();</script>');
         }
 
-        // بروزرسانی موجودی
-        existing.stock = newStock;
-
         // اضافه کردن آدرس‌های جدید به آدرس‌های موجود
         if (newAddresses.length > 0) {
           const currentAddresses = Array.isArray(existing.addresses) ? existing.addresses : [];
           const combinedAddresses = [...currentAddresses, ...newAddresses];
           // حذف آدرس‌های تکراری
           existing.addresses = [...new Set(combinedAddresses)];
+          // بروزرسانی خودکار موجودی بر اساس تعداد کل آدرس‌ها
+          existing.stock = existing.addresses.length;
         }
 
         await putDnsEntry(env.DB, existing);
