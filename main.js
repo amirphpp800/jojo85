@@ -385,6 +385,54 @@ async function countUsers(kv) {
   }
 }
 
+// محاسبه آمار کاربران
+async function getUserStats(kv) {
+  try {
+    const usersRes = await kv.list({ prefix: 'users:' });
+    const totalUsers = usersRes.keys.length;
+    
+    // محاسبه بیشترین دریافت کننده DNS
+    const historyRes = await kv.list({ prefix: 'history:dns:' });
+    let topUser = null;
+    let maxCount = 0;
+    
+    for (const key of historyRes.keys) {
+      const userId = key.name.replace('history:dns:', '');
+      const raw = await kv.get(key.name);
+      if (raw) {
+        try {
+          const history = JSON.parse(raw);
+          if (history.length > maxCount) {
+            maxCount = history.length;
+            // دریافت اطلاعات کاربر
+            const userRaw = await kv.get(`users:${userId}`);
+            if (userRaw) {
+              const userData = JSON.parse(userRaw);
+              topUser = {
+                id: userId,
+                name: userData.first_name || 'کاربر',
+                username: userData.username || null,
+                count: maxCount
+              };
+            }
+          }
+        } catch {}
+      }
+    }
+    
+    return {
+      totalUsers,
+      topUser
+    };
+  } catch (e) {
+    console.error('خطا در محاسبه آمار:', e);
+    return {
+      totalUsers: 0,
+      topUser: null
+    };
+  }
+}
+
 function renderMainPage(entries, userCount) {
   const rows = entries.map(e => {
     const flag = countryCodeToFlag(e.code);
@@ -1540,6 +1588,7 @@ function buildMainKeyboard(userId) {
       { text: '📢 پیام همگانی', callback_data: 'broadcast' },
       { text: '🎁 ریست محدودیت', callback_data: 'reset_quota' }
     ]);
+    rows.push([{ text: '📊 آمار ربات', callback_data: 'stats' }]);
   }
   return { inline_keyboard: rows };
 }
@@ -2120,6 +2169,39 @@ export async function handleUpdate(update, env) {
               [{ text: '✅ بله، ریست کن', callback_data: 'confirm_reset_quota' }],
               [{ text: '❌ لغو', callback_data: 'back_main' }]
             ]}
+          });
+        }
+      }
+
+      // نمایش آمار (فقط ادمین)
+      else if (data === 'stats') {
+        if (Number(from.id) !== Number(ADMIN_ID)) {
+          await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اجازه دسترسی ندارید', show_alert: true });
+        } else {
+          const stats = await getUserStats(env.DB);
+          
+          let msg = '📊 *آمار ربات*\n';
+          msg += '━━━━━━━━━━━━━━━━━━━━\n\n';
+          msg += `👥 *تعداد کل کاربران:* ${stats.totalUsers}\n\n`;
+          
+          if (stats.topUser) {
+            msg += '🏆 *بیشترین دریافت کننده DNS:*\n';
+            msg += `👤 نام: ${stats.topUser.name}\n`;
+            if (stats.topUser.username) {
+              msg += `🆔 یوزرنیم: @${stats.topUser.username}\n`;
+            }
+            msg += `🎯 تعداد دریافتی: ${stats.topUser.count} آدرس\n`;
+            msg += `🆔 شناسه: \`${stats.topUser.id}\``;
+          } else {
+            msg += '⚠️ هنوز هیچ کاربری DNS دریافت نکرده است.';
+          }
+          
+          await telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: msg,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'back_main' }]] }
           });
         }
       }
