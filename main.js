@@ -1474,7 +1474,7 @@ export async function handleUpdate(update, env) {
               
               const fd = new FormData();
               fd.append('chat_id', String(chat));
-              const captionHtml = `<blockquote><b>نام:</b> ${filename}<br>• <b>اپراتور:</b> ${OPERATORS[opCode].title}<br>• <b>دی ان اس:</b> ${dnsList.join(' , ')}<br>• <b>MTU:</b> ${mtu}<br>• <b>پورت:</b> ${listenPort}<br><br><i>نکته:</i> ListenPort بین 40000 تا 60000 باشد.</blockquote>`;
+              const captionHtml = `<blockquote><b>نام:</b> ${filename}<br>• <b>اپراتور:</b> ${OPERATORS[opCode].title}<br>• <b>دی ان اس:</b> ${dnsList.join(' , ')}<br>• <b>MTU:</b> ${mtu}<br>• <b>پورت شنونده:</b> ${listenPort}<br><br><i>نکته:</i> ListenPort بین 40000 تا 60000 باشد.</blockquote>`;
               fd.append('caption', captionHtml);
               fd.append('parse_mode', 'HTML');
               
