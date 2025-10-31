@@ -927,9 +927,14 @@ async function telegramApi(env, path, body) {
 // ساخت کیبورد اصلی
 function buildMainKeyboard(userId) {
   const rows = [];
-  rows.push([{ text: '🌐 DNS', callback_data: 'show_dns' }]);
-  rows.push([{ text: '🛰️ وایرگارد', callback_data: 'wireguard' }]);
+  // سطر اول: دی ان اس و وایرگارد کنار هم
+  rows.push([
+    { text: '🧭 دی ان اس', callback_data: 'show_dns' },
+    { text: '🛰️ وایرگارد', callback_data: 'wireguard' }
+  ]);
+  // سطر دوم: حساب کاربری
   rows.push([{ text: '👤 حساب کاربری', callback_data: 'account' }]);
+  // سطر سوم: ادمین (در صورت نیاز)
   if (Number(userId) === Number(ADMIN_ID)) {
     rows.push([{ text: '📢 پیام همگانی', callback_data: 'broadcast' }]);
   }
@@ -1031,7 +1036,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
     return telegramApi(env, '/editMessageText', {
       chat_id: chat,
       message_id: messageId,
-      text: `${flag} DNS ${entry.country}\n\nناموجود. کشور دیگری را انتخاب کنید.`,
+      text: `${flag} دی ان اس ${entry.country}\n\nناموجود. کشور دیگری را انتخاب کنید.`,
       reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
     });
   }
@@ -1042,7 +1047,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
     return telegramApi(env, '/editMessageText', {
       chat_id: chat,
       message_id: messageId,
-      text: `${flag} DNS ${entry.country}\n\nهیچ آدرسی ثبت نشده است.`,
+      text: `${flag} دی ان اس ${entry.country}\n\nهیچ آدرسی ثبت نشده است.`,
       reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
     });
   }
@@ -1066,7 +1071,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
     return telegramApi(env, '/editMessageText', {
       chat_id: chat,
       message_id: messageId,
-      text: `${flag} DNS ${entry.country}\n\nفعلاً ظرفیت آدرس‌ها تکمیل است.`,
+      text: `${flag} دی ان اس ${entry.country}\n\nفعلاً ظرفیت آدرس‌ها تکمیل است.`,
       reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
     });
   }
@@ -1083,10 +1088,18 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
   await decrementStock(env.DB, code);
 
   // پیام مینیمال
-  let msg = `${flag} DNS ${entry.country}\n\n`;
-  msg += `• آدرس: \`${selectedDns}\`\n`;
-  msg += `• استفاده: ${usageCount}/3\n`;
-  msg += `• موجودی: ${entry.stock - 1}`;
+  let msg = `${flag} دی ان اس ${entry.country}\n\n`;
+  msg += `آدرس اختصاصی شما:\n\`${selectedDns}\`\n\n`;
+  msg += `تعداد دفعات مجاز دریافت شما:\n${usageCount}/3\n\n`;
+  msg += `موجودی باقی‌مانده ${entry.country}:\n${entry.stock - 1}\n\n`;
+  msg += `🎮 DNS‌های پیشنهادی برای تانل:\n`;
+  msg += `• \`178.22.122.100\` - شاتل\n`;
+  msg += `• \`185.51.200.2\` - ایرانسل\n`;
+  msg += `• \`10.202.10.10\` - رادار\n`;
+  msg += `• \`8.8.8.8\` - گوگل\n`;
+  msg += `• \`1.1.1.1\` - کلودفلر\n`;
+  msg += `• \`4.2.2.4\` - لول 3\n`;
+  msg += `• \`78.157.42.100\` - الکترو`;
 
   return telegramApi(env, '/editMessageText', {
     chat_id: chat,
@@ -1226,106 +1239,117 @@ export async function handleUpdate(update, env) {
         });
       }
 
-      // وایرگارد: انتخاب اپراتور
+      // وایرگارد: شروع => انتخاب کشور
       else if (data === 'wireguard') {
         await clearWgState(env.DB, from.id);
-        const kb = buildWireguardOperatorKb();
+        const entries = await listDnsEntries(env.DB);
+        const kb = buildWireguardCountryKb(entries);
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: '🛰️ وایرگارد\n\nاپراتور خود را انتخاب کنید:',
+          text: '🛰️ وایرگارد\n\nکشور را انتخاب کنید:',
           reply_markup: kb
         });
       }
 
-      // وایرگارد: اپراتور انتخاب شد => انتخاب DNS
+      // وایرگارد: انتخاب اپراتور => ساخت فایل (باید DNS و کشور از قبل انتخاب شده باشد)
       else if (data.startsWith('wg_op:')) {
         const opCode = data.split(':')[1];
         if (!OPERATORS[opCode]) {
           await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اپراتور نامعتبر', show_alert: true });
         } else {
-          await setWgState(env.DB, from.id, { operator: opCode, step: 'dns' });
-          const kb = buildWireguardDnsKb();
-          await telegramApi(env, '/editMessageText', {
-            chat_id: chat,
-            message_id: messageId,
-            text: `اپراتور: ${OPERATORS[opCode].title}\n\nDNS موردنظر را انتخاب کنید:`,
-            reply_markup: kb
-          });
+          const state = await getWgState(env.DB, from.id);
+          if (!state || !state.dns || !state.country) {
+            await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'ابتدا کشور و دی ان اس را انتخاب کنید', show_alert: true });
+          } else {
+            // کوئوتا وایرگارد
+            const quota = await getUserQuota(env.DB, from.id, 'wg');
+            if (quota.count >= quota.limit) {
+              await telegramApi(env, '/editMessageText', {
+                chat_id: chat,
+                message_id: messageId,
+                text: '⏳ سهمیه امروز وایرگارد شما تمام شد (3/3)'
+              });
+            } else {
+              // ساخت و ارسال فایل
+              const keys = await generateWireGuardKeys();
+              const addresses = OPERATORS[opCode].addresses;
+              const mtu = randItem(WG_MTUS);
+              const listenPort = randInt(40000, 60000);
+              const dnsList = Array.isArray(state.dns) ? state.dns : [state.dns];
+              const conf = buildWgConf({ privateKey: keys.privateKey, addresses, dns: dnsList.join(', '), mtu, listenPort });
+              const filename = `${randName8()}.conf`;
+              const fd = new FormData();
+              fd.append('chat_id', String(chat));
+              fd.append('caption', `نام: ${filename}\n• اپراتور: ${OPERATORS[opCode].title}\n• دی ان اس: ${dnsList.join(' , ')}\n• MTU: ${mtu}\n• پورت: ${listenPort}\n\nنکته: ListenPort بین 40000 تا 60000 باشد.`);
+              fd.append('document', new File([conf], filename, { type: 'text/plain' }));
+              await telegramUpload(env, 'sendDocument', fd);
+              await incUserQuota(env.DB, from.id, 'wg');
+              await addUserHistory(env.DB, from.id, 'wg', `${state.country}|${dnsList.join('+')}|${mtu}|${listenPort}`);
+              await clearWgState(env.DB, from.id);
+            }
+          }
         }
       }
 
-      // وایرگارد: بازگشت از انتخاب DNS به اپراتورها
+      // وایرگارد: بازگشت از انتخاب DNS به لیست کشورها
       else if (data === 'wireguard_dns_back') {
-        const kb = buildWireguardDnsKb();
+        const entries = await listDnsEntries(env.DB);
+        const kb = buildWireguardCountryKb(entries);
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: 'DNS موردنظر را انتخاب کنید:',
+          text: 'کشور را انتخاب کنید:',
           reply_markup: kb
         });
       }
 
-      // وایرگارد: نمایش کشورها برای انتخاب DNS از کشور
+      // وایرگارد: نمایش کشورها (میانبر)
       else if (data === 'wg_dns_country') {
         const entries = await listDnsEntries(env.DB);
         const kb = buildWireguardCountryKb(entries);
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: '🌍 انتخاب کشور برای DNS:',
+          text: '🌍 کشور را انتخاب کنید:',
           reply_markup: kb
         });
       }
 
-      // وایرگارد: انتخاب کشور برای DNS
+      // وایرگارد: انتخاب کشور => ذخیره و نمایش دی ان اس‌های ثابت برای انتخاب
       else if (data.startsWith('wg_dns_country_pick:')) {
         const code = data.split(':')[1];
-        const entry = await getDnsEntry(env.DB, code);
-        if (!entry || !Array.isArray(entry.addresses) || entry.addresses.length === 0) {
-          await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'DNS برای این کشور موجود نیست', show_alert: true });
-        } else {
-          const state = await getWgState(env.DB, from.id);
-          const dnsVal = await getAvailableDns(env.DB, entry) || entry.addresses[0];
-          if (!state || !state.operator) {
-            await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'ابتدا اپراتور را انتخاب کنید', show_alert: true });
-          } else {
-            // ساخت و ارسال فایل
-            const keys = await generateWireGuardKeys();
-            const addresses = OPERATORS[state.operator].addresses;
-            const mtu = randItem(WG_MTUS);
-            const listenPort = randInt(40000, 60000);
-            const conf = buildWgConf({ privateKey: keys.privateKey, addresses, dns: dnsVal, mtu, listenPort });
-            const filename = `${randName8()}.conf`;
-            const fd = new FormData();
-            fd.append('chat_id', String(chat));
-            fd.append('caption', `⚠️ هنگام روشن کردن توجه کنید ListenPort بین 40000 تا 60000 باشد.\n\nاپراتور: ${OPERATORS[state.operator].title}\nDNS: ${dnsVal}`);
-            fd.append('document', new File([conf], filename, { type: 'text/plain' }));
-            await telegramUpload(env, 'sendDocument', fd);
-            await clearWgState(env.DB, from.id);
-          }
-        }
+        await setWgState(env.DB, from.id, { country: code, step: 'dns' });
+        const kb = buildWireguardDnsKb();
+        await telegramApi(env, '/editMessageText', {
+          chat_id: chat,
+          message_id: messageId,
+          text: `کشور انتخابی: ${code}\n\nیکی از دی ان اس‌های زیر را انتخاب کنید:`,
+          reply_markup: kb
+        });
       }
 
-      // وایرگارد: انتخاب DNS ثابت
+      // وایرگارد: انتخاب DNS ثابت => اضافه‌کردن یک DNS رندوم از کشور (در صورت وجود) و سپس انتخاب اپراتور
       else if (data.startsWith('wg_dns_fixed:')) {
-        const dnsVal = data.split(':')[1];
+        const fixedDns = data.split(':')[1];
         const state = await getWgState(env.DB, from.id);
-        if (!state || !state.operator) {
-          await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'ابتدا اپراتور را انتخاب کنید', show_alert: true });
+        if (!state || !state.country) {
+          await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'ابتدا کشور را انتخاب کنید', show_alert: true });
         } else {
-          const keys = await generateWireGuardKeys();
-          const addresses = OPERATORS[state.operator].addresses;
-          const mtu = randItem(WG_MTUS);
-          const listenPort = randInt(40000, 60000);
-          const conf = buildWgConf({ privateKey: keys.privateKey, addresses, dns: dnsVal, mtu, listenPort });
-          const filename = `${randName8()}.conf`;
-          const fd = new FormData();
-          fd.append('chat_id', String(chat));
-          fd.append('caption', `⚠️ هنگام روشن کردن توجه کنید ListenPort بین 40000 تا 60000 باشد.\n\nاپراتور: ${OPERATORS[state.operator].title}\nDNS: ${dnsVal}`);
-          fd.append('document', new File([conf], filename, { type: 'text/plain' }));
-          await telegramUpload(env, 'sendDocument', fd);
-          await clearWgState(env.DB, from.id);
+          const entry = await getDnsEntry(env.DB, state.country);
+          let randomDns = null;
+          if (entry && Array.isArray(entry.addresses) && entry.addresses.length > 0) {
+            randomDns = await getAvailableDns(env.DB, entry) || entry.addresses[0];
+          }
+          const dnsList = randomDns && randomDns !== fixedDns ? [fixedDns, randomDns] : [fixedDns];
+          await setWgState(env.DB, from.id, { country: state.country, dns: dnsList, step: 'op' });
+          const kb = buildWireguardOperatorKb();
+          await telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: `دی ان اس انتخاب شد:\n• ${dnsList.join(' , ')}\n\nاپراتور را انتخاب کنید:`,
+            reply_markup: kb
+          });
         }
       }
 
