@@ -16,6 +16,19 @@ function todayKey() {
   return `${y}${m}${day}`;
 }
 
+// محاسبه زمان باقی‌مانده تا ریست سهمیه (نیمه‌شب UTC)
+function getTimeUntilReset() {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setUTCHours(24, 0, 0, 0);
+  
+  const diff = tomorrow - now;
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  
+  return `${hours} ساعت و ${minutes} دقیقه`;
+}
+
 async function getUserQuota(kv, userId, type) {
   const key = `quota:${type}:${userId}:${todayKey()}`;
   const raw = await kv.get(key);
@@ -455,7 +468,8 @@ function getWebCss() {
 
 body {
   font-family: 'Vazirmatn', sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-attachment: fixed;
   min-height: 100vh;
   padding: 20px;
   line-height: 1.6;
@@ -494,7 +508,7 @@ body {
 }
 
 .stat-box {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   color: white;
   padding: 15px 25px;
   border-radius: 12px;
@@ -502,6 +516,40 @@ body {
   flex-direction: column;
   align-items: center;
   min-width: 120px;
+  box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
+  transition: transform 0.3s ease;
+}
+
+.stat-box:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(245, 87, 108, 0.4);
+}
+
+.stat-box:nth-child(1) {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
+}
+
+.stat-box:nth-child(1):hover {
+  box-shadow: 0 8px 25px rgba(79, 172, 254, 0.4);
+}
+
+.stat-box:nth-child(2) {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  box-shadow: 0 4px 15px rgba(67, 233, 123, 0.3);
+}
+
+.stat-box:nth-child(2):hover {
+  box-shadow: 0 8px 25px rgba(67, 233, 123, 0.4);
+}
+
+.stat-box:nth-child(3) {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  box-shadow: 0 4px 15px rgba(250, 112, 154, 0.3);
+}
+
+.stat-box:nth-child(3):hover {
+  box-shadow: 0 8px 25px rgba(250, 112, 154, 0.4);
 }
 
 .stat-number {
@@ -539,12 +587,13 @@ body {
 }
 
 .badge {
-  background: #e0e7ff;
-  color: #4f46e5;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 14px;
   font-weight: 500;
+  box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
 }
 
 .dns-grid {
@@ -574,7 +623,7 @@ body {
 }
 
 .card-header {
-  background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
   display: flex;
   justify-content: space-between;
@@ -594,13 +643,13 @@ body {
 .country-details h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #1e293b;
+  color: white;
   margin-bottom: 2px;
 }
 
 .country-code {
   font-size: 13px;
-  color: #64748b;
+  color: #667eea;
   font-weight: 500;
   background: white;
   padding: 2px 8px;
@@ -608,18 +657,21 @@ body {
 }
 
 .btn-delete {
-  background: #fee2e2;
+  background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+  color: white;
   border: none;
   padding: 8px 12px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
   transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
 }
 
 .btn-delete:hover {
-  background: #fecaca;
+  background: linear-gradient(135deg, #ee5a6f, #ff6b6b);
   transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
 }
 
 .card-body {
@@ -654,12 +706,20 @@ body {
 details summary {
   cursor: pointer;
   font-weight: 500;
-  color: #667eea;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   user-select: none;
   list-style: none;
   display: flex;
   align-items: center;
   gap: 8px;
+  transition: all 0.3s;
+}
+
+details summary:hover {
+  transform: translateX(5px);
 }
 
 details summary::-webkit-details-marker {
@@ -683,13 +743,20 @@ details[open] summary::before {
 }
 
 .addresses-list code {
-  background: #f1f5f9;
+  background: linear-gradient(135deg, #f8f9ff, #fff5f8);
   padding: 8px 12px;
   border-radius: 8px;
   font-family: 'Courier New', monospace;
   font-size: 14px;
   color: #1e293b;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid;
+  border-image: linear-gradient(135deg, #667eea, #f093fb) 1;
+  transition: all 0.3s;
+}
+
+.addresses-list code:hover {
+  transform: translateX(5px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
 }
 
 .empty {
@@ -761,7 +828,7 @@ small {
 }
 
 .btn-submit {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   color: white;
   padding: 14px 28px;
   border: none;
@@ -770,12 +837,13 @@ small {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
 }
 
 .btn-submit:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 25px rgba(245, 87, 108, 0.5);
+  background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
 }
 
 .btn-submit:active {
@@ -1048,10 +1116,11 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
   // محدودیت روزانه کاربر برای دریافت DNS
   const quota = await getUserQuota(env.DB, userId, 'dns');
   if (quota.count >= quota.limit) {
+    const timeLeft = getTimeUntilReset();
     return telegramApi(env, '/editMessageText', {
       chat_id: chat,
       message_id: messageId,
-      text: `⏳ محدودیت روزانه دریافت DNS شما به پایان رسیده است.\nامروز مجاز: ${quota.limit} مورد`,
+      text: `⏳ محدودیت روزانه دریافت DNS شما به پایان رسیده است.\n\n📊 امروز مجاز: ${quota.limit} مورد\n⏰ زمان باقی‌مانده تا ریست: ${timeLeft}`,
       reply_markup: { inline_keyboard: [[{ text: '👤 حساب کاربری', callback_data: 'account' }],[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
     });
   }
@@ -1272,13 +1341,20 @@ export async function handleUpdate(update, env) {
             // کوئوتا وایرگارد
             const quota = await getUserQuota(env.DB, from.id, 'wg');
             if (quota.count >= quota.limit) {
+              const timeLeft = getTimeUntilReset();
               await telegramApi(env, '/editMessageText', {
                 chat_id: chat,
                 message_id: messageId,
-                text: '⏳ سهمیه امروز وایرگارد شما تمام شد (3/3)',
+                text: `⏳ سهمیه امروز وایرگارد شما تمام شد\n\n📊 امروز مجاز: ${quota.limit} مورد\n⏰ زمان باقی‌مانده تا ریست: ${timeLeft}`,
                 reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
               });
             } else {
+              // پاسخ به callback
+              await telegramApi(env, '/answerCallbackQuery', { 
+                callback_query_id: cb.id, 
+                text: 'در حال ساخت فایل...' 
+              });
+
               // ساخت و ارسال فایل
               const keys = await generateWireGuardKeys();
               const addresses = OPERATORS[opCode].addresses;
@@ -1287,10 +1363,15 @@ export async function handleUpdate(update, env) {
               const dnsList = Array.isArray(state.dns) ? state.dns : [state.dns];
               const conf = buildWgConf({ privateKey: keys.privateKey, addresses, dns: dnsList.join(', '), mtu, listenPort });
               const filename = `${randName8()}.conf`;
+              
               const fd = new FormData();
               fd.append('chat_id', String(chat));
               fd.append('caption', `نام: ${filename}\n• اپراتور: ${OPERATORS[opCode].title}\n• دی ان اس: ${dnsList.join(' , ')}\n• MTU: ${mtu}\n• پورت: ${listenPort}\n\nنکته: ListenPort بین 40000 تا 60000 باشد.`);
-              fd.append('document', new File([conf], filename, { type: 'text/plain' }));
+              
+              // استفاده از Blob به جای File
+              const blob = new Blob([conf], { type: 'text/plain' });
+              fd.append('document', blob, filename);
+              
               await telegramUpload(env, 'sendDocument', fd);
               await incUserQuota(env.DB, from.id, 'wg');
               const newQuota = await getUserQuota(env.DB, from.id, 'wg');
