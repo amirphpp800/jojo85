@@ -1933,6 +1933,14 @@ export async function handleUpdate(update, env) {
                 await incUserQuota(env.DB, from.id, 'wg');
                 const newQuota = await getUserQuota(env.DB, from.id, 'wg');
                 await addUserHistory(env.DB, from.id, 'wg', `${state.country}|${dnsList.join('+')}|${mtu}|${listenPort}`);
+                
+                // حذف DNS استفاده شده از لیست (اگر از کشور انتخاب شده بود)
+                if (dnsList.length > 1) {
+                  // DNS دوم (randomDns) را حذف می‌کنیم
+                  const usedDns = dnsList[1];
+                  await removeAddressFromEntry(env.DB, state.country, usedDns);
+                }
+                
                 await clearWgState(env.DB, from.id);
                 
                 // پیام موفقیت
