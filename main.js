@@ -110,11 +110,10 @@ function b64(bytes) {
 }
 
 async function generateWireGuardKeys() {
-  // X25519
-  const keyPair = await crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
-  const rawPriv = new Uint8Array(await crypto.subtle.exportKey('raw', keyPair.privateKey));
-  const rawPub = new Uint8Array(await crypto.subtle.exportKey('raw', keyPair.publicKey));
-  return { privateKey: b64(rawPriv), publicKey: b64(rawPub) };
+  // Generate a WireGuard-compatible private key (32 random bytes, base64)
+  const rawPriv = new Uint8Array(32);
+  crypto.getRandomValues(rawPriv);
+  return { privateKey: b64(rawPriv), publicKey: null };
 }
 
 function buildWgConf({ privateKey, addresses, dns, mtu, listenPort }) {
