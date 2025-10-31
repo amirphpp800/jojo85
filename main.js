@@ -581,6 +581,20 @@ function renderMainPage(entries, userCount) {
 
   <section class="section">
     <div class="section-header">
+      <h2>🔧 ابزارهای مدیریت</h2>
+    </div>
+    <div style="margin-bottom: 20px;">
+      <button onclick="fixCountryNames()" class="btn-submit" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+        🌍 تبدیل تمام اسم کشورها به فارسی
+      </button>
+      <small style="display: block; margin-top: 10px; color: #64748b;">
+        این دکمه تمام کشورهایی که اسم انگلیسی دارند را به فارسی تبدیل می‌کند.
+      </small>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-header">
       <h2>➕ افزودن DNS جدید</h2>
     </div>
     <form method="POST" action="/api/admin/add-dns" class="dns-form">
@@ -755,6 +769,26 @@ async function loadCountryData(code) {
     }
   } catch (error) {
     console.error('خطا در بارگذاری اطلاعات:', error);
+  }
+}
+
+async function fixCountryNames() {
+  if (!confirm('آیا مطمئن هستید که می‌خواهید تمام اسم کشورها را به فارسی تبدیل کنید؟')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/admin/fix-country-names');
+    const result = await response.json();
+    
+    if (result.success) {
+      alert(result.message);
+      window.location.reload();
+    } else {
+      alert('خطا: ' + result.error);
+    }
+  } catch (error) {
+    alert('خطا در ارتباط با سرور: ' + error.message);
   }
 }
 </script>
@@ -2541,6 +2575,40 @@ export default {
       const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/getWebhookInfo`);
       const result = await res.json();
       return json(result);
+    }
+
+    // تبدیل تمام اسم کشورها به فارسی
+    if (url.pathname === '/api/admin/fix-country-names' && req.method === 'GET') {
+      try {
+        const entries = await listDnsEntries(env.DB);
+        let updated = 0;
+        let skipped = 0;
+        
+        for (const entry of entries) {
+          const persianName = getCountryNameFromCode(entry.code);
+          
+          // اگر اسم فعلی با اسم فارسی متفاوت است، بروزرسانی کن
+          if (entry.country !== persianName) {
+            entry.country = persianName;
+            await putDnsEntry(env.DB, entry);
+            updated++;
+          } else {
+            skipped++;
+          }
+        }
+        
+        invalidateDnsCache();
+        
+        return json({
+          success: true,
+          message: `✅ ${updated} کشور بروزرسانی شد، ${skipped} کشور نیازی به تغییر نداشت`,
+          updated,
+          skipped,
+          total: entries.length
+        });
+      } catch (e) {
+        return json({ success: false, error: e.message }, 500);
+      }
     }
 
     // 404
