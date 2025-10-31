@@ -485,9 +485,10 @@ function renderMainPage(entries, userCount) {
           </div>
         </div>
         <div class="card-actions">
+          <button class="btn-edit" onclick="editCountry('${escapeHtml(e.code)}', '${escapeHtml(e.country)}')" title="ویرایش نام">✏️</button>
           <form method="POST" action="/api/admin/delete-dns" style="display:inline;">
             <input type="hidden" name="code" value="${escapeHtml(e.code)}">
-            <button type="submit" class="btn-delete" onclick="return confirm('آیا مطمئن هستید؟')">🗑️</button>
+            <button type="submit" class="btn-delete" onclick="return confirm('آیا مطمئن هستید؟')" title="حذف">🗑️</button>
           </form>
         </div>
       </div>
@@ -789,6 +790,36 @@ async function fixCountryNames() {
     }
   } catch (error) {
     alert('خطا در ارتباط با سرور: ' + error.message);
+  }
+}
+
+async function editCountry(code, currentName) {
+  const newName = prompt('نام جدید کشور را وارد کنید:', currentName);
+  
+  if (!newName || newName === currentName) {
+    return;
+  }
+  
+  try {
+    const formData = new FormData();
+    formData.append('action', 'edit');
+    formData.append('existing_code', code);
+    formData.append('country', newName);
+    formData.append('addresses', ''); // آدرس جدیدی اضافه نمی‌شود
+    
+    const response = await fetch('/api/admin/add-dns', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (response.ok) {
+      alert('✅ نام کشور با موفقیت تغییر کرد');
+      window.location.reload();
+    } else {
+      alert('❌ خطا در تغییر نام کشور');
+    }
+  } catch (error) {
+    alert('خطا: ' + error.message);
   }
 }
 </script>
@@ -1114,6 +1145,25 @@ body {
   background: white;
   padding: 2px 8px;
   border-radius: 6px;
+}
+
+.btn-edit {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  margin-left: 8px;
+}
+
+.btn-edit:hover {
+  background: linear-gradient(135deg, #764ba2, #667eea);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .btn-delete {
@@ -2366,9 +2416,17 @@ export default {
           .map(s => s.trim())
           .filter(Boolean);
 
+        const code = form.get('code').toUpperCase().trim();
+        let countryName = form.get('country').trim();
+        
+        // اگر نام خالی است، از نام فارسی پیش‌فرض استفاده کن
+        if (!countryName && code) {
+          countryName = getCountryNameFromCode(code);
+        }
+
         const entry = {
-          country: form.get('country').trim(),
-          code: form.get('code').toUpperCase().trim(),
+          country: countryName,
+          code: code,
           addresses: addresses,
           stock: addresses.length  // موجودی خودکار بر اساس تعداد آدرس‌ها
         };
@@ -2392,6 +2450,7 @@ export default {
           .split(/\r?\n/)
           .map(s => s.trim())
           .filter(Boolean);
+        const newCountryName = form.get('country') ? form.get('country').trim() : null;
 
         if (!code || code.length !== 2) {
           return html('<script>alert("کد کشور نامعتبر است");history.back();</script>');
@@ -2401,6 +2460,11 @@ export default {
         const existing = await getDnsEntry(env.DB, code);
         if (!existing) {
           return html('<script>alert("کشور انتخابی یافت نشد");history.back();</script>');
+        }
+
+        // بروزرسانی نام کشور (در صورت وجود)
+        if (newCountryName) {
+          existing.country = newCountryName;
         }
 
         // اضافه کردن آدرس‌های جدید به آدرس‌های موجود
