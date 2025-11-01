@@ -135,10 +135,10 @@ async function generateWireGuardKeys() {
 
 function buildWgConf({ privateKey, addresses, dns, mtu, listenPort }) {
   let addrLines = '';
-  if (Array.isArray(addresses) && addresses.length > 1) {
-    addrLines = `Address = ${addresses[0]}\nAddress = ${addresses.join(', ')}`;
-  } else if (Array.isArray(addresses) && addresses.length === 1) {
-    addrLines = `Address = ${addresses[0]}`;
+  if (Array.isArray(addresses) && addresses.length > 0) {
+    addrLines = `Address = ${addresses.join(', ')}`;
+  } else if (addresses) {
+    addrLines = `Address = ${addresses}`;
   } else {
     addrLines = '';
   }
@@ -2327,7 +2327,7 @@ export async function handleUpdate(update, env) {
         const kb = buildMainKeyboard(from.id);
         await telegramApi(env, '/sendMessage', {
           chat_id: chat,
-          text: '👋 *سلام! خوش آمدید*\n\n🌐 برای دریافت DNS، گزینه موردنظر خود را انتخاب کنید:',
+          text: '🌍 *به ربات دسترسی جهانی خوش آمدید*\n\n🛡️ دریافت سرورهای DNS و WireGuard از لوکیشن‌های مختلف جهان\n\n🔻 لطفاً سرویس موردنظر خود را انتخاب کنید:',
           parse_mode: 'Markdown',
           reply_markup: kb
         });
@@ -2359,7 +2359,7 @@ export async function handleUpdate(update, env) {
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: '👋 *سلام! خوش آمدید*\n\n🌐 برای دریافت DNS، گزینه موردنظر خود را انتخاب کنید:',
+          text: '🌍 *به ربات دسترسی جهانی خوش آمدید*\n\n🛡️ دریافت سرورهای DNS و WireGuard از لوکیشن‌های مختلف جهان\n\n🔻 لطفاً سرویس موردنظر خود را انتخاب کنید:',
           parse_mode: 'Markdown',
           reply_markup: kb
         });
@@ -2818,8 +2818,8 @@ export default {
           .map(s => s.trim())
           .filter(Boolean);
 
-        const code = form.get('code').toUpperCase().trim();
-        let countryName = form.get('country').trim();
+        const code = (form.get('code') || '').toUpperCase().trim();
+        let countryName = (form.get('country') || '').trim();
         
         // اگر نام خالی است، از نام فارسی پیش‌فرض استفاده کن
         if (!countryName && code) {
@@ -2834,20 +2834,21 @@ export default {
         };
 
         if (!entry.country || !entry.code || entry.code.length !== 2) {
-          return html('<script>Toast.error("اطلاعات نامعتبر است");setTimeout(() => history.back(), 1500);</script>');
+          return html('<script>alert("اطلاعات نامعتبر است");setTimeout(() => history.back(), 1500);</script>');
         }
 
         // بررسی عدم تکرار کد کشور
         const existing = await getDnsEntry(env.DB, entry.code);
         if (existing) {
-          return html('<script>Toast.error("این کد کشور قبلاً ثبت شده است");setTimeout(() => history.back(), 1500);</script>');
+          return html('<script>alert("این کد کشور قبلاً ثبت شده است");setTimeout(() => history.back(), 1500);</script>');
         }
 
         await putDnsEntry(env.DB, entry);
+        invalidateDnsCache();
       }
       else if (action === 'edit') {
         // ویرایش کشور موجود - اضافه کردن آدرس‌های جدید
-        const code = form.get('existing_code').toUpperCase().trim();
+        const code = (form.get('existing_code') || '').toUpperCase().trim();
         const newAddresses = (form.get('addresses') || '')
           .split(/\r?\n/)
           .map(s => s.trim())
@@ -2855,13 +2856,13 @@ export default {
         const newCountryName = form.get('country') ? form.get('country').trim() : null;
 
         if (!code || code.length !== 2) {
-          return html('<script>Toast.error("کد کشور نامعتبر است");setTimeout(() => history.back(), 1500);</script>');
+          return html('<script>alert("کد کشور نامعتبر است");setTimeout(() => history.back(), 1500);</script>');
         }
 
         // دریافت اطلاعات فعلی
         const existing = await getDnsEntry(env.DB, code);
         if (!existing) {
-          return html('<script>Toast.error("کشور انتخابی یافت نشد");setTimeout(() => history.back(), 1500);</script>');
+          return html('<script>alert("کشور انتخابی یافت نشد");setTimeout(() => history.back(), 1500);</script>');
         }
 
         // بروزرسانی نام کشور (در صورت وجود)
@@ -2953,7 +2954,7 @@ export default {
       const addressesRaw = form.get('addresses');
       
       if (!addressesRaw) {
-        return html('<script>Toast.warning("لطفاً آدرس‌ها را وارد کنید");setTimeout(() => history.back(), 1500);</script>');
+        return html('<script>alert("لطفاً آدرس‌ها را وارد کنید");setTimeout(() => history.back(), 1500);</script>');
       }
 
       const addresses = addressesRaw.split('\n')
@@ -2961,7 +2962,7 @@ export default {
         .filter(a => a && /^\d+\.\d+\.\d+\.\d+$/.test(a));
 
       if (addresses.length === 0) {
-        return html('<script>Toast.error("هیچ آدرس IP معتبری یافت نشد");setTimeout(() => history.back(), 1500);</script>');
+        return html('<script>alert("هیچ آدرس IP معتبری یافت نشد");setTimeout(() => history.back(), 1500);</script>');
       }
 
       const results = { success: 0, failed: 0, byCountry: {} };
@@ -3010,7 +3011,7 @@ export default {
         .map(([code, count]) => `${code}: ${count}`)
         .join(', ');
       const msg = `${results.success} آدرس اضافه شد\\n${results.failed} آدرس ناموفق\\n\\n📊 ${summary}`;
-      return html(`<script>Toast.success("${msg}", 6000);setTimeout(() => window.location.href="/", 1500);</script>`);
+      return html(`<script>alert("${msg}");setTimeout(() => window.location.href="/", 1500);</script>`);
     }
 
     // Webhook تلگرام
