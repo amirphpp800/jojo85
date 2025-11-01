@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 const TELEGRAM_BASE = (token) => `https://api.telegram.org/bot${token}`;
 const ADMIN_ID = 7240662021;
 
@@ -721,16 +721,16 @@ const Toast = {
     };
     
     const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
+    toast.className = \`toast \${type}\`;
     
-    toast.innerHTML = `
-      <div class="toast-icon">${icons[type] || icons.info}</div>
+    toast.innerHTML = \`
+      <div class="toast-icon">\${icons[type] || icons.info}</div>
       <div class="toast-content">
-        <div class="toast-title">${titles[type] || titles.info}</div>
-        <div class="toast-message">${message}</div>
+        <div class="toast-title">\${titles[type] || titles.info}</div>
+        <div class="toast-message">\${message}</div>
       </div>
       <button class="toast-close">×</button>
-    `;
+    \`;
     
     this.container.appendChild(toast);
     
@@ -840,7 +840,7 @@ document.addEventListener('DOMContentLoaded', () => {
       for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
         const batch = addresses.slice(i, i + BATCH_SIZE);
         const percent = Math.round((processed / addresses.length) * 100);
-        progressText.textContent = ` پردازش موازی... (${processed}/${addresses.length}) - ${percent}% |  ${success} | ${failed}`;
+        progressText.textContent = \` پردازش موازی... (\${processed}/\${addresses.length}) - \${percent}% | \${success} | \${failed}\`;
         
         // پردازش همزمان 5 IP
         const promises = batch.map(async ip => {
@@ -875,14 +875,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const newPercent = Math.round((processed / addresses.length) * 100);
         progressFill.style.width = newPercent + '%';
-        progressText.textContent = `پردازش شد: ${processed}/${addresses.length} - ${newPercent}% |  ${success} | ${failed}`;
+        progressText.textContent = \`پردازش شد: \${processed}/\${addresses.length} - \${newPercent}% | \${success} | \${failed}\`;
       }
       
       const summary = Object.entries(byCountry)
-        .map(([code, count]) => `${code}: ${count}`)
+        .map(([code, count]) => \`\${code}: \${count}\`)
         .join(', ');
       
-      Toast.success(` ${success} آدرس اضافه شد\n${failed} آدرس ناموفق\n\n ${summary}`, 6000);
+      Toast.success(\`\${success} آدرس اضافه شد\\n\${failed} آدرس ناموفق\\n\\n📊 \${summary}\`, 6000);
       setTimeout(() => window.location.href = '/', 1500);
     });
   }
@@ -891,8 +891,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function showTab(tabName) {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-  document.querySelector(`[onclick="showTab('${tabName}')"]`).classList.add('active');
-  document.getElementById(`${tabName}-form`).classList.add('active');
+  document.querySelector(\`[onclick="showTab('\${tabName}')"]\`).classList.add('active');
+  document.getElementById(\`\${tabName}-form\`).classList.add('active');
 }
 
 async function loadCountryData(code) {
@@ -912,7 +912,7 @@ async function loadCountryData(code) {
       const addressesDiv = document.getElementById('current-addresses');
       if (country.addresses && country.addresses.length > 0) {
         addressesDiv.innerHTML = country.addresses.map(addr => 
-          `<code>${addr}</code>`
+          \`<code>\${addr}</code>\`
         ).join('');
       } else {
         addressesDiv.innerHTML = '<em style="color: #64748b;">هیچ آدرسی برای این کشور ثبت نشده</em>';
@@ -1012,13 +1012,13 @@ async function downloadJSON() {
     const a = document.createElement('a');
     a.href = url;
     const date = new Date().toISOString().split('T')[0];
-    a.download = `dns-addresses-${date}.json`;
+    a.download = \`dns-addresses-\${date}.json\`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    Toast.success(`فایل JSON با موفقیت دانلود شد\n📊 تعداد کشورها: ${data.length}`);
+    Toast.success(\`فایل JSON با موفقیت دانلود شد\\n📊 تعداد کشورها: \${data.length}\`);
   } catch (error) {
     Toast.error('خطا در دانلود فایل: ' + error.message);
   }
