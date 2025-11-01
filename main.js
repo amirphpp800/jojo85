@@ -22,11 +22,11 @@ function getTimeUntilReset() {
   const now = new Date();
   const tomorrow = new Date(now);
   tomorrow.setUTCHours(24, 0, 0, 0);
-  
+
   const diff = tomorrow - now;
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  
+
   return `${hours} ساعت و ${minutes} دقیقه`;
 }
 
@@ -121,7 +121,7 @@ async function generateWireGuardKeys() {
   // Generate a WireGuard-compatible private key (32 random bytes, base64)
   const rawPriv = new Uint8Array(32);
   crypto.getRandomValues(rawPriv);
-  
+
   // Apply WireGuard key clamping:
   // - Clear the 3 least significant bits of the first byte
   // - Clear the most significant bit of the last byte
@@ -129,7 +129,7 @@ async function generateWireGuardKeys() {
   rawPriv[0] &= 248;  // 11111000 - clear bottom 3 bits
   rawPriv[31] &= 127; // 01111111 - clear top bit
   rawPriv[31] |= 64;  // 01000000 - set second top bit
-  
+
   return { privateKey: b64(rawPriv), publicKey: null };
 }
 
@@ -190,7 +190,7 @@ async function clearWgState(kv, userId) { await kv.delete(`wg_state:${userId}`);
 
 function buildWireguardCountryKb(entries) {
   const rows = [];
-  
+
   entries.forEach(e => {
     const flag = countryCodeToFlag(e.code);
     const stock = e.stock ?? 0;
@@ -316,49 +316,74 @@ function getRandomDns(entry) {
 // Cache برای تشخیص کشور IP ها (برای جلوگیری از درخواست‌های تکراری)
 const ipCountryCache = new Map();
 
-// تشخیص کشور از IP با استفاده از API (با timeout و cache برای سرعت بیشتر)
+// تشخیص کشور از IP با استفاده از چندین API (با timeout و cache برای سرعت بیشتر)
 async function detectCountryFromIP(ip) {
   // بررسی cache
   if (ipCountryCache.has(ip)) {
     return ipCountryCache.get(ip);
   }
-  
-  try {
-    // timeout 5 ثانیه برای جلوگیری از تاخیر زیاد
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    
-    const res = await fetch(`https://api.iplocation.net/?cmd=ip-country&ip=${ip}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    const data = await res.json();
-    
-    if (data && data.country_code2) {
-      const result = {
-        code: data.country_code2.toUpperCase(),
-        name: getCountryNameFromCode(data.country_code2.toUpperCase())
-      };
-      // ذخیره در cache
-      ipCountryCache.set(ip, result);
-      return result;
+
+  // لیست API های مختلف برای fallback
+  const apis = [
+    {
+      url: `http://ip-api.com/json/${ip}?fields=status,countryCode`,
+      parser: (data) => data.status === 'success' ? data.countryCode : null
+    },
+    {
+      url: `https://ipapi.co/${ip}/country_code/`,
+      parser: (data) => typeof data === 'string' && data.length === 2 ? data : null
+    },
+    {
+      url: `https://api.iplocation.net/?cmd=ip-country&ip=${ip}`,
+      parser: (data) => data && data.country_code2 ? data.country_code2 : null
     }
-    
-    // ذخیره null در cache برای جلوگیری از تلاش مجدد
-    ipCountryCache.set(ip, null);
-    return null;
-  } catch (e) {
-    if (e.name === 'AbortError') {
-      console.error('Timeout در تشخیص کشور:', ip);
-    } else {
-      console.error('خطا در تشخیص کشور:', e);
+  ];
+
+  for (const api of apis) {
+    try {
+      // timeout 3 ثانیه برای هر API
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+      const res = await fetch(api.url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        let data;
+        const contentType = res.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+          data = await res.json();
+        } else {
+          data = await res.text();
+        }
+
+        const countryCode = api.parser(data);
+        
+        if (countryCode && countryCode.length === 2) {
+          const result = {
+            code: countryCode.toUpperCase(),
+            name: getCountryNameFromCode(countryCode.toUpperCase())
+          };
+          // ذخیره در cache
+          ipCountryCache.set(ip, result);
+          return result;
+        }
+      }
+    } catch (e) {
+      console.error(`خطا در API ${api.url}:`, e.message);
+      continue; // تلاش با API بعدی
     }
-    // ذخیره null در cache
-    ipCountryCache.set(ip, null);
-    return null;
   }
+
+  console.error('تمام APIها برای IP ناموفق بودند:', ip);
+  // ذخیره null در cache برای جلوگیری از تلاش مجدد
+  ipCountryCache.set(ip, null);
+  return null;
 }
 
 // تبدیل نام کشور به فارسی (اگر انگلیسی باشد از کد آن استفاده می‌کند)
@@ -475,12 +500,12 @@ async function getUserStats(kv) {
   try {
     const usersRes = await kv.list({ prefix: 'users:' });
     const totalUsers = usersRes.keys.length;
-    
+
     // محاسبه بیشترین دریافت کننده DNS
     const historyRes = await kv.list({ prefix: 'history:dns:' });
     let topUser = null;
     let maxCount = 0;
-    
+
     for (const key of historyRes.keys) {
       const userId = key.name.replace('history:dns:', '');
       const raw = await kv.get(key.name);
@@ -504,7 +529,7 @@ async function getUserStats(kv) {
         } catch {}
       }
     }
-    
+
     return {
       totalUsers,
       topUser
@@ -692,7 +717,7 @@ function renderMainPage(entries, userCount) {
 // Toast Notification System
 const Toast = {
   container: null,
-  
+
   init() {
     this.container = document.getElementById('toast-container');
     if (!this.container) {
@@ -702,27 +727,27 @@ const Toast = {
       document.body.appendChild(this.container);
     }
   },
-  
+
   show(message, type = 'info', duration = 5000) {
     this.init();
-    
+
     const icons = {
       success: '✓',
       error: '✕',
       warning: '⚠',
       info: 'ℹ'
     };
-    
+
     const titles = {
       success: 'موفقیت',
       error: 'خطا',
       warning: 'هشدار',
       info: 'اطلاعات'
     };
-    
+
     const toast = document.createElement('div');
     toast.className = \`toast \${type}\`;
-    
+
     toast.innerHTML = \`
       <div class="toast-icon">\${icons[type] || icons.info}</div>
       <div class="toast-content">
@@ -731,19 +756,19 @@ const Toast = {
       </div>
       <button class="toast-close">×</button>
     \`;
-    
+
     this.container.appendChild(toast);
-    
+
     const closeBtn = toast.querySelector('.toast-close');
     closeBtn.addEventListener('click', () => this.remove(toast));
-    
+
     if (duration > 0) {
       setTimeout(() => this.remove(toast), duration);
     }
-    
+
     return toast;
   },
-  
+
   remove(toast) {
     toast.classList.add('removing');
     setTimeout(() => {
@@ -752,19 +777,19 @@ const Toast = {
       }
     }, 300);
   },
-  
+
   success(message, duration) {
     return this.show(message, 'success', duration);
   },
-  
+
   error(message, duration) {
     return this.show(message, 'error', duration);
   },
-  
+
   warning(message, duration) {
     return this.show(message, 'warning', duration);
   },
-  
+
   info(message, duration) {
     return this.show(message, 'info', duration);
   }
@@ -804,44 +829,44 @@ document.addEventListener('DOMContentLoaded', () => {
   if (bulkForm) {
     bulkForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      
+
       const progress = document.getElementById('bulk-progress');
       const progressFill = progress.querySelector('.progress-fill');
       const progressText = progress.querySelector('.progress-text');
       const btn = document.getElementById('bulk-submit');
       const textarea = bulkForm.querySelector('textarea[name="addresses"]');
-      
+
       if (!textarea.value.trim()) {
         Toast.warning('لطفاً آدرس‌ها را وارد کنید');
         return;
       }
-      
+
       const addresses = textarea.value.split('\n')
         .map(a => a.trim())
         .filter(a => a && /^\d+\.\d+\.\d+\.\d+$/.test(a));
-      
+
       if (addresses.length === 0) {
         Toast.error('هیچ آدرس IP معتبری یافت نشد');
         return;
       }
-      
+
       progress.style.display = 'block';
       btn.disabled = true;
       btn.textContent = ' در حال پردازش...';
-      
+
       let processed = 0;
       let success = 0;
       let failed = 0;
       const byCountry = {};
-      
+
       // پردازش موازی با batch های 5 تایی برای سرعت بیشتر
       const BATCH_SIZE = 5;
-      
+
       for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
         const batch = addresses.slice(i, i + BATCH_SIZE);
         const percent = Math.round((processed / addresses.length) * 100);
         progressText.textContent = \` پردازش موازی... (\${processed}/\${addresses.length}) - \${percent}% | \${success} | \${failed}\`;
-        
+
         // پردازش همزمان 5 IP
         const promises = batch.map(async ip => {
           try {
@@ -850,38 +875,45 @@ document.addEventListener('DOMContentLoaded', () => {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ip })
             });
-            
+
+            if (!res.ok) {
+              throw new Error(\`HTTP \${res.status}: \${res.statusText}\`);
+            }
+
             const result = await res.json();
             return { ip, result };
           } catch (e) {
+            console.error(\`خطا در پردازش IP \${ip}:\`, e);
             return { ip, result: { success: false, error: e.message } };
           }
         });
-        
+
         const results = await Promise.all(promises);
-        
+
         // بروزرسانی آمار
         results.forEach(({ ip, result }) => {
           if (result.success) {
             success++;
             if (result.country) {
-              byCountry[result.country] = (byCountry[result.country] || 0) + 1;
+              const countryKey = result.countryName ? \`\${result.country} (\${result.countryName})\` : result.country;
+              byCountry[countryKey] = (byCountry[countryKey] || 0) + 1;
             }
           } else {
             failed++;
+            console.error(\`ناموفق - \${ip}: \${result.error}\`);
           }
           processed++;
         });
-        
+
         const newPercent = Math.round((processed / addresses.length) * 100);
         progressFill.style.width = newPercent + '%';
         progressText.textContent = \`پردازش شد: \${processed}/\${addresses.length} - \${newPercent}% | \${success} | \${failed}\`;
       }
-      
+
       const summary = Object.entries(byCountry)
         .map(([code, count]) => \`\${code}: \${count}\`)
         .join(', ');
-      
+
       Toast.success(\`\${success} آدرس اضافه شد\\n\${failed} آدرس ناموفق\\n\\n📊 \${summary}\`, 6000);
       setTimeout(() => window.location.href = '/', 1500);
     });
@@ -905,10 +937,10 @@ async function loadCountryData(code) {
     const response = await fetch('/api/dns');
     const entries = await response.json();
     const country = entries.find(e => e.code.toUpperCase() === code.toUpperCase());
-    
+
     if (country) {
       document.getElementById('edit-stock').value = country.stock || 0;
-      
+
       const addressesDiv = document.getElementById('current-addresses');
       if (country.addresses && country.addresses.length > 0) {
         addressesDiv.innerHTML = country.addresses.map(addr => 
@@ -927,11 +959,11 @@ async function fixCountryNames() {
   if (!confirm('آیا مطمئن هستید که می‌خواهید تمام اسم کشورها را به فارسی تبدیل کنید؟')) {
     return;
   }
-  
+
   try {
     const response = await fetch('/api/admin/fix-country-names');
     const result = await response.json();
-    
+
     if (result.success) {
       Toast.success(result.message);
       setTimeout(() => window.location.reload(), 1500);
@@ -945,23 +977,23 @@ async function fixCountryNames() {
 
 async function editCountry(code, currentName) {
   const newName = prompt('نام جدید کشور را وارد کنید:', currentName);
-  
+
   if (!newName || newName === currentName) {
     return;
   }
-  
+
   try {
     const formData = new FormData();
     formData.append('action', 'edit');
     formData.append('existing_code', code);
     formData.append('country', newName);
     formData.append('addresses', ''); // آدرس جدیدی اضافه نمی‌شود
-    
+
     const response = await fetch('/api/admin/add-dns', {
       method: 'POST',
       body: formData
     });
-    
+
     if (response.ok) {
       Toast.success('نام کشور با موفقیت تغییر کرد');
       setTimeout(() => window.location.reload(), 1500);
@@ -977,11 +1009,11 @@ async function removeDuplicates() {
   if (!confirm('آیا مطمئن هستید که می‌خواهید تمام آدرس‌های تکراری را از همه کشورها حذف کنید؟')) {
     return;
   }
-  
+
   try {
     const response = await fetch('/api/admin/remove-duplicates');
     const result = await response.json();
-    
+
     if (result.success) {
       Toast.success(result.message);
       setTimeout(() => window.location.reload(), 1500);
@@ -997,17 +1029,17 @@ async function downloadJSON() {
   try {
     const response = await fetch('/api/dns');
     const data = await response.json();
-    
+
     if (!data || data.length === 0) {
       Toast.warning('هیچ داده‌ای برای دانلود وجود ندارد');
       return;
     }
-    
+
     // ساخت فایل JSON با فرمت زیبا
     const jsonString = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    
+
     // ساخت لینک دانلود
     const a = document.createElement('a');
     a.href = url;
@@ -1017,7 +1049,7 @@ async function downloadJSON() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     Toast.success(\`فایل JSON با موفقیت دانلود شد\\n📊 تعداد کشورها: \${data.length}\`);
   } catch (error) {
     Toast.error('خطا در دانلود فایل: ' + error.message);
@@ -1660,15 +1692,15 @@ select:focus {
   .dns-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .form-row {
     grid-template-columns: 1fr;
   }
-  
+
   .header-stats {
     flex-direction: column;
   }
-  
+
   .stat-box {
     width: 100%;
   }
@@ -1676,13 +1708,13 @@ select:focus {
   .form-tabs {
     flex-direction: column;
   }
-  
+
   .tab-btn {
     text-align: center;
     border-bottom: none;
     border-right: 3px solid transparent;
   }
-  
+
   .tab-btn.active {
     border-right-color: #667eea;
     border-bottom-color: transparent;
@@ -2257,7 +2289,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
   await addUserHistory(env.DB, userId, 'dns', `${entry.code}:${selectedDns}`);
   // حذف آدرس استفاده شده از لیست و بروزرسانی خودکار موجودی
   await removeAddressFromEntry(env.DB, code, selectedDns);
-  
+
   // دریافت موجودی جدید
   const updatedEntry = await getDnsEntry(env.DB, code);
   const remainingStock = updatedEntry ? updatedEntry.stock : 0;
@@ -2433,7 +2465,7 @@ export async function handleUpdate(update, env) {
         const entries = await getCachedDnsList(env.DB);
         const kb = buildWireguardCountryKb(entries);
         const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
-        
+
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
@@ -2478,17 +2510,17 @@ export async function handleUpdate(update, env) {
               const dnsList = Array.isArray(state.dns) ? state.dns : [state.dns];
               const conf = buildWgConf({ privateKey: keys.privateKey, addresses, dns: dnsList.join(', '), mtu, listenPort });
               const filename = `${generateWgFilename()}.conf`;
-              
+
               const fd = new FormData();
               fd.append('chat_id', String(chat));
               const captionText = `📄 <b>نام:</b> ${filename}\n• <b>اپراتور:</b> ${OPERATORS[opCode].title}\n• <b>دی ان اس:</b> ${dnsList.join(' , ')}\n• <b>MTU:</b> ${mtu}\n• <b>پورت شنونده:</b> ${listenPort}\n\n💡 <i>نکته:</i> ListenPort بین 40000 تا 60000 باشد.`;
               fd.append('caption', captionText);
               fd.append('parse_mode', 'HTML');
-              
+
               // استفاده از File برای اطمینان از وجود نام فایل در multipart
               const file = new File([conf], filename, { type: 'text/plain' });
               fd.append('document', file);
-              
+
               const uploadRes = await telegramUpload(env, 'sendDocument', fd);
               if (!uploadRes || uploadRes.ok !== true) {
                 const err = uploadRes && uploadRes.description ? uploadRes.description : 'ارسال فایل ناموفق بود';
@@ -2502,16 +2534,16 @@ export async function handleUpdate(update, env) {
                 await incUserQuota(env.DB, from.id, 'wg');
                 const newQuota = await getUserQuota(env.DB, from.id, 'wg');
                 await addUserHistory(env.DB, from.id, 'wg', `${state.country}|${dnsList.join('+')}|${mtu}|${listenPort}`);
-                
+
                 // حذف DNS استفاده شده از لیست (اگر از کشور انتخاب شده بود)
                 if (dnsList.length > 1) {
                   // DNS دوم (randomDns) را حذف می‌کنیم
                   const usedDns = dnsList[1];
                   await removeAddressFromEntry(env.DB, state.country, usedDns);
                 }
-                
+
                 await clearWgState(env.DB, from.id);
-                
+
                 // پیام موفقیت
                 await telegramApi(env, '/editMessageText', {
                   chat_id: chat,
@@ -2536,7 +2568,7 @@ export async function handleUpdate(update, env) {
         const entries = await getCachedDnsList(env.DB);
         const kb = buildWireguardCountryKb(entries);
         const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
-        
+
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
@@ -2551,7 +2583,7 @@ export async function handleUpdate(update, env) {
         const entries = await getCachedDnsList(env.DB);
         const kb = buildWireguardCountryKb(entries);
         const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
-        
+
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
@@ -2565,13 +2597,13 @@ export async function handleUpdate(update, env) {
       else if (data.startsWith('wg_dns_country_pick:')) {
         // پاسخ سریع به callback
         await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id });
-        
+
         const code = data.split(':')[1];
         const entry = await getDnsEntry(env.DB, code);
         const flag = countryCodeToFlag(code);
         // تبدیل نام کشور به فارسی
         const countryName = entry ? ensurePersianCountryName(entry.country, entry.code) : getCountryNameFromCode(code);
-        
+
         await setWgState(env.DB, from.id, { country: code, step: 'dns' });
         const kb = buildWireguardDnsKb();
         await telegramApi(env, '/editMessageText', {
@@ -2618,7 +2650,7 @@ export async function handleUpdate(update, env) {
         msg += `👋 نام: ${from.first_name || 'کاربر'}\n`;
         if (from.username) msg += `🆔 یوزرنیم: @${from.username}\n`;
         msg += `🔢 شناسه: \`${from.id}\`\n\n`;
-        
+
         msg += '📊 *سهمیه روزانه:*\n';
         msg += `🧭 DNS: ${dnsQuota.count}/${dnsQuota.limit}\n`;
         msg += `🛰️ WireGuard: ${wgQuota.count}/${wgQuota.limit}\n\n`;
@@ -2700,11 +2732,11 @@ export async function handleUpdate(update, env) {
           await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اجازه دسترسی ندارید', show_alert: true });
         } else {
           const stats = await getUserStats(env.DB);
-          
+
           let msg = '📊 *آمار ربات*\n';
           msg += '━━━━━━━━━━━━━━━━━━━━\n\n';
           msg += `👥 *تعداد کل کاربران:* ${stats.totalUsers}\n\n`;
-          
+
           if (stats.topUser) {
             msg += '🏆 *بیشترین دریافت کننده DNS:*\n';
             msg += `👤 نام: ${stats.topUser.name}\n`;
@@ -2716,7 +2748,7 @@ export async function handleUpdate(update, env) {
           } else {
             msg += '⚠️ هنوز هیچ کاربری DNS دریافت نکرده است.';
           }
-          
+
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
             message_id: messageId,
@@ -2736,7 +2768,7 @@ export async function handleUpdate(update, env) {
           const today = todayKey();
           const dnsKeys = await env.DB.list({ prefix: `quota:dns:` });
           const wgKeys = await env.DB.list({ prefix: `quota:wg:` });
-          
+
           let deleted = 0;
           for (const k of dnsKeys.keys) {
             if (k.name.includes(today)) {
@@ -2755,7 +2787,7 @@ export async function handleUpdate(update, env) {
           const users = await env.DB.list({ prefix: 'users:' });
           let notified = 0;
           const giftMsg = '🎁 *خبر خوش!*\n\nمحدودیت روزانه شما توسط مدیریت ربات ریست شد!\n\n✨ می‌توانید مجدداً از خدمات استفاده کنید.\n\n💝 از صبر و همراهی شما سپاسگزاریم.';
-          
+
           for (const k of users.keys) {
             try {
               const userId = k.name.replace('users:', '');
@@ -2820,7 +2852,7 @@ export default {
 
         const code = (form.get('code') || '').toUpperCase().trim();
         let countryName = (form.get('country') || '').trim();
-        
+
         // اگر نام خالی است، از نام فارسی پیش‌فرض استفاده کن
         if (!countryName && code) {
           countryName = getCountryNameFromCode(code);
@@ -2905,32 +2937,37 @@ export default {
       try {
         const body = await req.json();
         const ip = body.ip;
-        
+
         if (!ip || !/^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
           return json({ success: false, error: 'IP نامعتبر' });
         }
-        
+
+        console.log('شروع تشخیص کشور برای IP:', ip);
         const country = await detectCountryFromIP(ip);
-        if (!country || !country.code) {
-          return json({ success: false, error: 'تشخیص کشور ناموفق' });
-        }
         
+        if (!country || !country.code) {
+          console.error('تشخیص کشور ناموفق برای IP:', ip);
+          return json({ success: false, error: `تشخیص کشور ناموفق برای ${ip}` });
+        }
+
+        console.log(`کشور تشخیص داده شد: ${ip} -> ${country.code} (${country.name})`);
         const code = country.code.toUpperCase();
         const existing = await getDnsEntry(env.DB, code);
-        
+
         if (existing) {
           // حذف آدرس‌های تکراری از لیست موجود
           existing.addresses = [...new Set(existing.addresses)];
-          
+
           if (!existing.addresses.includes(ip)) {
             existing.addresses.push(ip);
             existing.stock = existing.addresses.length;
             await putDnsEntry(env.DB, existing);
             invalidateDnsCache();
-            return json({ success: true, country: code, action: 'updated' });
+            console.log(`IP اضافه شد به کشور موجود: ${ip} -> ${code}`);
+            return json({ success: true, country: code, action: 'updated', countryName: country.name });
           } else {
-            // آدرس تکراری است، ولی موفقیت برمی‌گردانیم
-            return json({ success: true, country: code, action: 'duplicate' });
+            console.log(`IP تکراری: ${ip} -> ${code}`);
+            return json({ success: true, country: code, action: 'duplicate', countryName: country.name });
           }
         } else {
           const newEntry = {
@@ -2941,10 +2978,12 @@ export default {
           };
           await putDnsEntry(env.DB, newEntry);
           invalidateDnsCache();
-          return json({ success: true, country: code, action: 'created' });
+          console.log(`کشور جدید ایجاد شد: ${ip} -> ${code} (${country.name})`);
+          return json({ success: true, country: code, action: 'created', countryName: country.name });
         }
       } catch (e) {
-        return json({ success: false, error: e.message });
+        console.error('خطا در افزودن IP:', ip, e);
+        return json({ success: false, error: `خطا: ${e.message}` });
       }
     }
 
@@ -2952,7 +2991,7 @@ export default {
     if (url.pathname === '/api/admin/bulk-add' && req.method === 'POST') {
       const form = await req.formData();
       const addressesRaw = form.get('addresses');
-      
+
       if (!addressesRaw) {
         return html('<script>alert("لطفاً آدرس‌ها را وارد کنید");setTimeout(() => history.back(), 1500);</script>');
       }
@@ -2980,7 +3019,7 @@ export default {
         if (existing) {
           // حذف آدرس‌های تکراری از لیست موجود
           existing.addresses = [...new Set(existing.addresses)];
-          
+
           // اضافه کردن به کشور موجود
           if (!existing.addresses.includes(ip)) {
             existing.addresses.push(ip);
@@ -3060,10 +3099,10 @@ export default {
         const entries = await listDnsEntries(env.DB);
         let updated = 0;
         let skipped = 0;
-        
+
         for (const entry of entries) {
           const persianName = getCountryNameFromCode(entry.code);
-          
+
           // اگر اسم فعلی با اسم فارسی متفاوت است، بروزرسانی کن
           if (entry.country !== persianName) {
             entry.country = persianName;
@@ -3073,9 +3112,9 @@ export default {
             skipped++;
           }
         }
-        
+
         invalidateDnsCache();
-        
+
         return json({
           success: true,
           message: `✅ ${updated} کشور بروزرسانی شد، ${skipped} کشور نیازی به تغییر نداشت`,
@@ -3094,7 +3133,7 @@ export default {
         const entries = await listDnsEntries(env.DB);
         let totalRemoved = 0;
         let countriesUpdated = 0;
-        
+
         for (const entry of entries) {
           if (Array.isArray(entry.addresses)) {
             const originalCount = entry.addresses.length;
@@ -3102,7 +3141,7 @@ export default {
             entry.addresses = [...new Set(entry.addresses)];
             const newCount = entry.addresses.length;
             const removed = originalCount - newCount;
-            
+
             if (removed > 0) {
               entry.stock = entry.addresses.length;
               await putDnsEntry(env.DB, entry);
@@ -3111,9 +3150,9 @@ export default {
             }
           }
         }
-        
+
         invalidateDnsCache();
-        
+
         return json({
           success: true,
           message: `✅ ${totalRemoved} آدرس تکراری از ${countriesUpdated} کشور حذف شد`,
