@@ -633,13 +633,21 @@ function renderMainPage(entries, userCount) {
     <div class="section-header">
       <h2>🔧 ابزارهای مدیریت</h2>
     </div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
       <div>
         <button onclick="fixCountryNames()" class="btn-submit" style="background: linear-gradient(135deg, #667eea, #764ba2); width: 100%;">
           🌍 تبدیل تمام اسم کشورها به فارسی
         </button>
         <small style="display: block; margin-top: 10px; color: #64748b;">
           تبدیل اسم‌های انگلیسی به فارسی
+        </small>
+      </div>
+      <div>
+        <button onclick="removeDuplicates()" class="btn-submit" style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 100%;">
+          🧹 حذف آدرس‌های تکراری
+        </button>
+        <small style="display: block; margin-top: 10px; color: #64748b;">
+          حذف تمام آدرس‌های تکراری از همه کشورها
         </small>
       </div>
       <div>
@@ -879,6 +887,26 @@ async function editCountry(code, currentName) {
     }
   } catch (error) {
     alert('خطا: ' + error.message);
+  }
+}
+
+async function removeDuplicates() {
+  if (!confirm('آیا مطمئن هستید که می‌خواهید تمام آدرس‌های تکراری را از همه کشورها حذف کنید؟')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/admin/remove-duplicates');
+    const result = await response.json();
+    
+    if (result.success) {
+      alert(result.message);
+      window.location.reload();
+    } else {
+      alert('خطا: ' + result.error);
+    }
+  } catch (error) {
+    alert('خطا در ارتباط با سرور: ' + error.message);
   }
 }
 
@@ -2612,6 +2640,9 @@ export default {
         const existing = await getDnsEntry(env.DB, code);
         
         if (existing) {
+          // حذف آدرس‌های تکراری از لیست موجود
+          existing.addresses = [...new Set(existing.addresses)];
+          
           if (!existing.addresses.includes(ip)) {
             existing.addresses.push(ip);
             existing.stock = existing.addresses.length;
@@ -2619,7 +2650,8 @@ export default {
             invalidateDnsCache();
             return json({ success: true, country: code, action: 'updated' });
           } else {
-            return json({ success: false, error: 'آدرس تکراری' });
+            // آدرس تکراری است، ولی موفقیت برمی‌گردانیم
+            return json({ success: true, country: code, action: 'duplicate' });
           }
         } else {
           const newEntry = {
@@ -2667,6 +2699,9 @@ export default {
         const existing = await getDnsEntry(env.DB, code);
 
         if (existing) {
+          // حذف آدرس‌های تکراری از لیست موجود
+          existing.addresses = [...new Set(existing.addresses)];
+          
           // اضافه کردن به کشور موجود
           if (!existing.addresses.includes(ip)) {
             existing.addresses.push(ip);
@@ -2674,6 +2709,9 @@ export default {
             await putDnsEntry(env.DB, existing);
             results.success++;
             results.byCountry[code] = (results.byCountry[code] || 0) + 1;
+          } else {
+            // آدرس تکراری است، ولی به عنوان موفق حساب می‌شود
+            results.success++;
           }
         } else {
           // ایجاد کشور جدید
@@ -2765,6 +2803,44 @@ export default {
           updated,
           skipped,
           total: entries.length
+        });
+      } catch (e) {
+        return json({ success: false, error: e.message }, 500);
+      }
+    }
+
+    // حذف آدرس‌های تکراری از تمام کشورها
+    if (url.pathname === '/api/admin/remove-duplicates' && req.method === 'GET') {
+      try {
+        const entries = await listDnsEntries(env.DB);
+        let totalRemoved = 0;
+        let countriesUpdated = 0;
+        
+        for (const entry of entries) {
+          if (Array.isArray(entry.addresses)) {
+            const originalCount = entry.addresses.length;
+            // حذف تکراری‌ها با استفاده از Set
+            entry.addresses = [...new Set(entry.addresses)];
+            const newCount = entry.addresses.length;
+            const removed = originalCount - newCount;
+            
+            if (removed > 0) {
+              entry.stock = entry.addresses.length;
+              await putDnsEntry(env.DB, entry);
+              totalRemoved += removed;
+              countriesUpdated++;
+            }
+          }
+        }
+        
+        invalidateDnsCache();
+        
+        return json({
+          success: true,
+          message: `✅ ${totalRemoved} آدرس تکراری از ${countriesUpdated} کشور حذف شد`,
+          totalRemoved,
+          countriesUpdated,
+          totalCountries: entries.length
         });
       } catch (e) {
         return json({ success: false, error: e.message }, 500);
