@@ -1,3 +1,4 @@
+// @ts-nocheck
 const TELEGRAM_BASE = (token) => `https://api.telegram.org/bot${token}`;
 const ADMIN_ID = 7240662021;
 
@@ -572,6 +573,7 @@ function renderMainPage(entries, userCount) {
 <style>${getWebCss()}</style>
 </head>
 <body>
+<div id="toast-container" class="toast-container"></div>
 <div class="container">
   <header class="main-header">
     <div class="header-content">
@@ -687,6 +689,87 @@ function renderMainPage(entries, userCount) {
 </div>
 
 <script>
+// Toast Notification System
+const Toast = {
+  container: null,
+  
+  init() {
+    this.container = document.getElementById('toast-container');
+    if (!this.container) {
+      this.container = document.createElement('div');
+      this.container.id = 'toast-container';
+      this.container.className = 'toast-container';
+      document.body.appendChild(this.container);
+    }
+  },
+  
+  show(message, type = 'info', duration = 5000) {
+    this.init();
+    
+    const icons = {
+      success: '✓',
+      error: '✕',
+      warning: '⚠',
+      info: 'ℹ'
+    };
+    
+    const titles = {
+      success: 'موفقیت',
+      error: 'خطا',
+      warning: 'هشدار',
+      info: 'اطلاعات'
+    };
+    
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    toast.innerHTML = `
+      <div class="toast-icon">${icons[type] || icons.info}</div>
+      <div class="toast-content">
+        <div class="toast-title">${titles[type] || titles.info}</div>
+        <div class="toast-message">${message}</div>
+      </div>
+      <button class="toast-close">×</button>
+    `;
+    
+    this.container.appendChild(toast);
+    
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn.addEventListener('click', () => this.remove(toast));
+    
+    if (duration > 0) {
+      setTimeout(() => this.remove(toast), duration);
+    }
+    
+    return toast;
+  },
+  
+  remove(toast) {
+    toast.classList.add('removing');
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  },
+  
+  success(message, duration) {
+    return this.show(message, 'success', duration);
+  },
+  
+  error(message, duration) {
+    return this.show(message, 'error', duration);
+  },
+  
+  warning(message, duration) {
+    return this.show(message, 'warning', duration);
+  },
+  
+  info(message, duration) {
+    return this.show(message, 'info', duration);
+  }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   const cards = document.querySelectorAll('.dns-card');
   cards.forEach((card, i) => { card.style.animationDelay = (i * 0.05) + 's'; });
@@ -729,7 +812,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const textarea = bulkForm.querySelector('textarea[name="addresses"]');
       
       if (!textarea.value.trim()) {
-        alert('لطفاً آدرس‌ها را وارد کنید');
+        Toast.warning('لطفاً آدرس‌ها را وارد کنید');
         return;
       }
       
@@ -738,7 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .filter(a => a && /^\\d+\\.\\d+\\.\\d+\\.\\d+$/.test(a));
       
       if (addresses.length === 0) {
-        alert('هیچ آدرس IP معتبری یافت نشد');
+        Toast.error('هیچ آدرس IP معتبری یافت نشد');
         return;
       }
       
@@ -799,8 +882,8 @@ document.addEventListener('DOMContentLoaded', () => {
         .map(([code, count]) => \`\${code}: \${count}\`)
         .join(', ');
       
-      alert(\`✅ \${success} آدرس اضافه شد\\n❌ \${failed} آدرس ناموفق\\n\\n📊 \${summary}\`);
-      window.location.href = '/';
+      Toast.success(`✅ ${success} آدرس اضافه شد\n❌ ${failed} آدرس ناموفق\n\n📊 ${summary}`, 6000);
+      setTimeout(() => window.location.href = '/', 1500);
     });
   }
 });
@@ -850,13 +933,13 @@ async function fixCountryNames() {
     const result = await response.json();
     
     if (result.success) {
-      alert(result.message);
-      window.location.reload();
+      Toast.success(result.message);
+      setTimeout(() => window.location.reload(), 1500);
     } else {
-      alert('خطا: ' + result.error);
+      Toast.error('خطا: ' + result.error);
     }
   } catch (error) {
-    alert('خطا در ارتباط با سرور: ' + error.message);
+    Toast.error('خطا در ارتباط با سرور: ' + error.message);
   }
 }
 
@@ -880,13 +963,13 @@ async function editCountry(code, currentName) {
     });
     
     if (response.ok) {
-      alert('✅ نام کشور با موفقیت تغییر کرد');
-      window.location.reload();
+      Toast.success('نام کشور با موفقیت تغییر کرد');
+      setTimeout(() => window.location.reload(), 1500);
     } else {
-      alert('❌ خطا در تغییر نام کشور');
+      Toast.error('خطا در تغییر نام کشور');
     }
   } catch (error) {
-    alert('خطا: ' + error.message);
+    Toast.error('خطا: ' + error.message);
   }
 }
 
@@ -900,13 +983,13 @@ async function removeDuplicates() {
     const result = await response.json();
     
     if (result.success) {
-      alert(result.message);
-      window.location.reload();
+      Toast.success(result.message);
+      setTimeout(() => window.location.reload(), 1500);
     } else {
-      alert('خطا: ' + result.error);
+      Toast.error('خطا: ' + result.error);
     }
   } catch (error) {
-    alert('خطا در ارتباط با سرور: ' + error.message);
+    Toast.error('خطا در ارتباط با سرور: ' + error.message);
   }
 }
 
@@ -916,7 +999,7 @@ async function downloadJSON() {
     const data = await response.json();
     
     if (!data || data.length === 0) {
-      alert('⚠️ هیچ داده‌ای برای دانلود وجود ندارد');
+      Toast.warning('هیچ داده‌ای برای دانلود وجود ندارد');
       return;
     }
     
@@ -935,9 +1018,9 @@ async function downloadJSON() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    alert(\`✅ فایل JSON با موفقیت دانلود شد\\n📊 تعداد کشورها: \${data.length}\`);
+    Toast.success(`فایل JSON با موفقیت دانلود شد\n📊 تعداد کشورها: ${data.length}`);
   } catch (error) {
-    alert('❌ خطا در دانلود فایل: ' + error.message);
+    Toast.error('خطا در دانلود فایل: ' + error.message);
   }
 }
 </script>
@@ -1763,6 +1846,201 @@ body.dark .progress-bar {
 body.dark .progress-text {
   color: #94a3b8;
 }
+
+/* Toast Notifications */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 400px;
+}
+
+.toast {
+  background: white;
+  border-radius: 16px;
+  padding: 18px 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  animation: slideInRight 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  border-left: 4px solid;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  min-width: 320px;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast.removing {
+  animation: slideOutRight 0.3s ease-out forwards;
+}
+
+@keyframes slideOutRight {
+  to {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+.toast::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: currentColor;
+  animation: progress 5s linear forwards;
+}
+
+@keyframes progress {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+.toast-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.toast-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toast-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: #1e293b;
+}
+
+.toast-message {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.toast-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #64748b;
+}
+
+.toast.success {
+  border-left-color: #10b981;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(255, 255, 255, 0.98));
+}
+
+.toast.success .toast-icon {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.toast.error {
+  border-left-color: #ef4444;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(255, 255, 255, 0.98));
+}
+
+.toast.error .toast-icon {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.toast.warning {
+  border-left-color: #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05), rgba(255, 255, 255, 0.98));
+}
+
+.toast.warning .toast-icon {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.toast.info {
+  border-left-color: #3b82f6;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(255, 255, 255, 0.98));
+}
+
+.toast.info .toast-icon {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+/* Dark mode toast styles */
+body.dark .toast {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.98));
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+body.dark .toast-title {
+  color: #f1f5f9;
+}
+
+body.dark .toast-message {
+  color: #94a3b8;
+}
+
+body.dark .toast-close {
+  color: #64748b;
+}
+
+body.dark .toast-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+}
+
+body.dark .toast.success {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(15, 23, 42, 0.98));
+}
+
+body.dark .toast.error {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(15, 23, 42, 0.98));
+}
+
+body.dark .toast.warning {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(15, 23, 42, 0.98));
+}
+
+body.dark .toast.info {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(15, 23, 42, 0.98));
+}
 `;
 }
 
@@ -2556,13 +2834,13 @@ export default {
         };
 
         if (!entry.country || !entry.code || entry.code.length !== 2) {
-          return html('<script>alert("اطلاعات نامعتبر است");history.back();</script>');
+          return html('<script>Toast.error("اطلاعات نامعتبر است");setTimeout(() => history.back(), 1500);</script>');
         }
 
         // بررسی عدم تکرار کد کشور
         const existing = await getDnsEntry(env.DB, entry.code);
         if (existing) {
-          return html('<script>alert("این کد کشور قبلاً ثبت شده است");history.back();</script>');
+          return html('<script>Toast.error("این کد کشور قبلاً ثبت شده است");setTimeout(() => history.back(), 1500);</script>');
         }
 
         await putDnsEntry(env.DB, entry);
@@ -2577,13 +2855,13 @@ export default {
         const newCountryName = form.get('country') ? form.get('country').trim() : null;
 
         if (!code || code.length !== 2) {
-          return html('<script>alert("کد کشور نامعتبر است");history.back();</script>');
+          return html('<script>Toast.error("کد کشور نامعتبر است");setTimeout(() => history.back(), 1500);</script>');
         }
 
         // دریافت اطلاعات فعلی
         const existing = await getDnsEntry(env.DB, code);
         if (!existing) {
-          return html('<script>alert("کشور انتخابی یافت نشد");history.back();</script>');
+          return html('<script>Toast.error("کشور انتخابی یافت نشد");setTimeout(() => history.back(), 1500);</script>');
         }
 
         // بروزرسانی نام کشور (در صورت وجود)
@@ -2675,7 +2953,7 @@ export default {
       const addressesRaw = form.get('addresses');
       
       if (!addressesRaw) {
-        return html('<script>alert("لطفاً آدرس‌ها را وارد کنید");history.back();</script>');
+        return html('<script>Toast.warning("لطفاً آدرس‌ها را وارد کنید");setTimeout(() => history.back(), 1500);</script>');
       }
 
       const addresses = addressesRaw.split('\n')
@@ -2683,7 +2961,7 @@ export default {
         .filter(a => a && /^\d+\.\d+\.\d+\.\d+$/.test(a));
 
       if (addresses.length === 0) {
-        return html('<script>alert("هیچ آدرس IP معتبری یافت نشد");history.back();</script>');
+        return html('<script>Toast.error("هیچ آدرس IP معتبری یافت نشد");setTimeout(() => history.back(), 1500);</script>');
       }
 
       const results = { success: 0, failed: 0, byCountry: {} };
@@ -2731,8 +3009,8 @@ export default {
       const summary = Object.entries(results.byCountry)
         .map(([code, count]) => `${code}: ${count}`)
         .join(', ');
-      const msg = `✅ ${results.success} آدرس اضافه شد\\n❌ ${results.failed} آدرس ناموفق\\n\\n📊 ${summary}`;
-      return html(`<script>alert("${msg}");window.location.href="/";</script>`);
+      const msg = `${results.success} آدرس اضافه شد\\n${results.failed} آدرس ناموفق\\n\\n📊 ${summary}`;
+      return html(`<script>Toast.success("${msg}", 6000);setTimeout(() => window.location.href="/", 1500);</script>`);
     }
 
     // Webhook تلگرام
