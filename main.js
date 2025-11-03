@@ -477,41 +477,48 @@ function getRandomDns(entry) {
   return entry.addresses[Math.floor(Math.random() * entry.addresses.length)];
 }
 
-// Cache برای تشخیص کشور IP ها (برای جلوگیری از درخواست‌های تکراری)
-const ipCountryCache = new Map();
-
-// تشخیص کشور از IP با استفاده از API (با timeout و cache برای سرعت بیشتر)
-async function detectCountryFromIP(ip) {
-  // بررسی cache
-  if (ipCountryCache.has(ip)) {
-    return ipCountryCache.get(ip);
+// تشخیص کشور از IP با استفاده از API و cache در KV
+async function detectCountryFromIP(ip, kv) {
+  // بررسی cache در KV (دائمی)
+  const cacheKey = `ip_cache:${ip}`;
+  const cached = await kv.get(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch {}
   }
   
   try {
-    // timeout 5 ثانیه برای جلوگیری از تاخیر زیاد
+    // timeout 4 ثانیه برای سرعت بیشتر
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     
-    const res = await fetch(`https://api.iplocation.net/?cmd=ip-country&ip=${ip}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+    // استفاده از ip-api.com که سریع‌تر و قابل اعتمادتر است
+    // توجه: این API محدودیت 45 درخواست در دقیقه دارد
+    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,countryCode,country`, {
       signal: controller.signal
     });
     
     clearTimeout(timeoutId);
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    
     const data = await res.json();
     
-    if (data && data.country_code2) {
+    if (data && data.status === 'success' && data.countryCode) {
       const result = {
-        code: data.country_code2.toUpperCase(),
-        name: getCountryNameFromCode(data.country_code2.toUpperCase())
+        code: data.countryCode.toUpperCase(),
+        name: getCountryNameFromCode(data.countryCode.toUpperCase())
       };
-      // ذخیره در cache
-      ipCountryCache.set(ip, result);
+      // ذخیره در KV با TTL 30 روز
+      await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: 2592000 });
       return result;
     }
     
-    // ذخیره null در cache برای جلوگیری از تلاش مجدد
-    ipCountryCache.set(ip, null);
+    // ذخیره null در cache با TTL کوتاه‌تر (1 روز)
+    await kv.put(cacheKey, JSON.stringify(null), { expirationTtl: 86400 });
     return null;
   } catch (e) {
     if (e.name === 'AbortError') {
@@ -519,8 +526,7 @@ async function detectCountryFromIP(ip) {
     } else {
       console.error('خطا در تشخیص کشور:', e);
     }
-    // ذخیره null در cache
-    ipCountryCache.set(ip, null);
+    // در صورت خطا، cache نمی‌کنیم تا بعداً دوباره تلاش شود
     return null;
   }
 }
@@ -1033,8 +1039,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const byCountry = {};
       const errors = [];
       
-      // تنظیم دینامیک batch size بر اساس تعداد آدرس‌ها
-      const BATCH_SIZE = addresses.length > 100 ? 10 : addresses.length > 50 ? 7 : 5;
+      // تنظیم دینامیک batch size بر اساس تعداد آدرس‌ها (افزایش برای سرعت بیشتر)
+      const BATCH_SIZE = addresses.length > 100 ? 15 : addresses.length > 50 ? 10 : 7;
       
       // تابع بروزرسانی UI با requestAnimationFrame برای عملکرد بهتر
       const updateUI = (currentIp = null) => {
@@ -1071,7 +1077,7 @@ document.addEventListener('DOMContentLoaded', () => {
             attempt++;
             try {
               const controller = new AbortController();
-              const t = setTimeout(() => controller.abort(), 6000);
+              const t = setTimeout(() => controller.abort(), 5000);
               const res = await fetch('/api/admin/bulk-add-single', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1120,6 +1126,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (eta > 0 && !cancelRequested) {
           currentIpText.textContent = '⚡ سرعت: ' + speed + ' IP/s | ⏱️ زمان تخمینی: ' + eta + 's';
+        }
+        
+        // تاخیر کوچک بین batch‌ها برای جلوگیری از rate limit (100ms)
+        if (i + BATCH_SIZE < addresses.length && !cancelRequested) {
+          await new Promise(r => setTimeout(r, 100));
         }
       }
       
@@ -4392,7 +4403,7 @@ export default {
           return json({ success: false, error: 'IP نامعتبر' });
         }
         
-        const country = await detectCountryFromIP(ip);
+        const country = await detectCountryFromIP(ip, env.DB);
         if (!country || !country.code) {
           return json({ success: false, error: 'تشخیص کشور ناموفق' });
         }
@@ -4472,7 +4483,7 @@ export default {
       const results = { success: 0, failed: 0, byCountry: {} };
 
       for (const ip of addresses) {
-        const country = await detectCountryFromIP(ip);
+        const country = await detectCountryFromIP(ip, env.DB);
         if (!country || !country.code) {
           results.failed++;
           continue;
