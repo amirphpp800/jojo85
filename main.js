@@ -2766,16 +2766,12 @@ function invalidateDnsCache() {
 // ساخت کیبورد اصلی
 function buildMainKeyboard(userId) {
   const rows = [];
-  // سطر اول: وایرگارد
+  // سطر اول: وایرگارد و دی ان اس کنار هم
   rows.push([
-    { text: '🛰️ وایرگارد', callback_data: 'wireguard' }
+    { text: '🛰️ وایرگارد', callback_data: 'wireguard' },
+    { text: '🧭 دی ان اس', callback_data: 'show_dns_menu' }
   ]);
-  // سطر دوم: IPv4 و IPv6 کنار هم
-  rows.push([
-    { text: '🌐 IPv4', callback_data: 'show_dns' },
-    { text: '🌐 IPv6', callback_data: 'show_ipv6' }
-  ]);
-  // سطر سوم: حساب کاربری
+  // سطر دوم: حساب کاربری
   rows.push([{ text: '👤 حساب کاربری', callback_data: 'account' }]);
   // سطر سوم: ادمین (در صورت نیاز)
   if (Number(userId) === Number(ADMIN_ID)) {
@@ -2861,7 +2857,7 @@ function buildDnsKeyboard(entries, page = 0) {
     rows.push(paginationRow);
   }
 
-  rows.push([{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]);
+  rows.push([{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]);
 
   return { inline_keyboard: rows };
 }
@@ -2875,7 +2871,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: '❌ هیچ DNSی برای این کشور یافت نشد.',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
@@ -2889,7 +2885,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: `${flag} دی ان اس ${countryName}\n\nناموجود. کشور دیگری را انتخاب کنید.`,
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
@@ -2900,7 +2896,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: `${flag} دی ان اس ${countryName}\n\nهیچ آدرسی ثبت نشده است.`,
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
@@ -2912,7 +2908,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: `⏳ محدودیت روزانه دریافت DNS شما به پایان رسیده است.\n\n📊 امروز مجاز: ${quota.limit} مورد\n⏰ زمان باقی‌مانده تا ریست: ${timeLeft}`,
-      reply_markup: { inline_keyboard: [[{ text: '👤 حساب کاربری', callback_data: 'account' }],[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '👤 حساب کاربری', callback_data: 'account' }],[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
@@ -2925,7 +2921,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: `${flag} دی ان اس ${countryName}\n\nهیچ آدرسی موجود نیست.`,
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
@@ -2968,7 +2964,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
       inline_keyboard: [
         [{ text: '🔍 بررسی فیلتر آدرس', url: checkUrl }],
         [{ text: '🔄 دریافت DNS جدید', callback_data: `dns:${code}` }],
-        [{ text: '🔙 بازگشت', callback_data: 'show_dns' }]
+        [{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]
       ]
     }
   });
@@ -3036,7 +3032,7 @@ function buildIpv6Keyboard(entries, page = 0) {
     rows.push(paginationRow);
   }
 
-  rows.push([{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]);
+  rows.push([{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]);
 
   return { inline_keyboard: rows };
 }
@@ -3050,7 +3046,7 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: '❌ هیچ IPv6 برای این کشور یافت نشد.',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
@@ -3063,7 +3059,7 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: `${flag} IPv6 ${countryName}\n\nناموجود. کشور دیگری را انتخاب کنید.`,
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
@@ -3074,7 +3070,7 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: `${flag} IPv6 ${countryName}\n\nهیچ آدرسی ثبت نشده است.`,
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
@@ -3086,7 +3082,7 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: `⏳ محدودیت روزانه دریافت IPv6 شما به پایان رسیده است.\n\n📊 امروز مجاز: ${quota.limit} مورد\n⏰ زمان باقی‌مانده تا ریست: ${timeLeft}`,
-      reply_markup: { inline_keyboard: [[{ text: '👤 حساب کاربری', callback_data: 'account' }],[{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '👤 حساب کاربری', callback_data: 'account' }],[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
@@ -3099,7 +3095,7 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: `${flag} IPv6 ${countryName}\n\nهیچ آدرسی موجود نیست.`,
-      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
@@ -3132,7 +3128,7 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
       inline_keyboard: [
         [{ text: '🔍 بررسی فیلتر آدرس', url: checkUrl }],
         [{ text: '🔄 دریافت IPv6 جدید', callback_data: `ipv6:${code}` }],
-        [{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]
+        [{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]
       ]
     }
   });
@@ -3380,6 +3376,25 @@ export async function handleUpdate(update, env) {
         });
       }
 
+      // نمایش منوی انتخاب نوع DNS (IPv4 یا IPv6)
+      else if (data === 'show_dns_menu') {
+        await telegramApi(env, '/editMessageText', {
+          chat_id: chat,
+          message_id: messageId,
+          text: '🧭 *انتخاب نوع DNS*\n━━━━━━━━━━━━━━━━━━━━\n\n💡 لطفاً نسل DNS موردنظر خود را انتخاب کنید:',
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '🌐 IPv4', callback_data: 'show_dns' },
+                { text: '🌐 IPv6', callback_data: 'show_ipv6' }
+              ],
+              [{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]
+            ]
+          }
+        });
+      }
+
       // نمایش لیست DNS IPv4
       else if (data === 'show_dns' || data.startsWith('page:')) {
         const entries = await getCachedDnsList(env.DB);
@@ -3389,7 +3404,7 @@ export async function handleUpdate(update, env) {
             message_id: messageId,
             text: '❌ *هیچ IPv4 موجود نیست*\n\nلطفاً ابتدا از پنل مدیریت، آدرس‌های IPv4 موردنظر را اضافه کنید.',
             parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
+            reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
           });
         } else {
           // تعیین شماره صفحه
@@ -3418,7 +3433,7 @@ export async function handleUpdate(update, env) {
             message_id: messageId,
             text: '❌ *هیچ IPv6 موجود نیست*\n\nلطفاً ابتدا از پنل مدیریت، آدرس‌های IPv6 موردنظر را اضافه کنید.',
             parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
+            reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
           });
         } else {
           // تعیین شماره صفحه
