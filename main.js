@@ -2821,21 +2821,6 @@ function escapeHtml(s) {
   }[c]));
 }
 
-// === Telegram Bot ===
-async function telegramApi(env, path, body) {
-  try {
-    const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    return await res.json();
-  } catch (e) {
-    console.error('خطا در Telegram API:', e);
-    return {};
-  }
-}
-
 // Cache برای لیست DNS (5 دقیقه)
 let dnsListCache = { data: null, timestamp: 0 };
 const DNS_CACHE_TTL = 300000; // 5 minutes
