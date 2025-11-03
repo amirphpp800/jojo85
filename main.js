@@ -1102,9 +1102,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // پردازش نتایج
         const results = await Promise.all(promises);
+        let duplicates = 0;
         results.forEach(({ ip, result }) => {
           if (result.success) {
-            success++;
+            if (result.action === 'duplicate') {
+              duplicates++;
+            } else {
+              success++;
+            }
             if (result.country) {
               byCountry[result.country] = (byCountry[result.country] || 0) + 1;
             }
@@ -1143,9 +1148,18 @@ document.addEventListener('DOMContentLoaded', () => {
           .map(([code, count]) => code + ': ' + count)
           .join(', ');
         
-        progressText.textContent = '✅ تکمیل شد! ' + processed + ' آدرس | ✅ ' + success + ' موفق | ❌ ' + failed + ' ناموفق';
+        const duplicateText = duplicates > 0 ? ' | 🔄 ' + duplicates + ' تکراری' : '';
+        progressText.textContent = '✅ تکمیل شد! ' + processed + ' آدرس | ✅ ' + success + ' جدید' + duplicateText + ' | ❌ ' + failed + ' ناموفق';
         btn.textContent = '✅ تکمیل شد';
         btn.onclick = null;
+        
+        if (summary) {
+          const duplicateMsg = duplicates > 0 ? '\\n🔄 ' + duplicates + ' آدرس تکراری نادیده گرفته شد' : '';
+          Toast.success('🎉 افزودن گروهی تکمیل شد!\\n' + summary + duplicateMsg, 10000);
+        } else {
+          const duplicateMsg = duplicates > 0 ? ', ' + duplicates + ' تکراری' : '';
+          Toast.success('✅ تکمیل شد! ' + success + ' جدید' + duplicateMsg + ', ' + failed + ' ناموفق', 5000);
+        }
         
         // نمایش خطاها در UI
         if (errors.length > 0) {
@@ -1156,7 +1170,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // نمایش خلاصه با جزئیات بیشتر
-        let message = '✅ ' + success + ' آدرس با موفقیت اضافه شد';
+        let message = '✅ ' + success + ' آدرس جدید اضافه شد';
+        if (duplicates > 0) {
+          message += '\n🔄 ' + duplicates + ' آدرس تکراری';
+        }
         if (failed > 0) {
           message += '\n❌ ' + failed + ' آدرس ناموفق';
         }
@@ -1165,7 +1182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         Toast.success(message, 8000);
-        setTimeout(() => window.location.href = '/', 2500);
+        setTimeout(() => window.location.href = '/', 3000);
       } else {
         btn.textContent = '❌ لغو شد';
         btn.disabled = false;
@@ -4397,15 +4414,25 @@ export default {
     if (url.pathname === '/api/admin/bulk-add-single' && req.method === 'POST') {
       try {
         const body = await req.json();
-        const ip = body.ip;
+        const ip = (body.ip || '').trim();
         
-        if (!ip || !isValidIPv4(ip) || !isPublicIPv4(ip)) {
-          return json({ success: false, error: 'IP نامعتبر' });
+        // اعتبارسنجی ورودی
+        if (!ip) {
+          return json({ success: false, error: 'IP خالی است' });
         }
         
+        if (!isValidIPv4(ip)) {
+          return json({ success: false, error: 'فرمت IP نامعتبر است' });
+        }
+        
+        if (!isPublicIPv4(ip)) {
+          return json({ success: false, error: 'IP باید عمومی باشد (نه خصوصی)' });
+        }
+        
+        // تشخیص کشور از IP
         const country = await detectCountryFromIP(ip, env.DB);
         if (!country || !country.code) {
-          return json({ success: false, error: 'تشخیص کشور ناموفق' });
+          return json({ success: false, error: 'تشخیص کشور ناموفق - API در دسترس نیست' });
         }
         
         const code = country.code.toUpperCase();
@@ -4420,92 +4447,22 @@ export default {
             existing.stock = existing.addresses.length;
             await putDnsEntry(env.DB, existing);
             invalidateDnsCache();
-            return json({ success: true, country: code, action: 'updated' });
+            return json({ 
+              success: true, 
+              country: code, 
+              countryName: existing.country,
+              action: 'updated',
+              totalIps: existing.stock
+            });
           } else {
-            // آدرس تکراری است، ولی موفقیت برمی‌گردانیم
-            return json({ success: true, country: code, action: 'duplicate' });
-          }
-        } else {
-          const newEntry = {
-            code: code,
-            country: country.name,
-            addresses: [ip],
-            stock: 1
-          };
-          await putDnsEntry(env.DB, newEntry);
-          invalidateDnsCache();
-          return json({ success: true, country: code, action: 'created' });
-        }
-      } catch (e) {
-        return json({ success: false, error: e.message });
-      }
-    }
-
-    // API: افزودن گروهی با تشخیص خودکار کشور (legacy - برای فرم‌های قدیمی)
-    if (url.pathname === '/api/admin/bulk-add' && req.method === 'POST') {
-      const form = await req.formData();
-      const addressesRaw = form.get('addresses');
-      
-      if (!addressesRaw) {
-        return html(`<!doctype html>
-<html lang="fa" dir="rtl">
-<meta charset="utf-8">
-<meta http-equiv="refresh" content="2;url=/">
-<title>ورودی نامعتبر</title>
-<body style="font-family: sans-serif; padding:20px;">
-  <p>⚠️ لطفاً آدرس‌ها را وارد کنید. انتقال به صفحه اصلی...</p>
-  <p><a href="/">بازگشت به صفحه اصلی</a></p>
-  <script>setTimeout(()=>location.href='/',2000)</script>
-</body>
-</html>`);
-      }
-
-      const addresses = Array.from(new Set(
-        addressesRaw.split(/[^0-9.]+/)
-          .map(a => a.trim())
-          .filter(a => a && isValidIPv4(a) && isPublicIPv4(a))
-      ));
-
-      if (addresses.length === 0) {
-        return html(`<!doctype html>
-<html lang="fa" dir="rtl">
-<meta charset="utf-8">
-<meta http-equiv="refresh" content="2;url=/">
-<title>بدون IP معتبر</title>
-<body style="font-family: sans-serif; padding:20px;">
-  <p>❌ هیچ آدرس IP معتبری یافت نشد. انتقال به صفحه اصلی...</p>
-  <p><a href="/">بازگشت به صفحه اصلی</a></p>
-  <script>setTimeout(()=>location.href='/',2000)</script>
-</body>
-</html>`);
-      }
-
-      const results = { success: 0, failed: 0, byCountry: {} };
-
-      for (const ip of addresses) {
-        const country = await detectCountryFromIP(ip, env.DB);
-        if (!country || !country.code) {
-          results.failed++;
-          continue;
-        }
-
-        const code = country.code.toUpperCase();
-        const existing = await getDnsEntry(env.DB, code);
-
-        if (existing) {
-          // حذف آدرس‌های تکراری از لیست موجود
-          existing.addresses = [...new Set(existing.addresses)];
-          
-          // اضافه کردن به کشور موجود
-          if (!existing.addresses.includes(ip)) {
-            existing.addresses.push(ip);
-            existing.stock = existing.addresses.length;
-            await putDnsEntry(env.DB, existing);
-            results.success++;
-            results.byCountry[code] = (results.byCountry[code] || 0) + 1;
-          } else {
-            // آدرس تکراری است، ولی به عنوان موفق حساب می‌شود
-            results.success++;
+            // آدرس تکراری است
+            return json({ 
+              success: true, 
+              country: code, 
+              countryName: existing.country,
+              action: 'duplicate',
+              totalIps: existing.stock
+            });
           }
         } else {
           // ایجاد کشور جدید
@@ -4516,31 +4473,209 @@ export default {
             stock: 1
           };
           await putDnsEntry(env.DB, newEntry);
-          results.success++;
-          results.byCountry[code] = 1;
+          invalidateDnsCache();
+          return json({ 
+            success: true, 
+            country: code, 
+            countryName: country.name,
+            action: 'created',
+            totalIps: 1
+          });
         }
+      } catch (e) {
+        console.error('خطا در افزودن IP:', e);
+        return json({ 
+          success: false, 
+          error: e.message || 'خطای نامشخص در سرور' 
+        });
       }
+    }
 
-      invalidateDnsCache(); // بروزرسانی cache
-      const summary = Object.entries(results.byCountry)
-        .sort((a, b) => b[1] - a[1])
-        .map(([code, count]) => `${code}: ${count}`)
-        .join(', ');
-      
-      return html(`<!doctype html>
+    // API: افزودن گروهی با تشخیص خودکار کشور (fallback - برای JavaScript غیرفعال)
+    if (url.pathname === '/api/admin/bulk-add' && req.method === 'POST') {
+      try {
+        const form = await req.formData();
+        const addressesRaw = form.get('addresses');
+        
+        if (!addressesRaw || !addressesRaw.trim()) {
+          return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="2.5;url=/">
-<title>نتیجه افزودن گروهی</title>
-<body style="font-family: sans-serif; padding:20px; white-space: pre-wrap;">
-  <p>✅ ${results.success} آدرس اضافه شد</p>
-  <p>❌ ${results.failed} ناموفق</p>
-  <p>📊 ${summary || 'بدون خلاصه'}</p>
-  <p>در حال انتقال به صفحه اصلی...</p>
-  <p><a href="/">بازگشت به صفحه اصلی</a></p>
-  <script>setTimeout(()=>location.href='/',2500)</script>
+<meta http-equiv="refresh" content="3;url=/">
+<title>ورودی نامعتبر</title>
+<body style="font-family: Vazirmatn, sans-serif; padding:30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center;">
+  <h2>⚠️ ورودی نامعتبر</h2>
+  <p>لطفاً آدرس‌های IP را وارد کنید</p>
+  <p style="margin-top: 20px;"><a href="/" style="color: white; text-decoration: underline;">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',3000)</script>
 </body>
 </html>`);
+        }
+
+        // پارس کردن و اعتبارسنجی آدرس‌ها
+        const allIps = addressesRaw.split(/[\r\n,;\s]+/)
+          .map(a => a.trim())
+          .filter(Boolean);
+        
+        const validIps = [];
+        const invalidIps = [];
+        
+        for (const ip of allIps) {
+          if (isValidIPv4(ip) && isPublicIPv4(ip)) {
+            validIps.push(ip);
+          } else if (ip) {
+            invalidIps.push(ip);
+          }
+        }
+        
+        // حذف تکراری‌ها
+        const uniqueIps = [...new Set(validIps)];
+
+        if (uniqueIps.length === 0) {
+          return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="3;url=/">
+<title>بدون IP معتبر</title>
+<body style="font-family: Vazirmatn, sans-serif; padding:30px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; text-align: center;">
+  <h2>❌ هیچ آدرس IP معتبری یافت نشد</h2>
+  <p>از ${allIps.length} آدرس، هیچ IP عمومی معتبری شناسایی نشد</p>
+  ${invalidIps.length > 0 ? `<p style="font-size: 0.9em; opacity: 0.9;">نامعتبر: ${invalidIps.slice(0, 5).join(', ')}${invalidIps.length > 5 ? '...' : ''}</p>` : ''}
+  <p style="margin-top: 20px;"><a href="/" style="color: white; text-decoration: underline;">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',3000)</script>
+</body>
+</html>`);
+        }
+
+        const results = { 
+          success: 0, 
+          failed: 0, 
+          duplicate: 0,
+          byCountry: {},
+          errors: []
+        };
+
+        // پردازش هر IP
+        for (const ip of uniqueIps) {
+          try {
+            const country = await detectCountryFromIP(ip, env.DB);
+            
+            if (!country || !country.code) {
+              results.failed++;
+              results.errors.push({ ip, reason: 'تشخیص کشور ناموفق' });
+              continue;
+            }
+
+            const code = country.code.toUpperCase();
+            const existing = await getDnsEntry(env.DB, code);
+
+            if (existing) {
+              // حذف تکراری‌ها و اضافه کردن
+              existing.addresses = [...new Set(existing.addresses)];
+              
+              if (!existing.addresses.includes(ip)) {
+                existing.addresses.push(ip);
+                existing.stock = existing.addresses.length;
+                await putDnsEntry(env.DB, existing);
+                results.success++;
+                results.byCountry[code] = (results.byCountry[code] || 0) + 1;
+              } else {
+                results.duplicate++;
+              }
+            } else {
+              // ایجاد کشور جدید
+              const newEntry = {
+                code: code,
+                country: country.name,
+                addresses: [ip],
+                stock: 1
+              };
+              await putDnsEntry(env.DB, newEntry);
+              results.success++;
+              results.byCountry[code] = 1;
+            }
+          } catch (e) {
+            results.failed++;
+            results.errors.push({ ip, reason: e.message });
+          }
+        }
+
+        // بروزرسانی cache
+        invalidateDnsCache();
+        
+        // آماده‌سازی خلاصه
+        const summary = Object.entries(results.byCountry)
+          .sort((a, b) => b[1] - a[1])
+          .map(([code, count]) => `${code}: ${count}`)
+          .join(', ');
+        
+        const totalProcessed = results.success + results.failed + results.duplicate;
+        
+        return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="4;url=/">
+  <title>نتیجه افزودن گروهی</title>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: Vazirmatn, sans-serif;
+      padding: 30px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-align: center;
+      line-height: 1.8;
+    }
+    .result-box {
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 30px;
+      max-width: 600px;
+      margin: 0 auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+    h1 { font-size: 2em; margin-bottom: 20px; }
+    .stat { font-size: 1.2em; margin: 10px 0; }
+    .summary { 
+      background: rgba(255,255,255,0.15); 
+      padding: 15px; 
+      border-radius: 10px; 
+      margin: 20px 0;
+      font-size: 0.95em;
+    }
+    a { color: white; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="result-box">
+    <h1>📊 نتیجه افزودن گروهی</h1>
+    <div class="stat">✅ <strong>${results.success}</strong> آدرس جدید اضافه شد</div>
+    <div class="stat">🔄 <strong>${results.duplicate}</strong> آدرس تکراری</div>
+    <div class="stat">❌ <strong>${results.failed}</strong> ناموفق</div>
+    <div class="stat">📍 <strong>${totalProcessed}</strong> از ${uniqueIps.length} پردازش شد</div>
+    ${summary ? `<div class="summary"><strong>توزیع کشورها:</strong><br>${summary}</div>` : ''}
+    ${invalidIps.length > 0 ? `<div class="stat" style="font-size: 0.9em; opacity: 0.9;">⚠️ ${invalidIps.length} IP نامعتبر نادیده گرفته شد</div>` : ''}
+    <p style="margin-top: 30px; font-size: 0.9em;">در حال انتقال به صفحه اصلی...</p>
+    <p><a href="/">بازگشت فوری</a></p>
+  </div>
+  <script>setTimeout(()=>location.href='/',4000)</script>
+</body>
+</html>`);
+      } catch (e) {
+        console.error('خطا در افزودن گروهی:', e);
+        return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<title>خطا</title>
+<body style="font-family: sans-serif; padding:30px; text-align: center;">
+  <h2>❌ خطا در پردازش</h2>
+  <p>${e.message || 'خطای نامشخص'}</p>
+  <p><a href="/">بازگشت به صفحه اصلی</a></p>
+</body>
+</html>`);
+      }
     }
 
     // صفحه IPv6
