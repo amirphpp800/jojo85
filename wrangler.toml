@@ -4,7 +4,7 @@ compatibility_date = "2024-01-01"
 # KV Namespace binding
 [[kv_namespaces]]
 binding = "DB"
-id = "YOUR_KV_NAMESPACE_ID"  # Replace with your KV namespace ID after creating it
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"  # User must replace this
 
 # Environment variables (set these in Cloudflare dashboard or via wrangler secret)
 [vars]

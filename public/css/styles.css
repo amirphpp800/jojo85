@@ -1,0 +1,6 @@
+/* استایل‌های اصلی پروژه مدیریت DNS */
+/* این فایل از main.js استخراج شده است */
+
+@import url('base.css');
+@import url('components.css');
+@import url('dark-mode.css');
