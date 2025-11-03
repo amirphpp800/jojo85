@@ -906,11 +906,11 @@ document.addEventListener('DOMContentLoaded', () => {
           progressFill.style.width = percent + '%';
           
           if (currentIp) {
-            currentIpText.textContent = `🔄 در حال پردازش: ${currentIp}`;
+            currentIpText.textContent = '🔄 در حال پردازش: ' + currentIp;
             currentIpText.style.display = 'block';
           }
           
-          progressText.textContent = `📊 ${processed}/${addresses.length} (${percent}%) | ✅ ${success} | ❌ ${failed}`;
+          progressText.textContent = '📊 ' + processed + '/' + addresses.length + ' (' + percent + '%) | ✅ ' + success + ' | ❌ ' + failed;
         });
       };
       
@@ -919,7 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
         if (cancelRequested) {
-          Toast.warning(`⏸️ عملیات لغو شد. ${processed} از ${addresses.length} آدرس پردازش شد.`);
+          Toast.warning('⏸️ عملیات لغو شد. ' + processed + ' از ' + addresses.length + ' آدرس پردازش شد.');
           break;
         }
         
@@ -969,7 +969,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const eta = remaining > 0 ? Math.ceil(remaining / speed) : 0;
         
         if (eta > 0 && !cancelRequested) {
-          currentIpText.textContent = `⚡ سرعت: ${speed} IP/s | ⏱️ زمان تخمینی: ${eta}s`;
+          currentIpText.textContent = '⚡ سرعت: ' + speed + ' IP/s | ⏱️ زمان تخمینی: ' + eta + 's';
         }
       }
       
@@ -979,10 +979,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!cancelRequested) {
         const summary = Object.entries(byCountry)
           .sort((a, b) => b[1] - a[1])
-          .map(([code, count]) => `${code}: ${count}`)
+          .map(([code, count]) => code + ': ' + count)
           .join(', ');
         
-        progressText.textContent = `✅ تکمیل شد! ${processed} آدرس | ✅ ${success} موفق | ❌ ${failed} ناموفق`;
+        progressText.textContent = '✅ تکمیل شد! ' + processed + ' آدرس | ✅ ' + success + ' موفق | ❌ ' + failed + ' ناموفق';
         btn.textContent = '✅ تکمیل شد';
         btn.onclick = null;
         
@@ -995,12 +995,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // نمایش خلاصه با جزئیات بیشتر
-        let message = `✅ ${success} آدرس با موفقیت اضافه شد`;
+        let message = '✅ ' + success + ' آدرس با موفقیت اضافه شد';
         if (failed > 0) {
-          message += `\n❌ ${failed} آدرس ناموفق`;
+          message += '\n❌ ' + failed + ' آدرس ناموفق';
         }
         if (summary) {
-          message += `\n\n📊 توزیع کشورها:\n${summary}`;
+          message += '\n\n📊 توزیع کشورها:\n' + summary;
         }
         
         Toast.success(message, 8000);
@@ -1009,7 +1009,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = '❌ لغو شد';
         btn.disabled = false;
         btn.onclick = null;
-        progressText.textContent = `⏸️ لغو شد | ${processed}/${addresses.length} پردازش شد`;
+        progressText.textContent = '⏸️ لغو شد | ' + processed + '/' + addresses.length + ' پردازش شد';
       }
       
       cancelRequested = false;
@@ -1141,13 +1141,13 @@ async function downloadJSON() {
     const a = document.createElement('a');
     a.href = url;
     const date = new Date().toISOString().split('T')[0];
-    a.download = \`dns-addresses-\${date}.json\`;
+    a.download = 'dns-addresses-' + date + '.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    Toast.success(\`فایل JSON با موفقیت دانلود شد\\n📊 تعداد کشورها: \${data.length}\`);
+    Toast.success('فایل JSON با موفقیت دانلود شد\n📊 تعداد کشورها: ' + data.length);
   } catch (error) {
     Toast.error('خطا در دانلود فایل: ' + error.message);
   }
