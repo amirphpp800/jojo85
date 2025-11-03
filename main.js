@@ -873,7 +873,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       // نمایش تعداد آدرس‌های یافت شده
-      Toast.info(`🔍 ${addresses.length} آدرس IP معتبر یافت شد`);
+      Toast.info('🔍 ' + addresses.length + ' آدرس IP معتبر یافت شد');
       
       // ریست کردن UI
       progress.style.display = 'block';
