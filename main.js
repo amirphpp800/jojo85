@@ -2346,18 +2346,189 @@ export async function handleUpdate(update, env) {
 
       if (Number(from.id) === Number(ADMIN_ID)) {
         const state = await env.DB.get(`admin_state:${ADMIN_ID}`);
-        if (state === 'broadcast_waiting' && text && !text.startsWith('/start')) {
+        
+        // ارسال پیام همگانی (متن، عکس، ویدیو، فایل با کپشن)
+        if (state === 'broadcast_waiting') {
           const res = await env.DB.list({ prefix: 'users:' });
-          let sent = 0;
-          for (const k of res.keys) {
+          const totalUsers = res.keys.filter(k => {
             const userId = Number(k.name.split(':')[1]);
-            if (!userId) continue;
-            await telegramApi(env, '/sendMessage', { chat_id: userId, text });
-            sent++;
+            return userId && userId !== ADMIN_ID;
+          }).length;
+          
+          let sent = 0;
+          let failed = 0;
+          
+          // ارسال پیام شروع
+          const progressMsg = await telegramApi(env, '/sendMessage', { 
+            chat_id: chat, 
+            text: `⏳ در حال ارسال به ${totalUsers} کاربر...\n\n✅ موفق: 0\n❌ ناموفق: 0`
+          });
+          const progressMsgId = progressMsg?.result?.message_id;
+          
+          // بررسی عکس
+          if (msg.photo && msg.photo.length > 0) {
+            const photo = msg.photo[msg.photo.length - 1]; // بزرگترین سایز
+            const caption = msg.caption || '';
+            
+            for (const k of res.keys) {
+              const userId = Number(k.name.split(':')[1]);
+              if (!userId || userId === ADMIN_ID) continue;
+              try {
+                await telegramApi(env, '/sendPhoto', {
+                  chat_id: userId,
+                  photo: photo.file_id,
+                  caption: caption,
+                  parse_mode: caption ? 'Markdown' : undefined
+                });
+                sent++;
+                
+                // بروزرسانی پیشرفت هر 5 ارسال
+                if (progressMsgId && (sent + failed) % 5 === 0) {
+                  await telegramApi(env, '/editMessageText', {
+                    chat_id: chat,
+                    message_id: progressMsgId,
+                    text: `⏳ در حال ارسال عکس...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
+                  });
+                }
+                
+                await new Promise(r => setTimeout(r, 50));
+              } catch (e) {
+                failed++;
+                console.error('خطا در ارسال به کاربر:', userId, e);
+              }
+            }
+            await env.DB.delete(`admin_state:${ADMIN_ID}`);
+            
+            // پیام نهایی
+            if (progressMsgId) {
+              await telegramApi(env, '/editMessageText', {
+                chat_id: chat,
+                message_id: progressMsgId,
+                text: `✅ *ارسال عکس تکمیل شد!*\n\n📊 کل کاربران: ${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`,
+                parse_mode: 'Markdown'
+              });
+            }
+            return;
           }
-          await env.DB.delete(`admin_state:${ADMIN_ID}`);
-          await telegramApi(env, '/sendMessage', { chat_id: chat, text: `✅ پیام برای ${sent} کاربر ارسال شد.` });
-          return;
+          // بررسی ویدیو
+          else if (msg.video) {
+            const caption = msg.caption || '';
+            
+            for (const k of res.keys) {
+              const userId = Number(k.name.split(':')[1]);
+              if (!userId || userId === ADMIN_ID) continue;
+              try {
+                await telegramApi(env, '/sendVideo', {
+                  chat_id: userId,
+                  video: msg.video.file_id,
+                  caption: caption,
+                  parse_mode: caption ? 'Markdown' : undefined
+                });
+                sent++;
+                
+                if (progressMsgId && (sent + failed) % 5 === 0) {
+                  await telegramApi(env, '/editMessageText', {
+                    chat_id: chat,
+                    message_id: progressMsgId,
+                    text: `⏳ در حال ارسال ویدیو...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
+                  });
+                }
+                
+                await new Promise(r => setTimeout(r, 50));
+              } catch (e) {
+                failed++;
+                console.error('خطا در ارسال به کاربر:', userId, e);
+              }
+            }
+            await env.DB.delete(`admin_state:${ADMIN_ID}`);
+            
+            if (progressMsgId) {
+              await telegramApi(env, '/editMessageText', {
+                chat_id: chat,
+                message_id: progressMsgId,
+                text: `✅ *ارسال ویدیو تکمیل شد!*\n\n📊 کل کاربران: ${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`,
+                parse_mode: 'Markdown'
+              });
+            }
+            return;
+          }
+          // بررسی فایل
+          else if (msg.document) {
+            const caption = msg.caption || '';
+            
+            for (const k of res.keys) {
+              const userId = Number(k.name.split(':')[1]);
+              if (!userId || userId === ADMIN_ID) continue;
+              try {
+                await telegramApi(env, '/sendDocument', {
+                  chat_id: userId,
+                  document: msg.document.file_id,
+                  caption: caption,
+                  parse_mode: caption ? 'Markdown' : undefined
+                });
+                sent++;
+                
+                if (progressMsgId && (sent + failed) % 5 === 0) {
+                  await telegramApi(env, '/editMessageText', {
+                    chat_id: chat,
+                    message_id: progressMsgId,
+                    text: `⏳ در حال ارسال فایل...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
+                  });
+                }
+                
+                await new Promise(r => setTimeout(r, 50));
+              } catch (e) {
+                failed++;
+                console.error('خطا در ارسال به کاربر:', userId, e);
+              }
+            }
+            await env.DB.delete(`admin_state:${ADMIN_ID}`);
+            
+            if (progressMsgId) {
+              await telegramApi(env, '/editMessageText', {
+                chat_id: chat,
+                message_id: progressMsgId,
+                text: `✅ *ارسال فایل تکمیل شد!*\n\n📊 کل کاربران: ${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`,
+                parse_mode: 'Markdown'
+              });
+            }
+            return;
+          }
+          // ارسال متن ساده
+          else if (text && !text.startsWith('/start')) {
+            for (const k of res.keys) {
+              const userId = Number(k.name.split(':')[1]);
+              if (!userId || userId === ADMIN_ID) continue;
+              try {
+                await telegramApi(env, '/sendMessage', { chat_id: userId, text, parse_mode: 'Markdown' });
+                sent++;
+                
+                if (progressMsgId && (sent + failed) % 5 === 0) {
+                  await telegramApi(env, '/editMessageText', {
+                    chat_id: chat,
+                    message_id: progressMsgId,
+                    text: `⏳ در حال ارسال پیام...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
+                  });
+                }
+                
+                await new Promise(r => setTimeout(r, 50));
+              } catch (e) {
+                failed++;
+                console.error('خطا در ارسال به کاربر:', userId, e);
+              }
+            }
+            await env.DB.delete(`admin_state:${ADMIN_ID}`);
+            
+            if (progressMsgId) {
+              await telegramApi(env, '/editMessageText', {
+                chat_id: chat,
+                message_id: progressMsgId,
+                text: `✅ *ارسال پیام تکمیل شد!*\n\n📊 کل کاربران: ${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`,
+                parse_mode: 'Markdown'
+              });
+            }
+            return;
+          }
         }
       }
 
@@ -2703,8 +2874,9 @@ export async function handleUpdate(update, env) {
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
             message_id: messageId,
-            text: '✍️ متن پیام همگانی را ارسال کنید.',
-            reply_markup: { inline_keyboard: [[{ text: 'لغو', callback_data: 'cancel_broadcast' }]] }
+            text: '📢 *پیام همگانی*\n━━━━━━━━━━━━━━━━━━━━\n\n✍️ پیام خود را ارسال کنید:\n\n📝 *انواع پشتیبانی شده:*\n• متن ساده\n• 🖼️ عکس (با یا بدون کپشن)\n• 🎬 ویدیو (با یا بدون کپشن)\n• 📎 فایل (با یا بدون کپشن)\n\n💡 *نکات:*\n• از Markdown پشتیبانی می‌شود\n• ادمین پیام دریافت نمی‌کند\n• آمار ارسال موفق/ناموفق نمایش داده می‌شود',
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'cancel_broadcast' }]] }
           });
         }
       }
