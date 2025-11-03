@@ -3235,17 +3235,187 @@ export default {
         };
 
         if (!entry.country || !entry.code || entry.code.length !== 2) {
-          return html('<script>alert("اطلاعات نامعتبر است");setTimeout(() => history.back(), 1500);</script>');
+          return html(`<script>
+            Toast.error('❌ اطلاعات نامعتبر است');
+            setTimeout(() => history.back(), 2000);
+          </script>`);
         }
 
         // بررسی عدم تکرار کد کشور
         const existing = await getDnsEntry(env.DB, entry.code);
         if (existing) {
-          return html('<script>alert("این کد کشور قبلاً ثبت شده است");setTimeout(() => history.back(), 1500);</script>');
+          return html(`<script>
+            Toast.warning('⚠️ این کد کشور قبلاً ثبت شده است');
+            setTimeout(() => history.back(), 2000);
+          </script>`);
         }
 
         await putDnsEntry(env.DB, entry);
         invalidateDnsCache();
+        
+        // نمایش صفحه موفقیت با جزئیات
+        return html(`<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>✅ کشور جدید اضافه شد</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .success-card {
+      background: white;
+      border-radius: 24px;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: slideUp 0.5s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .success-icon {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      animation: scaleIn 0.5s ease 0.2s both;
+    }
+    @keyframes scaleIn {
+      from { transform: scale(0); }
+      to { transform: scale(1); }
+    }
+    .success-icon::after {
+      content: '✓';
+      color: white;
+      font-size: 48px;
+      font-weight: bold;
+    }
+    h1 {
+      color: #1f2937;
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    .subtitle {
+      color: #6b7280;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 16px;
+    }
+    .info-box {
+      background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-label {
+      color: #6b7280;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .info-value {
+      color: #1f2937;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .country-code {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 18px;
+    }
+    .btn-home {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .btn-home:hover {
+      transform: translateY(-2px);
+    }
+    .countdown {
+      text-align: center;
+      color: #9ca3af;
+      font-size: 13px;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="success-card">
+    <div class="success-icon"></div>
+    <h1>🎉 کشور جدید اضافه شد!</h1>
+    <p class="subtitle">کشور با موفقیت به سیستم اضافه شد</p>
+    
+    <div class="info-box">
+      <div class="info-row">
+        <span class="info-label">🌍 نام کشور</span>
+        <span class="info-value">${entry.country}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">🏳️ کد کشور</span>
+        <span class="country-code">${entry.code}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">📡 تعداد آدرس‌ها</span>
+        <span class="info-value">${entry.addresses.length} آدرس</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">📊 موجودی</span>
+        <span class="info-value">${entry.stock} IP</span>
+      </div>
+    </div>
+    
+    <button class="btn-home" onclick="window.location.href='/'">
+      🏠 بازگشت به صفحه اصلی
+    </button>
+    <p class="countdown">بازگشت خودکار در <span id="timer">3</span> ثانیه...</p>
+  </div>
+  
+  <script>
+    let seconds = 3;
+    const timer = setInterval(() => {
+      seconds--;
+      document.getElementById('timer').textContent = seconds;
+      if (seconds <= 0) {
+        clearInterval(timer);
+        window.location.href = '/';
+      }
+    }, 1000);
+  </script>
+</body>
+</html>`);
       }
       else if (action === 'edit') {
         // ویرایش کشور موجود - اضافه کردن آدرس‌های جدید
@@ -3257,13 +3427,19 @@ export default {
         const newCountryName = form.get('country') ? form.get('country').trim() : null;
 
         if (!code || code.length !== 2) {
-          return html('<script>alert("کد کشور نامعتبر است");setTimeout(() => history.back(), 1500);</script>');
+          return html(`<script>
+            Toast.error('❌ کد کشور نامعتبر است');
+            setTimeout(() => history.back(), 2000);
+          </script>`);
         }
 
         // دریافت اطلاعات فعلی
         const existing = await getDnsEntry(env.DB, code);
         if (!existing) {
-          return html('<script>alert("کشور انتخابی یافت نشد");setTimeout(() => history.back(), 1500);</script>');
+          return html(`<script>
+            Toast.error('❌ کشور انتخابی یافت نشد');
+            setTimeout(() => history.back(), 2000);
+          </script>`);
         }
 
         // بروزرسانی نام کشور (در صورت وجود)
@@ -3283,6 +3459,170 @@ export default {
 
         await putDnsEntry(env.DB, existing);
         invalidateDnsCache(); // بروزرسانی cache
+        
+        // نمایش صفحه موفقیت برای ویرایش
+        const addedCount = newAddresses.length;
+        const totalCount = existing.addresses.length;
+        return html(`<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>✅ کشور بروزرسانی شد</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .success-card {
+      background: white;
+      border-radius: 24px;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: slideUp 0.5s ease;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .success-icon {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      animation: scaleIn 0.5s ease 0.2s both;
+    }
+    @keyframes scaleIn {
+      from { transform: scale(0); }
+      to { transform: scale(1); }
+    }
+    .success-icon::after {
+      content: '✓';
+      color: white;
+      font-size: 48px;
+      font-weight: bold;
+    }
+    h1 {
+      color: #1f2937;
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    .subtitle {
+      color: #6b7280;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 16px;
+    }
+    .info-box {
+      background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-label {
+      color: #6b7280;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .info-value {
+      color: #1f2937;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .highlight {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 8px;
+    }
+    .btn-home {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .btn-home:hover {
+      transform: translateY(-2px);
+    }
+    .countdown {
+      text-align: center;
+      color: #9ca3af;
+      font-size: 13px;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="success-card">
+    <div class="success-icon"></div>
+    <h1>✅ کشور بروزرسانی شد!</h1>
+    <p class="subtitle">اطلاعات کشور با موفقیت بروزرسانی شد</p>
+    
+    <div class="info-box">
+      <div class="info-row">
+        <span class="info-label">🌍 نام کشور</span>
+        <span class="info-value">${existing.country}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">🏳️ کد کشور</span>
+        <span class="info-value">${existing.code}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">➕ آدرس‌های جدید</span>
+        <span class="highlight">${addedCount} آدرس</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">📊 مجموع آدرس‌ها</span>
+        <span class="info-value">${totalCount} آدرس</span>
+      </div>
+    </div>
+    
+    <button class="btn-home" onclick="window.location.href='/'">
+      🏠 بازگشت به صفحه اصلی
+    </button>
+    <p class="countdown">بازگشت خودکار در <span id="timer">3</span> ثانیه...</p>
+  </div>
+  
+  <script>
+    let seconds = 3;
+    const timer = setInterval(() => {
+      seconds--;
+      document.getElementById('timer').textContent = seconds;
+      if (seconds <= 0) {
+        clearInterval(timer);
+        window.location.href = '/';
+      }
+    }, 1000);
+  </script>
+</body>
+</html>`);
       }
 
       return html('<script>window.location.href="/";</script>');
@@ -3294,11 +3634,20 @@ export default {
       const code = form.get('code');
 
       if (code) {
+        const entry = await getDnsEntry(env.DB, code);
         await deleteDnsEntry(env.DB, code);
         invalidateDnsCache(); // بروزرسانی cache
+        
+        return html(`<script>
+          Toast.success('🗑️ کشور ${entry ? entry.country : code} با موفقیت حذف شد', 5000);
+          setTimeout(() => window.location.href="/", 1500);
+        </script>`);
       }
 
-      return html('<script>window.location.href="/";</script>');
+      return html(`<script>
+        Toast.error('❌ خطا در حذف کشور');
+        setTimeout(() => window.location.href="/", 1500);
+      </script>`);
     }
 
     // API: افزودن تک IP (برای نمایش پیشرفت زنده)
@@ -3355,7 +3704,10 @@ export default {
       const addressesRaw = form.get('addresses');
       
       if (!addressesRaw) {
-        return html('<script>alert("لطفاً آدرس‌ها را وارد کنید");setTimeout(() => history.back(), 1500);</script>');
+        return html(`<script>
+          Toast.warning('⚠️ لطفاً آدرس‌ها را وارد کنید');
+          setTimeout(() => history.back(), 2000);
+        </script>`);
       }
 
       const addresses = addressesRaw.split('\n')
@@ -3363,7 +3715,10 @@ export default {
         .filter(a => a && /^\d+\.\d+\.\d+\.\d+$/.test(a));
 
       if (addresses.length === 0) {
-        return html('<script>alert("هیچ آدرس IP معتبری یافت نشد");setTimeout(() => history.back(), 1500);</script>');
+        return html(`<script>
+          Toast.error('❌ هیچ آدرس IP معتبری یافت نشد');
+          setTimeout(() => history.back(), 2000);
+        </script>`);
       }
 
       const results = { success: 0, failed: 0, byCountry: {} };
@@ -3409,10 +3764,14 @@ export default {
 
       invalidateDnsCache(); // بروزرسانی cache
       const summary = Object.entries(results.byCountry)
+        .sort((a, b) => b[1] - a[1])
         .map(([code, count]) => `${code}: ${count}`)
         .join(', ');
-      const msg = `${results.success} آدرس اضافه شد\\n${results.failed} آدرس ناموفق\\n\\n📊 ${summary}`;
-      return html(`<script>alert("${msg}");setTimeout(() => window.location.href="/", 1500);</script>`);
+      
+      return html(`<script>
+        Toast.success('✅ ${results.success} آدرس اضافه شد\\n❌ ${results.failed} ناموفق\\n\\n📊 ${summary}', 8000);
+        setTimeout(() => window.location.href="/", 2500);
+      </script>`);
     }
 
     // Webhook تلگرام
