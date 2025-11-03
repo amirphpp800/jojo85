@@ -989,8 +989,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // نمایش خطاها در UI
         if (errors.length > 0) {
           errorList.style.display = 'block';
-          errorItems.innerHTML = errors.map(e => 
-            `<div class="error-item"><code>${e.ip}</code>: ${e.error}</div>`
+          errorItems.innerHTML = errors.map(e =>
+            '<div class="error-item"><code>' + e.ip + '</code>: ' + e.error + '</div>'
           ).join('');
         }
         
