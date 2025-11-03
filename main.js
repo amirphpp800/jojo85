@@ -3086,10 +3086,10 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
     });
   }
 
-  // انتخاب یک IPv6 رندوم
-  const selectedIpv6 = getRandomIpv6(entry);
-
-  if (!selectedIpv6) {
+  // انتخاب 2 آدرس IPv6 رندوم
+  const selectedIpv6_1 = getRandomIpv6(entry);
+  
+  if (!selectedIpv6_1) {
     const flag = countryCodeToFlag(entry.code);
     return telegramApi(env, '/editMessageText', {
       chat_id: chat,
@@ -3099,13 +3099,29 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
     });
   }
 
+  // حذف آدرس اول از لیست
+  await removeIpv6AddressFromEntry(env.DB, code, selectedIpv6_1);
+  
+  // دریافت entry بروزرسانی شده برای انتخاب آدرس دوم
+  const updatedEntry1 = await getIpv6Entry(env.DB, code);
+  const selectedIpv6_2 = updatedEntry1 ? getRandomIpv6(updatedEntry1) : null;
+  
+  // حذف آدرس دوم از لیست (اگر موجود باشد)
+  if (selectedIpv6_2) {
+    await removeIpv6AddressFromEntry(env.DB, code, selectedIpv6_2);
+  }
+
   const flag = countryCodeToFlag(entry.code);
 
-  // افزایش مصرف کاربر و حذف آدرس از لیست
+  // افزایش مصرف کاربر
   await incUserQuota(env.DB, userId, 'ipv6');
   const newQuota = await getUserQuota(env.DB, userId, 'ipv6');
-  await addUserHistory(env.DB, userId, 'ipv6', `${entry.code}:${selectedIpv6}`);
-  await removeIpv6AddressFromEntry(env.DB, code, selectedIpv6);
+  
+  // ذخیره در تاریخچه
+  const historyItem = selectedIpv6_2 
+    ? `${entry.code}:${selectedIpv6_1},${selectedIpv6_2}` 
+    : `${entry.code}:${selectedIpv6_1}`;
+  await addUserHistory(env.DB, userId, 'ipv6', historyItem);
   
   // دریافت موجودی جدید
   const updatedEntry = await getIpv6Entry(env.DB, code);
@@ -3113,11 +3129,13 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
 
   // پیام مینیمال
   let msg = `${flag} IPv6 ${countryName}\n\n`;
-  msg += `آدرس اختصاصی شما:\n\`${selectedIpv6}\`\n\n`;
-  msg += `📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}\n`;
+  msg += `آدرس‌های اختصاصی شما:\n`;
+  msg += `\`${selectedIpv6_1}\`\n`;
+  if (selectedIpv6_2) {
+    msg += `\`${selectedIpv6_2}\`\n`;
+  }
+  msg += `\n📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}\n`;
   msg += `📦 موجودی باقی‌مانده ${countryName}: ${remainingStock}`;
-
-  const checkUrl = `https://check-host.net/check-ping?host=${selectedIpv6}`;
 
   return telegramApi(env, '/editMessageText', {
     chat_id: chat,
@@ -3126,7 +3144,6 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
     parse_mode: 'Markdown',
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🔍 بررسی فیلتر آدرس', url: checkUrl }],
         [{ text: '🔄 دریافت IPv6 جدید', callback_data: `ipv6:${code}` }],
         [{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]
       ]
