@@ -3747,10 +3747,14 @@ export default {
     // صفحه اصلی IPv4
     if (url.pathname === '/' && req.method === 'GET') {
       // خواندن فایل HTML از پوشه public/templates
-      const htmlContent = await fetch(`${url.origin}/public/templates/ipv4.html`);
-      return new Response(await htmlContent.text(), {
-        headers: { 'Content-Type': 'text/html; charset=utf-8' }
-      });
+      try {
+        const htmlContent = await env.ASSETS.fetch(new Request(`${url.origin}/public/templates/ipv4.html`, req));
+        return new Response(await htmlContent.text(), {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+      } catch (e) {
+        return new Response('صفحه یافت نشد', { status: 404 });
+      }
     }
 
     // API: لیست DNS‌ها
@@ -4377,10 +4381,14 @@ export default {
     // صفحه مدیریت IPv6
     if (url.pathname === '/ipv6' && req.method === 'GET') {
       // خواندن فایل HTML از پوشه public/templates
-      const htmlContent = await fetch(`${url.origin}/public/templates/ipv6.html`);
-      return new Response(await htmlContent.text(), {
-        headers: { 'Content-Type': 'text/html; charset=utf-8' }
-      });
+      try {
+        const htmlContent = await env.ASSETS.fetch(new Request(`${url.origin}/public/templates/ipv6.html`, req));
+        return new Response(await htmlContent.text(), {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+      } catch (e) {
+        return new Response('صفحه یافت نشد', { status: 404 });
+      }
     }
 
     // API: لیست IPv6‌ها
