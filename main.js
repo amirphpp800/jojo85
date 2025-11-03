@@ -486,8 +486,8 @@ async function getUserStats(kv) {
   }
 }
 
-// ⚠️ DEPRECATED: این تابع دیگر استفاده نمی‌شود - از public/templates/ipv4.html استفاده می‌شود
-// function renderMainPage(entries, userCount) {
+function renderMainPage(entries, userCount) {
+  // ⚠️ DEPRECATED: این تابع دیگر استفاده نمی‌شود - از public/templates/ipv4.html استفاده می‌شود
   const rows = entries.map(e => {
     const flag = countryCodeToFlag(e.code);
     const count = Array.isArray(e.addresses) ? e.addresses.length : 0;
@@ -4921,19 +4921,11 @@ export default {
       }
     }
 
+    // سرو CSS
     if (url.pathname === '/styles.css') {
-      // خواندن CSS از فایل یا استفاده از تابع
-      try {
-        const cssContent = await fetch(`${url.origin}/public/css/main.css`);
-        return new Response(await cssContent.text(), {
-          headers: { 'Content-Type': 'text/css; charset=utf-8' }
-        });
-      } catch (e) {
-        // اگر فایل پیدا نشد، از تابع استفاده کن
-        return new Response(getWebCss(), {
-          headers: { 'Content-Type': 'text/css; charset=utf-8' }
-        });
-      }
+      return new Response(getWebCss(), {
+        headers: { 'Content-Type': 'text/css; charset=utf-8' }
+      });
     }
 
     // 404
