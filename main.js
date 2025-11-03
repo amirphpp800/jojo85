@@ -276,6 +276,23 @@ function getRandomItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function isValidIPv4(ip) {
+  return /^(25[0-5]|2[0-4][0-9]|[01]?\d?\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\d?\d)){3}$/.test(ip);
+}
+
+function isPublicIPv4(ip) {
+  const p = ip.split('.').map(Number);
+  if (p[0] === 10) return false;
+  if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return false;
+  if (p[0] === 192 && p[1] === 168) return false;
+  if (p[0] === 127) return false;
+  if (p[0] === 0) return false;
+  if (p[0] === 169 && p[1] === 254) return false;
+  if (p[0] >= 224 && p[0] <= 239) return false;
+  if (p[0] === 255 && p[1] === 255 && p[2] === 255 && p[3] === 255) return false;
+  return true;
+}
+
 // === KV Helpers ===
 async function listDnsEntries(kv) {
   const res = await kv.list({ prefix: 'dns:' });
@@ -863,9 +880,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       
-      const addresses = textarea.value.split('\n')
-        .map(a => a.trim())
-        .filter(a => a && /^\d+\.\d+\.\d+\.\d+$/.test(a));
+      const rawParts = textarea.value.split(/[^0-9.]+/);
+      const addresses = Array.from(new Set(
+        rawParts
+          .map(a => a.trim())
+          .filter(a => a && /^(25[0-5]|2[0-4][0-9]|[01]?\d?\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\d?\d)){3}$/.test(a))
+      ));
       
       if (addresses.length === 0) {
         Toast.error('هیچ آدرس IP معتبری یافت نشد');
@@ -927,21 +947,34 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // پردازش موازی batch
         const promises = batch.map(async ip => {
-          // نمایش IP در حال پردازش
           updateUI(ip);
           
-          try {
-            const res = await fetch('/api/admin/bulk-add-single', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ip })
-            });
-            
-            const result = await res.json();
-            return { ip, result };
-          } catch (e) {
-            return { ip, result: { success: false, error: e.message } };
+          let attempt = 0;
+          while (attempt < 3) {
+            attempt++;
+            try {
+              const controller = new AbortController();
+              const t = setTimeout(() => controller.abort(), 6000);
+              const res = await fetch('/api/admin/bulk-add-single', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip }),
+                signal: controller.signal
+              });
+              clearTimeout(t);
+              const result = await res.json();
+              if (result && result.success !== undefined) {
+                return { ip, result };
+              }
+              return { ip, result: { success: false, error: 'پاسخ نامعتبر از سرور' } };
+            } catch (e) {
+              if (attempt >= 3) {
+                return { ip, result: { success: false, error: e.name === 'AbortError' ? 'timeout' : e.message } };
+              }
+              await new Promise(r => setTimeout(r, 300 * attempt));
+            }
           }
+          return { ip, result: { success: false, error: 'خطای نامشخص' } };
         });
         
         // پردازش نتایج
@@ -1108,7 +1141,18 @@ async function removeDuplicates() {
   }
   
   try {
-    const response = await fetch('/api/admin/remove-duplicates');
+    const btn = document.querySelector('button[onclick="removeDuplicates()"]');
+    if (btn) { btn.disabled = true; btn.textContent = '🧹 در حال حذف تکراری‌ها...'; }
+
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 15000);
+    const response = await fetch('/api/admin/remove-duplicates', { signal: controller.signal });
+    clearTimeout(t);
+
+    if (!response.ok) {
+      throw new Error('پاسخ نامعتبر از سرور (' + response.status + ')');
+    }
+
     const result = await response.json();
     
     if (result.success) {
@@ -1119,6 +1163,9 @@ async function removeDuplicates() {
     }
   } catch (error) {
     Toast.error('خطا در ارتباط با سرور: ' + error.message);
+  } finally {
+    const btn = document.querySelector('button[onclick="removeDuplicates()"]');
+    if (btn) { btn.disabled = false; btn.textContent = '🧹 حذف آدرس‌های تکراری'; }
   }
 }
 
@@ -3656,7 +3703,7 @@ export default {
         const body = await req.json();
         const ip = body.ip;
         
-        if (!ip || !/^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
+        if (!ip || !isValidIPv4(ip) || !isPublicIPv4(ip)) {
           return json({ success: false, error: 'IP نامعتبر' });
         }
         
@@ -3710,9 +3757,11 @@ export default {
         </script>`);
       }
 
-      const addresses = addressesRaw.split('\n')
-        .map(a => a.trim())
-        .filter(a => a && /^\d+\.\d+\.\d+\.\d+$/.test(a));
+      const addresses = Array.from(new Set(
+        addressesRaw.split(/[^0-9.]+/)
+          .map(a => a.trim())
+          .filter(a => a && isValidIPv4(a) && isPublicIPv4(a))
+      ));
 
       if (addresses.length === 0) {
         return html(`<script>
