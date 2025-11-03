@@ -105,9 +105,48 @@ function randName8() {
   return s;
 }
 
-function generateWgFilename() {
-  const randomNum = String(randInt(10000, 99999));
-  return `JOJO${randomNum}`;
+function generateWgFilename(namingType, countryCode) {
+  if (namingType === 'location' && countryCode) {
+    // استفاده از نام انگلیسی کشور برای نام فایل
+    const countryNameEn = getCountryNameEnglish(countryCode);
+    return countryNameEn;
+  } else {
+    // نام تصادفی (پیش‌فرض)
+    const randomNum = String(randInt(10000, 99999));
+    return `JOJO${randomNum}`;
+  }
+}
+
+function getCountryNameEnglish(code) {
+  const map = {
+    'US': 'USA', 'CA': 'Canada', 'MX': 'Mexico',
+    'GB': 'UK', 'DE': 'Germany', 'FR': 'France', 'NL': 'Netherlands', 'BE': 'Belgium',
+    'CH': 'Switzerland', 'AT': 'Austria', 'IE': 'Ireland', 'LU': 'Luxembourg',
+    'IT': 'Italy', 'ES': 'Spain', 'PT': 'Portugal', 'GR': 'Greece', 'MT': 'Malta',
+    'SE': 'Sweden', 'NO': 'Norway', 'DK': 'Denmark', 'FI': 'Finland', 'IS': 'Iceland',
+    'EE': 'Estonia', 'LV': 'Latvia', 'LT': 'Lithuania',
+    'PL': 'Poland', 'CZ': 'Czechia', 'SK': 'Slovakia', 'HU': 'Hungary', 'RO': 'Romania',
+    'BG': 'Bulgaria', 'UA': 'Ukraine', 'BY': 'Belarus', 'MD': 'Moldova',
+    'RS': 'Serbia', 'HR': 'Croatia', 'SI': 'Slovenia', 'BA': 'Bosnia',
+    'MK': 'Macedonia', 'AL': 'Albania', 'ME': 'Montenegro', 'XK': 'Kosovo',
+    'RU': 'Russia', 'KZ': 'Kazakhstan', 'UZ': 'Uzbekistan', 'TM': 'Turkmenistan',
+    'KG': 'Kyrgyzstan', 'TJ': 'Tajikistan', 'AM': 'Armenia', 'AZ': 'Azerbaijan', 'GE': 'Georgia',
+    'IR': 'Iran', 'TR': 'Turkey', 'AE': 'UAE', 'SA': 'Saudi', 'IL': 'Israel',
+    'IQ': 'Iraq', 'SY': 'Syria', 'JO': 'Jordan', 'LB': 'Lebanon', 'PS': 'Palestine',
+    'KW': 'Kuwait', 'QA': 'Qatar', 'BH': 'Bahrain', 'OM': 'Oman', 'YE': 'Yemen', 'CY': 'Cyprus',
+    'DZ': 'Algeria', 'EG': 'Egypt', 'MA': 'Morocco', 'TN': 'Tunisia', 'LY': 'Libya',
+    'ZA': 'SouthAfrica', 'NG': 'Nigeria', 'KE': 'Kenya', 'ET': 'Ethiopia', 'GH': 'Ghana',
+    'CN': 'China', 'JP': 'Japan', 'KR': 'SouthKorea', 'KP': 'NorthKorea', 'TW': 'Taiwan',
+    'HK': 'HongKong', 'MO': 'Macau', 'MN': 'Mongolia',
+    'TH': 'Thailand', 'VN': 'Vietnam', 'SG': 'Singapore', 'MY': 'Malaysia', 'ID': 'Indonesia',
+    'PH': 'Philippines', 'MM': 'Myanmar', 'KH': 'Cambodia', 'LA': 'Laos', 'BN': 'Brunei',
+    'IN': 'India', 'PK': 'Pakistan', 'BD': 'Bangladesh', 'LK': 'SriLanka', 'NP': 'Nepal',
+    'BT': 'Bhutan', 'MV': 'Maldives', 'AF': 'Afghanistan',
+    'AU': 'Australia', 'NZ': 'NewZealand', 'FJ': 'Fiji',
+    'AR': 'Argentina', 'BR': 'Brazil', 'CL': 'Chile', 'CO': 'Colombia',
+    'PE': 'Peru', 'VE': 'Venezuela', 'UY': 'Uruguay'
+  };
+  return map[code.toUpperCase()] || code.toUpperCase();
 }
 
 function b64(bytes) {
@@ -164,6 +203,16 @@ function buildWireguardOperatorKb() {
   });
   rows.push([{ text: '🔙 بازگشت', callback_data: 'back_main' }]);
   return { inline_keyboard: rows };
+}
+
+function buildWireguardNamingKb() {
+  return {
+    inline_keyboard: [
+      [{ text: '🌍 اسم لوکیشن (مثال: Germany.conf)', callback_data: 'wg_name:location' }],
+      [{ text: '🎲 اسم اختصاصی (مثال: JOJO12345.conf)', callback_data: 'wg_name:custom' }],
+      [{ text: '🔙 بازگشت', callback_data: 'wireguard_dns_back' }]
+    ]
+  };
 }
 
 function buildWireguardDnsKb() {
@@ -2922,7 +2971,8 @@ export async function handleUpdate(update, env) {
               const listenPort = randInt(40000, 60000);
               const dnsList = Array.isArray(state.dns) ? state.dns : [state.dns];
               const conf = buildWgConf({ privateKey: keys.privateKey, addresses, dns: dnsList.join(', '), mtu, listenPort });
-              const filename = `${generateWgFilename()}.conf`;
+              const namingType = state.namingType || 'custom'; // پیش‌فرض: اسم اختصاصی
+              const filename = `${generateWgFilename(namingType, state.country)}.conf`;
               
               const fd = new FormData();
               fd.append('chat_id', String(chat));
@@ -3029,7 +3079,7 @@ export async function handleUpdate(update, env) {
         });
       }
 
-      // وایرگارد: انتخاب DNS ثابت => اضافه‌کردن یک DNS رندوم از کشور (در صورت وجود) و سپس انتخاب اپراتور
+      // وایرگارد: انتخاب DNS ثابت => اضافه‌کردن یک DNS رندوم از کشور (در صورت وجود) و سپس انتخاب نوع نام‌گذاری
       else if (data.startsWith('wg_dns_fixed:')) {
         const fixedDns = data.split(':')[1];
         const state = await getWgState(env.DB, from.id);
@@ -3042,7 +3092,26 @@ export async function handleUpdate(update, env) {
             randomDns = getRandomDns(entry);
           }
           const dnsList = randomDns && randomDns !== fixedDns ? [fixedDns, randomDns] : [fixedDns];
-          await setWgState(env.DB, from.id, { country: state.country, dns: dnsList, step: 'op' });
+          await setWgState(env.DB, from.id, { country: state.country, dns: dnsList, step: 'naming' });
+          const kb = buildWireguardNamingKb();
+          await telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: `🏷️ *نوع نام‌گذاری فایل*\n━━━━━━━━━━━━━━━━━━━━\n\n📝 نحوه نام‌گذاری فایل کانفیگ را انتخاب کنید:\n\n🌍 *اسم لوکیشن:* نام کشور به عنوان نام فایل\n🎲 *اسم اختصاصی:* نام تصادفی منحصر به فرد`,
+            parse_mode: 'Markdown',
+            reply_markup: kb
+          });
+        }
+      }
+
+      // وایرگارد: انتخاب نوع نام‌گذاری => ذخیره و نمایش اپراتورها
+      else if (data.startsWith('wg_name:')) {
+        const namingType = data.split(':')[1];
+        const state = await getWgState(env.DB, from.id);
+        if (!state || !state.dns) {
+          await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'ابتدا DNS را انتخاب کنید', show_alert: true });
+        } else {
+          await setWgState(env.DB, from.id, { ...state, namingType, step: 'op' });
           const kb = buildWireguardOperatorKb();
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
