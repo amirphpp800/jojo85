@@ -2968,7 +2968,7 @@ export async function handleUpdate(update, env) {
               const keys = await generateWireGuardKeys();
               const addresses = OPERATORS[opCode].addresses;
               const mtu = randItem(WG_MTUS);
-              const listenPort = randInt(40000, 60000);
+              const listenPort = randInt(49000, 60000);
               const dnsList = Array.isArray(state.dns) ? state.dns : [state.dns];
               const conf = buildWgConf({ privateKey: keys.privateKey, addresses, dns: dnsList.join(', '), mtu, listenPort });
               const namingType = state.namingType || 'custom'; // پیش‌فرض: اسم اختصاصی
@@ -2976,7 +2976,7 @@ export async function handleUpdate(update, env) {
               
               const fd = new FormData();
               fd.append('chat_id', String(chat));
-              const captionText = `📄 <b>نام:</b> ${filename}\n• <b>اپراتور:</b> ${OPERATORS[opCode].title}\n• <b>دی ان اس:</b> ${dnsList.join(' , ')}\n• <b>MTU:</b> ${mtu}\n• <b>پورت شنونده:</b> ${listenPort}\n\n💡 <i>نکته:</i> ListenPort بین 40000 تا 60000 باشد.`;
+              const captionText = `📄 <b>نام:</b> ${filename}\n• <b>اپراتور:</b> ${OPERATORS[opCode].title}\n• <b>دی ان اس:</b> ${dnsList.join(' , ')}\n• <b>MTU:</b> ${mtu}\n• <b>پورت شنونده:</b> ${listenPort}\n\n💡 <i>نکته:</i> ListenPort بین 49000 تا 60000 باشد.`;
               fd.append('caption', captionText);
               fd.append('parse_mode', 'HTML');
               
