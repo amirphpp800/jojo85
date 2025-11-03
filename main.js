@@ -2376,7 +2376,7 @@ function renderIpv6Page(entries, userCount) {
           </div>
         </div>
         <div class="card-actions">
-          <button class="btn-edit" onclick="editCountry('${escapeHtml(e.code)}', '${escapeHtml(e.country)}')" title="ویرایش نام">✏️</button>
+          <button class="btn-edit" onclick="editCountryIpv6('${escapeHtml(e.code)}', '${escapeHtml(e.country)}')" title="ویرایش نام">✏️</button>
           <form method="POST" action="/api/admin/delete-ipv6" style="display:inline;">
             <input type="hidden" name="code" value="${escapeHtml(e.code)}">
             <button type="submit" class="btn-delete" onclick="return confirm('آیا مطمئن هستید؟')" title="حذف">🗑️</button>
@@ -2490,7 +2490,7 @@ function renderIpv6Page(entries, userCount) {
     </div>
     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
       <div>
-        <button onclick="fixCountryNames()" class="btn-submit" style="background: linear-gradient(135deg, #667eea, #764ba2); width: 100%;">
+        <button onclick="fixCountryNamesIpv6()" class="btn-submit" style="background: linear-gradient(135deg, #667eea, #764ba2); width: 100%;">
           🌍 تبدیل تمام اسم کشورها به فارسی
         </button>
         <small style="display: block; margin-top: 10px; color: #64748b;">
@@ -2498,7 +2498,7 @@ function renderIpv6Page(entries, userCount) {
         </small>
       </div>
       <div>
-        <button onclick="removeDuplicates()" class="btn-submit" style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 100%;">
+        <button onclick="removeDuplicatesIpv6()" class="btn-submit" style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 100%;">
           🧹 حذف آدرس‌های تکراری
         </button>
         <small style="display: block; margin-top: 10px; color: #64748b;">
@@ -2506,7 +2506,7 @@ function renderIpv6Page(entries, userCount) {
         </small>
       </div>
       <div>
-        <button onclick="downloadJSON()" class="btn-submit" style="background: linear-gradient(135deg, #10b981, #059669); width: 100%;">
+        <button onclick="downloadJSONIpv6()" class="btn-submit" style="background: linear-gradient(135deg, #10b981, #059669); width: 100%;">
           📥 دانلود JSON تمام آدرس‌ها
         </button>
         <small style="display: block; margin-top: 10px; color: #64748b;">
@@ -2630,7 +2630,7 @@ searchInput.addEventListener('input', (e) => {
 });
 
 // Edit Country Name
-function editCountry(code, currentName) {
+function editCountryIpv6(code, currentName) {
   const newName = prompt('نام جدید کشور را وارد کنید:', currentName);
   if (newName && newName.trim() !== '' && newName !== currentName) {
     const form = document.createElement('form');
@@ -2661,7 +2661,7 @@ function editCountry(code, currentName) {
 }
 
 // Fix Country Names
-async function fixCountryNames() {
+async function fixCountryNamesIpv6() {
   if (!confirm('آیا می‌خواهید تمام اسم‌های کشورها را به فارسی تبدیل کنید؟')) return;
   
   try {
@@ -2680,7 +2680,7 @@ async function fixCountryNames() {
 }
 
 // Remove Duplicates
-async function removeDuplicates() {
+async function removeDuplicatesIpv6() {
   if (!confirm('آیا می‌خواهید آدرس‌های تکراری را از همه کشورها حذف کنید؟')) return;
   
   try {
@@ -2699,7 +2699,7 @@ async function removeDuplicates() {
 }
 
 // Download JSON
-async function downloadJSON() {
+async function downloadJSONIpv6() {
   try {
     const res = await fetch('/api/ipv6');
     const data = await res.json();
