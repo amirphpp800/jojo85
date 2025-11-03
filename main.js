@@ -1,40 +1,34 @@
-// === Imports ===
-import { 
-  TELEGRAM_BASE, 
-  ADMIN_ID, 
-  WG_MTUS, 
-  WG_FIXED_DNS, 
-  OPERATORS,
-  DAILY_QUOTA_LIMIT,
-  ADMIN_QUOTA_LIMIT,
-  MAX_HISTORY_ITEMS,
-  QUOTA_EXPIRATION_TTL
-} from './src/config.js';
 
-import { 
-  json, 
-  html,
-  randInt, 
-  randItem, 
-  randName8,
-  todayKey, 
-  getTimeUntilReset,
-  isValidIPv4, 
-  isPublicIPv4, 
-  isValidIPv6, 
-  isPublicIPv6,
-  telegramApi, 
-  telegramUpload
-} from './src/utils.js';
+const TELEGRAM_BASE = (token) => `https://api.telegram.org/bot${token}`;
+const ADMIN_ID = 7240662021;
 
-import { 
-  getCountryNameEnglish, 
-  getCountryNameFromCode,
-  generateWgFilename,
-  countryCodeToFlag
-} from './src/countries.js';
+const json = (obj, status = 200) =>
+  new Response(JSON.stringify(obj, null, 2), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8' }
+  });
 
 // === Per-user Daily Quotas & History ===
+function todayKey() {
+  const d = new Date();
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}${m}${day}`;
+}
+
+// محاسبه زمان باقی‌مانده تا ریست سهمیه (نیمه‌شب UTC)
+function getTimeUntilReset() {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setUTCHours(24, 0, 0, 0);
+  
+  const diff = tomorrow - now;
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  
+  return `${hours} ساعت و ${minutes} دقیقه`;
+}
 
 async function getUserQuota(kv, userId, type) {
   const key = `quota:${type}:${userId}:${todayKey()}`;
@@ -69,7 +63,91 @@ async function getUserHistory(kv, userId, type) {
   return raw ? JSON.parse(raw) : [];
 }
 
+const html = (s) =>
+  new Response(s, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+  });
+
+// ارسال فایل به تلگرام (sendDocument)
+async function telegramUpload(env, method, formData) {
+  try {
+    const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/${method}`, {
+      method: 'POST',
+      body: formData
+    });
+    return await res.json();
+  } catch (e) {
+    console.error('خطا در Telegram Upload:', e);
+    return {};
+  }
+}
+
 // === WireGuard Helpers ===
+const WG_MTUS = [1280, 1320, 1360, 1380, 1400, 1420, 1440, 1480, 1500];
+const WG_FIXED_DNS = [
+  '1.1.1.1','1.0.0.1','8.8.8.8','8.8.4.4','9.9.9.9','10.202.10.10','78.157.42.100','208.67.222.222','208.67.220.220','185.55.226.26','185.55.225.25','185.51.200.2'
+];
+const OPERATORS = {
+  irancell: { title: 'ایرانسل', addresses: ['2.144.0.0/16'] },
+  mci: { title: 'همراه اول', addresses: ['5.52.0.0/16'] },
+  tci: { title: 'مخابرات', addresses: ['2.176.0.0/15','2.190.0.0/15'] },
+  rightel: { title: 'رایتل', addresses: ['37.137.128.0/17','95.162.0.0/17'] },
+  shatel: { title: 'شاتل موبایل', addresses: ['94.182.0.0/16','37.148.0.0/18'] }
+};
+
+function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function randItem(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function randName8() {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let s = '';
+  for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+function generateWgFilename(namingType, countryCode) {
+  if (namingType === 'location' && countryCode) {
+    // استفاده از نام انگلیسی کشور برای نام فایل
+    const countryNameEn = getCountryNameEnglish(countryCode);
+    return countryNameEn;
+  } else {
+    // نام تصادفی (پیش‌فرض)
+    const randomNum = String(randInt(10000, 99999));
+    return `JOJO${randomNum}`;
+  }
+}
+
+function getCountryNameEnglish(code) {
+  const map = {
+    'US': 'USA', 'CA': 'Canada', 'MX': 'Mexico',
+    'GB': 'UK', 'DE': 'Germany', 'FR': 'France', 'NL': 'Netherlands', 'BE': 'Belgium',
+    'CH': 'Switzerland', 'AT': 'Austria', 'IE': 'Ireland', 'LU': 'Luxembourg',
+    'IT': 'Italy', 'ES': 'Spain', 'PT': 'Portugal', 'GR': 'Greece', 'MT': 'Malta',
+    'SE': 'Sweden', 'NO': 'Norway', 'DK': 'Denmark', 'FI': 'Finland', 'IS': 'Iceland',
+    'EE': 'Estonia', 'LV': 'Latvia', 'LT': 'Lithuania',
+    'PL': 'Poland', 'CZ': 'Czechia', 'SK': 'Slovakia', 'HU': 'Hungary', 'RO': 'Romania',
+    'BG': 'Bulgaria', 'UA': 'Ukraine', 'BY': 'Belarus', 'MD': 'Moldova',
+    'RS': 'Serbia', 'HR': 'Croatia', 'SI': 'Slovenia', 'BA': 'Bosnia',
+    'MK': 'Macedonia', 'AL': 'Albania', 'ME': 'Montenegro', 'XK': 'Kosovo',
+    'RU': 'Russia', 'KZ': 'Kazakhstan', 'UZ': 'Uzbekistan', 'TM': 'Turkmenistan',
+    'KG': 'Kyrgyzstan', 'TJ': 'Tajikistan', 'AM': 'Armenia', 'AZ': 'Azerbaijan', 'GE': 'Georgia',
+    'IR': 'Iran', 'TR': 'Turkey', 'AE': 'UAE', 'SA': 'Saudi', 'IL': 'Israel',
+    'IQ': 'Iraq', 'SY': 'Syria', 'JO': 'Jordan', 'LB': 'Lebanon', 'PS': 'Palestine',
+    'KW': 'Kuwait', 'QA': 'Qatar', 'BH': 'Bahrain', 'OM': 'Oman', 'YE': 'Yemen', 'CY': 'Cyprus',
+    'DZ': 'Algeria', 'EG': 'Egypt', 'MA': 'Morocco', 'TN': 'Tunisia', 'LY': 'Libya',
+    'ZA': 'SouthAfrica', 'NG': 'Nigeria', 'KE': 'Kenya', 'ET': 'Ethiopia', 'GH': 'Ghana',
+    'CN': 'China', 'JP': 'Japan', 'KR': 'SouthKorea', 'KP': 'NorthKorea', 'TW': 'Taiwan',
+    'HK': 'HongKong', 'MO': 'Macau', 'MN': 'Mongolia',
+    'TH': 'Thailand', 'VN': 'Vietnam', 'SG': 'Singapore', 'MY': 'Malaysia', 'ID': 'Indonesia',
+    'PH': 'Philippines', 'MM': 'Myanmar', 'KH': 'Cambodia', 'LA': 'Laos', 'BN': 'Brunei',
+    'IN': 'India', 'PK': 'Pakistan', 'BD': 'Bangladesh', 'LK': 'SriLanka', 'NP': 'Nepal',
+    'BT': 'Bhutan', 'MV': 'Maldives', 'AF': 'Afghanistan',
+    'AU': 'Australia', 'NZ': 'NewZealand', 'FJ': 'Fiji',
+    'AR': 'Argentina', 'BR': 'Brazil', 'CL': 'Chile', 'CO': 'Colombia',
+    'PE': 'Peru', 'VE': 'Venezuela', 'UY': 'Uruguay'
+  };
+  return map[code.toUpperCase()] || code.toUpperCase();
+}
 
 function b64(bytes) {
   let bin = '';
@@ -233,7 +311,36 @@ function buildWireguardCountryKb(entries, page = 0) {
   return { inline_keyboard: rows };
 }
 
-// توابع کمکی (countryCodeToFlag, getRandomItem, IP validation) از ماژول‌ها import شده‌اند
+// تبدیل کد کشور به پرچم
+function countryCodeToFlag(code) {
+  if (!code || code.length !== 2) return '🌐';
+  const A = 0x1F1E6;
+  return Array.from(code.toUpperCase())
+    .map(c => String.fromCodePoint(A + c.charCodeAt(0) - 65))
+    .join('');
+}
+
+// انتخاب رندوم از آرایه
+function getRandomItem(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function isValidIPv4(ip) {
+  return /^(25[0-5]|2[0-4][0-9]|[01]?\d?\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\d?\d)){3}$/.test(ip);
+}
+
+function isPublicIPv4(ip) {
+  const p = ip.split('.').map(Number);
+  if (p[0] === 10) return false;
+  if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return false;
+  if (p[0] === 192 && p[1] === 168) return false;
+  if (p[0] === 127) return false;
+  if (p[0] === 0) return false;
+  if (p[0] === 169 && p[1] === 254) return false;
+  if (p[0] >= 224 && p[0] <= 239) return false;
+  if (p[0] === 255 && p[1] === 255 && p[2] === 255 && p[3] === 255) return false;
+  return true;
+}
 
 // === KV Helpers ===
 async function listDnsEntries(kv) {
@@ -286,67 +393,6 @@ async function removeAddressFromEntry(kv, code, address) {
     return true;
   }
   return false;
-}
-
-// === IPv6 KV Helpers ===
-async function listIpv6Entries(kv) {
-  const res = await kv.list({ prefix: 'ipv6:' });
-  // بارگذاری موازی برای سرعت بیشتر
-  const promises = res.keys.map(async k => {
-    const raw = await kv.get(k.name);
-    if (raw) {
-      try {
-        return JSON.parse(raw);
-      } catch {}
-    }
-    return null;
-  });
-  const results = await Promise.all(promises);
-  const entries = results.filter(e => e !== null);
-  entries.sort((a, b) => (a.country || '').localeCompare(b.country || ''));
-  return entries;
-}
-
-async function getIpv6Entry(kv, code) {
-  const raw = await kv.get(`ipv6:${code.toUpperCase()}`);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-async function putIpv6Entry(kv, entry) {
-  await kv.put(`ipv6:${entry.code.toUpperCase()}`, JSON.stringify(entry));
-}
-
-async function deleteIpv6Entry(kv, code) {
-  await kv.delete(`ipv6:${code.toUpperCase()}`);
-}
-
-// حذف یک آدرس IPv6 از لیست آدرس‌های کشور و بروزرسانی موجودی
-async function removeIpv6AddressFromEntry(kv, code, address) {
-  const entry = await getIpv6Entry(kv, code);
-  if (!entry) return false;
-
-  if (Array.isArray(entry.addresses)) {
-    // حذف آدرس از لیست
-    entry.addresses = entry.addresses.filter(addr => addr !== address);
-    // بروزرسانی خودکار موجودی بر اساس تعداد آدرس‌های باقیمانده
-    entry.stock = entry.addresses.length;
-    await putIpv6Entry(kv, entry);
-    return true;
-  }
-  return false;
-}
-
-// انتخاب یک IPv6 رندوم از لیست
-function getRandomIpv6(entry) {
-  if (!Array.isArray(entry.addresses) || entry.addresses.length === 0) {
-    return null;
-  }
-  return entry.addresses[Math.floor(Math.random() * entry.addresses.length)];
 }
 
 async function saveUser(kv, from) {
@@ -426,7 +472,94 @@ function ensurePersianCountryName(countryName, countryCode) {
   return getCountryNameFromCode(countryCode);
 }
 
-// تابع getCountryNameFromCode از countries.js import شده است
+// نقشه نام کشورها به فارسی
+function getCountryNameFromCode(code) {
+  const map = {
+// آمریکا و کانادا
+'US': 'ایالات متحده آمریکا', 'CA': 'کانادا', 'MX': 'مکزیک',
+
+// اروپای غربی
+'GB': 'بریتانیا', 'DE': 'آلمان', 'FR': 'فرانسه', 'NL': 'هلند', 'BE': 'بلژیک',
+'CH': 'سوئیس', 'AT': 'اتریش', 'IE': 'ایرلند', 'LU': 'لوکزامبورگ',
+'LI': 'لیختن‌اشتاین', 'MC': 'موناکو',
+
+// اروپای جنوبی
+'IT': 'ایتالیا', 'ES': 'اسپانیا', 'PT': 'پرتغال', 'GR': 'یونان', 'MT': 'مالت',
+'SM': 'سان مارینو', 'VA': 'واتیکان', 'AD': 'آندورا',
+
+// اروپای شمالی
+'SE': 'سوئد', 'NO': 'نروژ', 'DK': 'دانمارک', 'FI': 'فنلاند', 'IS': 'ایسلند',
+'EE': 'استونی', 'LV': 'لتونی', 'LT': 'لیتوانی',
+
+// اروپای شرقی
+'PL': 'لهستان', 'CZ': 'جمهوری چک', 'SK': 'اسلواکی', 'HU': 'مجارستان', 'RO': 'رومانی',
+'BG': 'بلغارستان', 'UA': 'اوکراین', 'BY': 'بلاروس', 'MD': 'مولداوی',
+'RS': 'صربستان', 'HR': 'کرواسی', 'SI': 'اسلوونی', 'BA': 'بوسنی و هرزگوین',
+'MK': 'مقدونیه شمالی', 'AL': 'آلبانی', 'ME': 'مونته‌نگرو', 'XK': 'کوزوو',
+
+// روسیه و همسایگان
+'RU': 'روسیه', 'KZ': 'قزاقستان', 'UZ': 'ازبکستان', 'TM': 'ترکمنستان',
+'KG': 'قرقیزستان', 'TJ': 'تاجیکستان', 'AM': 'ارمنستان', 'AZ': 'آذربایجان', 'GE': 'گرجستان',
+
+// خاورمیانه
+'IR': 'ایران', 'TR': 'ترکیه', 'AE': 'امارات متحده عربی', 'SA': 'عربستان سعودی', 'IL': 'اسرائیل',
+'IQ': 'عراق', 'SY': 'سوریه', 'JO': 'اردن', 'LB': 'لبنان', 'PS': 'فلسطین',
+'KW': 'کویت', 'QA': 'قطر', 'BH': 'بحرین', 'OM': 'عمان', 'YE': 'یمن', 'CY': 'قبرس',
+
+// آفریقا
+'DZ': 'الجزایر', 'AO': 'آنگولا', 'BJ': 'بنین', 'BW': 'بوتسوانا', 'BF': 'بورکینافاسو',
+'BI': 'بوروندی', 'CV': 'کیپ ورد', 'CM': 'کامرون', 'CF': 'جمهوری آفریقای مرکزی',
+'TD': 'چاد', 'KM': 'کومور', 'CG': 'کنگو', 'CD': 'جمهوری دموکراتیک کنگو',
+'CI': 'ساحل عاج', 'DJ': 'جیبوتی', 'EG': 'مصر', 'GQ': 'گینه استوایی', 'ER': 'اریتره',
+'SZ': 'اسواتینی', 'ET': 'اتیوپی', 'GA': 'گابن', 'GM': 'گامبیا', 'GH': 'غنا',
+'GN': 'گینه', 'GW': 'گینه بیسائو', 'KE': 'کنیا', 'LS': 'لسوتو', 'LR': 'لیبریا',
+'LY': 'لیبی', 'MG': 'ماداگاسکار', 'MW': 'مالاوی', 'ML': 'مالی', 'MR': 'موریتانی',
+'MU': 'موریس', 'MA': 'مراکش', 'MZ': 'موزامبیک', 'NA': 'نامیبیا', 'NE': 'نیجر',
+'NG': 'نیجریه', 'RW': 'رواندا', 'ST': 'سائوتومه و پرنسیپ', 'SN': 'سنگال',
+'SC': 'سیشل', 'SL': 'سیرالئون', 'SO': 'سومالی', 'ZA': 'آفریقای جنوبی',
+'SS': 'سودان جنوبی', 'SD': 'سودان', 'TZ': 'تانزانیا', 'TG': 'توگو',
+'TN': 'تونس', 'UG': 'اوگاندا', 'ZM': 'زامبیا', 'ZW': 'زیمبابوه',
+
+// آسیای شرقی
+'CN': 'چین', 'JP': 'ژاپن', 'KR': 'کره جنوبی', 'KP': 'کره شمالی', 'TW': 'تایوان',
+'HK': 'هنگ‌کنگ', 'MO': 'ماکائو', 'MN': 'مغولستان',
+
+// جنوب شرقی آسیا
+'TH': 'تایلند', 'VN': 'ویتنام', 'SG': 'سنگاپور', 'MY': 'مالزی', 'ID': 'اندونزی',
+'PH': 'فیلیپین', 'MM': 'میانمار', 'KH': 'کامبوج', 'LA': 'لائوس', 'BN': 'برونئی',
+'TL': 'تیمور شرقی',
+
+// جنوب آسیا
+'IN': 'هند', 'PK': 'پاکستان', 'BD': 'بنگلادش', 'LK': 'سری‌لانکا', 'NP': 'نپال',
+'BT': 'بوتان', 'MV': 'مالدیو', 'AF': 'افغانستان',
+
+// آسیای مرکزی و قفقاز
+'TM': 'ترکمنستان', 'KG': 'قرقیزستان', 'TJ': 'تاجیکستان', 'KZ': 'قزاقستان', 'UZ': 'ازبکستان',
+
+// اقیانوسیه
+'AU': 'استرالیا', 'NZ': 'نیوزیلند', 'FJ': 'فیجی', 'PG': 'پاپوآ گینه نو',
+'SB': 'جزایر سلیمان', 'VU': 'وانواتو', 'WS': 'ساموآ', 'TO': 'تونگا', 'KI': 'کیریباتی',
+'TV': 'تووالو', 'FM': 'میکرونزی', 'MH': 'جزایر مارشال', 'NR': 'نائورو', 'PW': 'پالائو',
+
+// آمریکای جنوبی
+'AR': 'آرژانتین', 'BO': 'بولیوی', 'BR': 'برزیل', 'CL': 'شیلی', 'CO': 'کلمبیا',
+'EC': 'اکوادور', 'GY': 'گویان', 'PY': 'پاراگوئه', 'PE': 'پرو', 'SR': 'سورینام',
+'UY': 'اروگوئه', 'VE': 'ونزوئلا',
+
+// آمریکای مرکزی و کارائیب
+'AG': 'آنتیگوا و باربودا', 'BS': 'باهاما', 'BB': 'باربادوس', 'BZ': 'بلیز',
+'CR': 'کاستاریکا', 'CU': 'کوبا', 'DM': 'دومینیکا', 'DO': 'جمهوری دومینیکن',
+'GD': 'گرانادا', 'GT': 'گواتمالا', 'HT': 'هائیتی', 'HN': 'هندوراس', 'JM': 'جامائیکا',
+'KN': 'سنت کیتس و نویس', 'LC': 'سنت لوسیا', 'VC': 'سنت وینسنت و گرنادین‌ها',
+'NI': 'نیکاراگوئه', 'PA': 'پاناما', 'SV': 'السالوادور', 'TT': 'ترینیداد و توباگو',
+
+// سایر (به‌طور رسمی کشور مستقل ولی کوچک)
+'QA': 'قطر', 'BH': 'بحرین', 'LU': 'لوکزامبورگ', 'MT': 'مالت', 'MC': 'موناکو',
+'LI': 'لیختن‌اشتاین', 'SM': 'سان مارینو', 'VA': 'واتیکان'
+
+  };
+  return map[code.toUpperCase()] || code.toUpperCase();
+}
 
 // === Web UI ===
 async function countUsers(kv) {
@@ -487,7 +620,6 @@ async function getUserStats(kv) {
 }
 
 function renderMainPage(entries, userCount) {
-  // ⚠️ DEPRECATED: این تابع دیگر استفاده نمی‌شود - از public/templates/ipv4.html استفاده می‌شود
   const rows = entries.map(e => {
     const flag = countryCodeToFlag(e.code);
     const count = Array.isArray(e.addresses) ? e.addresses.length : 0;
@@ -569,11 +701,6 @@ function renderMainPage(entries, userCount) {
         <span class="stat-number">${userCount}</span>
         <span class="stat-text">کاربر ربات</span>
       </div>
-    </div>
-    <div style="margin-top: 20px; text-align: center;">
-      <a href="/ipv6" class="btn-submit" style="display: inline-block; padding: 12px 24px; text-decoration: none; background: linear-gradient(135deg, #3b82f6, #8b5cf6);">
-        🌐 مدیریت IPv6
-      </a>
     </div>
   </header>
 
@@ -1128,104 +1255,48 @@ async function downloadJSON() {
 
 function getWebCss() {
   return `
-* { 
-  margin: 0; 
-  padding: 0; 
-  box-sizing: border-box; 
-}
-
-:root {
-  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  --success-gradient: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-  --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  --warning-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-  --glass-bg: rgba(255, 255, 255, 0.95);
-  --glass-border: rgba(255, 255, 255, 0.3);
-  --shadow-sm: 0 4px 15px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 10px 40px rgba(0, 0, 0, 0.12);
-  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.15);
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c, #43e97b);
-  background-size: 400% 400%;
-  animation: gradientFlow 20s ease infinite;
+  font-family: 'Vazirmatn', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #ff9a9e 75%, #fecfef 100%);
+  background-attachment: fixed;
   min-height: 100vh;
   padding: 20px;
   line-height: 1.6;
-  position: relative;
-  overflow-x: hidden;
+  animation: gradientShift 15s ease infinite;
 }
 
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: 
-    radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.2) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(240, 147, 251, 0.2) 0%, transparent 50%),
-    radial-gradient(circle at 40% 20%, rgba(67, 233, 123, 0.15) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-@keyframes gradientFlow {
-  0% { background-position: 0% 50%; }
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
 }
 
 .container {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
-  position: relative;
-  z-index: 1;
 }
 
 .main-header {
-  background: var(--glass-bg);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  border-radius: 32px;
-  padding: 50px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  padding: 40px;
   margin-bottom: 40px;
-  box-shadow: var(--shadow-lg), 0 0 0 1px var(--glass-border) inset;
-  border: 2px solid var(--glass-border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12), 0 8px 32px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   position: relative;
   overflow: hidden;
-  animation: fadeInUp 0.8s ease-out;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(40px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .main-header::before {
   content: '';
   position: absolute;
   top: 0;
-  left: -100%;
-  width: 200%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-  animation: shimmer 3s infinite;
-}
-
-@keyframes shimmer {
-  0% { left: -100%; }
-  100% { left: 100%; }
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
 }
 
 .header-actions {
@@ -1429,56 +1500,26 @@ body::before {
 }
 
 .dns-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: var(--shadow-md), 0 0 0 1px var(--glass-border) inset;
-  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-  animation: cardSlideIn 0.6s ease forwards;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: slideIn 0.6s ease forwards;
   opacity: 0;
-  border: 2px solid var(--glass-border);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   position: relative;
 }
 
-.dns-card:nth-child(1) { animation-delay: 0.1s; }
-.dns-card:nth-child(2) { animation-delay: 0.2s; }
-.dns-card:nth-child(3) { animation-delay: 0.3s; }
-.dns-card:nth-child(4) { animation-delay: 0.4s; }
-.dns-card:nth-child(5) { animation-delay: 0.5s; }
-.dns-card:nth-child(6) { animation-delay: 0.6s; }
-
-@keyframes cardSlideIn {
-  from { 
-    opacity: 0; 
-    transform: translateY(40px) scale(0.9) rotateX(10deg);
-  }
-  to { 
-    opacity: 1; 
-    transform: translateY(0) scale(1) rotateX(0deg);
-  }
+@keyframes slideIn {
+  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
 }
 
 .dns-card:hover {
-  transform: translateY(-12px) scale(1.03);
-  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-  border-color: rgba(255, 255, 255, 0.6);
-}
-
-.dns-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-  transition: left 0.6s;
-}
-
-.dns-card:hover::before {
-  left: 100%;
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
 }
 
 .dns-card::after {
@@ -1488,7 +1529,7 @@ body::before {
   left: 0;
   right: 0;
   bottom: 0;
-  background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255, 255, 255, 0.15), transparent 50%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
@@ -1726,48 +1767,43 @@ small {
 }
 
 .btn-submit {
-  background: var(--secondary-gradient);
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   color: white;
-  padding: 18px 40px;
+  padding: 18px 36px;
   border: none;
-  border-radius: 20px;
+  border-radius: 16px;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: 0 10px 35px rgba(245, 87, 108, 0.35);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 8px 32px rgba(245, 87, 108, 0.3);
   position: relative;
   overflow: hidden;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .btn-submit::before {
   content: '';
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  transform: translate(-50%, -50%);
-  transition: width 0.6s, height 0.6s;
-}
-
-.btn-submit:hover::before {
-  width: 300px;
-  height: 300px;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
 }
 
 .btn-submit:hover {
-  transform: translateY(-4px) scale(1.05);
-  box-shadow: 0 15px 50px rgba(245, 87, 108, 0.45);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 12px 40px rgba(245, 87, 108, 0.4);
+  background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+}
+
+.btn-submit:hover::before {
+  left: 100%;
 }
 
 .btn-submit:active {
-  transform: translateY(-2px) scale(1.03);
-  box-shadow: 0 8px 30px rgba(245, 87, 108, 0.4);
+  transform: translateY(-1px) scale(1.01);
 }
 
 .form-tabs {
@@ -1878,44 +1914,31 @@ select:focus {
   }
 }
 
-/* Dark mode - طراحی مدرن و زیبا */
+/* Dark mode */
 body.dark {
-  background: linear-gradient(-45deg, #0f0f23, #1a1a2e, #16213e, #0f3460, #1e1b4b);
-  background-size: 400% 400%;
-  animation: darkGradientFlow 25s ease infinite;
+  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 25%, #16213e 50%, #0f3460 75%, #533483 100%);
+  animation: darkGradientShift 20s ease infinite;
 }
 
-body.dark::before {
-  background: 
-    radial-gradient(circle at 20% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 40% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
-}
-
-@keyframes darkGradientFlow {
-  0% { background-position: 0% 50%; }
+@keyframes darkGradientShift {
+  0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
 }
 
 body.dark .main-header,
 body.dark .section {
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  background: rgba(15, 23, 42, 0.95);
   color: #e2e8f0;
-  border-color: rgba(99, 102, 241, 0.2);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.1) inset;
+  border-color: rgba(51, 65, 85, 0.3);
 }
 
 body.dark .main-header::before,
 body.dark .section::before {
-  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.2), transparent);
 }
 
 body.dark .header-content h1 {
   color: #f1f5f9;
-  text-shadow: 0 2px 20px rgba(99, 102, 241, 0.3);
 }
 
 body.dark .subtitle,
@@ -1927,34 +1950,14 @@ body.dark label {
 }
 
 body.dark .dns-card { 
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(25px) saturate(180%);
-  -webkit-backdrop-filter: blur(25px) saturate(180%);
-  border-color: rgba(99, 102, 241, 0.2);
-  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(99, 102, 241, 0.1) inset;
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(51, 65, 85, 0.3);
 }
-
-body.dark .dns-card:hover {
-  border-color: rgba(99, 102, 241, 0.4);
-  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.3) inset;
-}
-
 body.dark .card-body { color: #e2e8f0; }
-body.dark .country-details h3 { 
-  color: #f1f5f9; 
-  text-shadow: 0 2px 10px rgba(99, 102, 241, 0.2);
-}
-body.dark .country-code { 
-  background: rgba(99, 102, 241, 0.15); 
-  color: #a5b4fc; 
-  border: 1px solid rgba(99, 102, 241, 0.3);
-}
-body.dark .card-footer { border-top-color: rgba(51, 65, 85, 0.5); }
-body.dark .addresses-list code { 
-  background: rgba(30, 41, 59, 0.6); 
-  color: #e2e8f0; 
-  border-color: rgba(71, 85, 105, 0.5); 
-}
+body.dark .country-details h3 { color: #f1f5f9; }
+body.dark .country-code { background: #1e293b; color: #93c5fd; }
+body.dark .card-footer { border-top-color: #334155; }
+body.dark .addresses-list code { background: #1e293b; color: #e2e8f0; border-color: #475569; }
 
 body.dark input,
 body.dark textarea,
@@ -2359,458 +2362,6 @@ body.dark .toast.info {
 `;
 }
 
-function renderIpv6Page(entries, userCount) {
-  const rows = entries.map(e => {
-    const flag = countryCodeToFlag(e.code);
-    const count = Array.isArray(e.addresses) ? e.addresses.length : 0;
-    const stockColor = (e.stock || 0) > 5 ? '#10b981' : (e.stock || 0) > 0 ? '#f59e0b' : '#ef4444';
-
-    return `
-    <div class="dns-card">
-      <div class="card-header">
-        <div class="country-info">
-          <span class="country-flag">${flag}</span>
-          <div class="country-details">
-            <h3>${escapeHtml(e.country)}</h3>
-            <span class="country-code">${escapeHtml(e.code)}</span>
-          </div>
-        </div>
-        <div class="card-actions">
-          <button class="btn-edit" onclick="editCountryIpv6('${escapeHtml(e.code)}', '${escapeHtml(e.country)}')" title="ویرایش نام">✏️</button>
-          <form method="POST" action="/api/admin/delete-ipv6" style="display:inline;">
-            <input type="hidden" name="code" value="${escapeHtml(e.code)}">
-            <button type="submit" class="btn-delete" onclick="return confirm('آیا مطمئن هستید؟')" title="حذف">🗑️</button>
-          </form>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="stat-item">
-          <span class="stat-label">موجودی:</span>
-          <span class="stat-value" style="color: ${stockColor};">${e.stock ?? 0}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">تعداد آدرس:</span>
-          <span class="stat-value">${count}</span>
-        </div>
-      </div>
-      <div class="card-footer">
-        <details>
-          <summary>مشاهده آدرس‌ها</summary>
-          <div class="addresses-list">
-            ${count > 0 ? e.addresses.map(addr => `<code>${escapeHtml(addr)}</code>`).join('') : '<span class="empty">هیچ آدرسی ثبت نشده</span>'}
-          </div>
-        </details>
-      </div>
-    </div>`;
-  }).join('\n');
-
-  return `<!doctype html>
-<html lang="fa" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>🌐 پنل مدیریت IPv6</title>
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<style>${getWebCss()}</style>
-</head>
-<body>
-<div id="toast-container" class="toast-container"></div>
-<div class="container">
-  <header class="main-header">
-    <div class="header-content">
-      <h1>🌐 پنل مدیریت IPv6</h1>
-      <p class="subtitle">مدیریت و پیکربندی سرورهای IPv6 در سراسر دنیا</p>
-    </div>
-    <div class="header-actions">
-      <div class="search-box">
-        <input id="search" type="text" placeholder="جستجو: نام یا کد کشور..." autocomplete="off">
-        <span class="search-icon">🔎</span>
-      </div>
-      <button id="theme-toggle" class="btn-toggle" aria-label="تغییر تم">🌙</button>
-    </div>
-    <div class="header-stats">
-      <div class="stat-box">
-        <span class="stat-number">${entries.length}</span>
-        <span class="stat-text">کشور</span>
-      </div>
-      <div class="stat-box">
-        <span class="stat-number">${entries.reduce((sum, e) => sum + (e.stock || 0), 0)}</span>
-        <span class="stat-text">موجودی کل</span>
-      </div>
-      <div class="stat-box">
-        <span class="stat-number">${userCount}</span>
-        <span class="stat-text">کاربر ربات</span>
-      </div>
-    </div>
-    <div style="margin-top: 20px; text-align: center;">
-      <a href="/" class="btn-submit" style="display: inline-block; padding: 12px 24px; text-decoration: none;">
-        🔙 بازگشت به IPv4
-      </a>
-    </div>
-  </header>
-
-  <section class="section">
-    <div class="section-header">
-      <h2>📋 لیست IPv6 های موجود</h2>
-      <span class="badge">${entries.length} مورد</span>
-    </div>
-    <div id="dns-grid" class="dns-grid">
-      ${rows || '<div class="empty-state">هنوز هیچ IPv6 ثبت نشده است</div>'}
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="section-header">
-      <h2>🚀 افزودن گروهی آدرس‌های IPv6 (تشخیص خودکار کشور)</h2>
-    </div>
-    <form method="POST" action="/api/admin/bulk-add-ipv6" class="dns-form">
-      <div class="form-group full-width">
-        <label>📡 آدرس‌های IPv6 (هر خط یک آدرس)</label>
-        <textarea name="addresses" placeholder="2001:4860:4860::8888&#10;2606:4700:4700::1111&#10;2620:fe::fe" rows="8" required></textarea>
-        <small>هر آدرس IPv6 را در یک خط جداگانه وارد کنید. کشور هر آدرس به‌صورت خودکار تشخیص داده می‌شود.</small>
-      </div>
-      <div id="bulk-progress" class="bulk-progress" style="display:none;">
-        <div class="progress-bar"><div class="progress-fill"></div></div>
-        <p class="current-ip" style="display:none;"></p>
-        <p class="progress-text">در حال پردازش...</p>
-        <div class="error-list" style="display:none;">
-          <details>
-            <summary class="error-summary">🔴 مشاهده خطاها</summary>
-            <div class="error-items"></div>
-          </details>
-        </div>
-      </div>
-      <button type="submit" class="btn-submit" id="bulk-submit">🔍 تشخیص و افزودن</button>
-    </form>
-  </section>
-
-  <section class="section">
-    <div class="section-header">
-      <h2>🔧 ابزارهای مدیریت</h2>
-    </div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-      <div>
-        <button onclick="fixCountryNamesIpv6()" class="btn-submit" style="background: linear-gradient(135deg, #667eea, #764ba2); width: 100%;">
-          🌍 تبدیل تمام اسم کشورها به فارسی
-        </button>
-        <small style="display: block; margin-top: 10px; color: #64748b;">
-          تبدیل اسم‌های انگلیسی به فارسی
-        </small>
-      </div>
-      <div>
-        <button onclick="removeDuplicatesIpv6()" class="btn-submit" style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 100%;">
-          🧹 حذف آدرس‌های تکراری
-        </button>
-        <small style="display: block; margin-top: 10px; color: #64748b;">
-          حذف تمام آدرس‌های تکراری از همه کشورها
-        </small>
-      </div>
-      <div>
-        <button onclick="downloadJSONIpv6()" class="btn-submit" style="background: linear-gradient(135deg, #10b981, #059669); width: 100%;">
-          📥 دانلود JSON تمام آدرس‌ها
-        </button>
-        <small style="display: block; margin-top: 10px; color: #64748b;">
-          دانلود فایل JSON شامل تمام کشورها و آدرس‌ها
-        </small>
-      </div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="section-header">
-      <h2>➕ افزودن IPv6 جدید</h2>
-    </div>
-    <form method="POST" action="/api/admin/add-ipv6" class="dns-form">
-      <div class="form-row">
-        <div class="form-group">
-          <label>🌍 نام کشور (فارسی)</label>
-          <input name="country" placeholder="مثال: ایران" required autocomplete="off">
-        </div>
-        <div class="form-group">
-          <label>🔤 کد کشور (2 حرفی)</label>
-          <input name="code" placeholder="IR" maxlength="2" required autocomplete="off" style="text-transform:uppercase;">
-        </div>
-      </div>
-      <div class="form-group full-width">
-        <label>📡 آدرس‌های IPv6 (هر خط یک آدرس)</label>
-        <textarea name="addresses" placeholder="2001:4860:4860::8888&#10;2606:4700:4700::1111&#10;2620:fe::fe" rows="5" required></textarea>
-        <small>هر آدرس IPv6 را در یک خط جداگانه وارد کنید. موجودی به صورت خودکار بر اساس تعداد آدرس‌ها محاسبه می‌شود.</small>
-      </div>
-      <button type="submit" class="btn-submit">💾 ذخیره اطلاعات</button>
-    </form>
-  </section>
-</div>
-
-<script>
-// Toast Notification System
-const Toast = {
-  container: null,
-  
-  init() {
-    this.container = document.getElementById('toast-container');
-    if (!this.container) {
-      this.container = document.createElement('div');
-      this.container.id = 'toast-container';
-      this.container.className = 'toast-container';
-      document.body.appendChild(this.container);
-    }
-  },
-  
-  show(message, type = 'info', duration = 5000) {
-    this.init();
-    
-    const icons = {
-      success: '✓',
-      error: '✕',
-      warning: '⚠',
-      info: 'ℹ'
-    };
-    
-    const titles = {
-      success: 'موفقیت',
-      error: 'خطا',
-      warning: 'هشدار',
-      info: 'اطلاعات'
-    };
-    
-    const toast = document.createElement('div');
-    toast.className = \`toast \${type}\`;
-    
-    toast.innerHTML = \`
-      <div class="toast-icon">\${icons[type] || icons.info}</div>
-      <div class="toast-content">
-        <div class="toast-title">\${titles[type] || titles.info}</div>
-        <div class="toast-message">\${message}</div>
-      </div>
-      <button class="toast-close" onclick="this.parentElement.remove()">×</button>
-    \`;
-    
-    this.container.appendChild(toast);
-    
-    if (duration > 0) {
-      setTimeout(() => {
-        toast.classList.add('removing');
-        setTimeout(() => toast.remove(), 300);
-      }, duration);
-    }
-  },
-  
-  success(message) { this.show(message, 'success'); },
-  error(message) { this.show(message, 'error'); },
-  warning(message) { this.show(message, 'warning'); },
-  info(message) { this.show(message, 'info'); }
-};
-
-// Theme Toggle
-const themeToggle = document.getElementById('theme-toggle');
-const savedTheme = localStorage.getItem('theme') || 'light';
-document.body.classList.toggle('dark', savedTheme === 'dark');
-themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
-
-themeToggle.addEventListener('click', () => {
-  const isDark = document.body.classList.toggle('dark');
-  localStorage.setItem('theme', isDark ? 'dark' : 'light');
-  themeToggle.textContent = isDark ? '☀️' : '🌙';
-});
-
-// Search Functionality
-const searchInput = document.getElementById('search');
-const dnsGrid = document.getElementById('dns-grid');
-const cards = Array.from(dnsGrid.querySelectorAll('.dns-card'));
-
-searchInput.addEventListener('input', (e) => {
-  const query = e.target.value.toLowerCase().trim();
-  
-  cards.forEach(card => {
-    const countryName = card.querySelector('.country-details h3').textContent.toLowerCase();
-    const countryCode = card.querySelector('.country-code').textContent.toLowerCase();
-    const matches = countryName.includes(query) || countryCode.includes(query);
-    card.style.display = matches ? 'block' : 'none';
-  });
-});
-
-// Edit Country Name
-function editCountryIpv6(code, currentName) {
-  const newName = prompt('نام جدید کشور را وارد کنید:', currentName);
-  if (newName && newName.trim() !== '' && newName !== currentName) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/api/admin/add-ipv6';
-    
-    const actionInput = document.createElement('input');
-    actionInput.type = 'hidden';
-    actionInput.name = 'action';
-    actionInput.value = 'edit';
-    
-    const codeInput = document.createElement('input');
-    codeInput.type = 'hidden';
-    codeInput.name = 'existing_code';
-    codeInput.value = code;
-    
-    const countryInput = document.createElement('input');
-    countryInput.type = 'hidden';
-    countryInput.name = 'country';
-    countryInput.value = newName.trim();
-    
-    form.appendChild(actionInput);
-    form.appendChild(codeInput);
-    form.appendChild(countryInput);
-    document.body.appendChild(form);
-    form.submit();
-  }
-}
-
-// Fix Country Names
-async function fixCountryNamesIpv6() {
-  if (!confirm('آیا می‌خواهید تمام اسم‌های کشورها را به فارسی تبدیل کنید؟')) return;
-  
-  try {
-    const res = await fetch('/api/admin/fix-country-names-ipv6', { method: 'POST' });
-    const data = await res.json();
-    
-    if (data.success) {
-      Toast.success(\`✅ \${data.updated} کشور بروزرسانی شد\`);
-      setTimeout(() => location.reload(), 2000);
-    } else {
-      Toast.error('❌ خطا در بروزرسانی');
-    }
-  } catch (e) {
-    Toast.error('❌ خطا در ارتباط با سرور');
-  }
-}
-
-// Remove Duplicates
-async function removeDuplicatesIpv6() {
-  if (!confirm('آیا می‌خواهید آدرس‌های تکراری را از همه کشورها حذف کنید؟')) return;
-  
-  try {
-    const res = await fetch('/api/admin/remove-duplicates-ipv6', { method: 'POST' });
-    const data = await res.json();
-    
-    if (data.success) {
-      Toast.success(\`✅ \${data.removed} آدرس تکراری حذف شد\`);
-      setTimeout(() => location.reload(), 2000);
-    } else {
-      Toast.error('❌ خطا در حذف تکراری‌ها');
-    }
-  } catch (e) {
-    Toast.error('❌ خطا در ارتباط با سرور');
-  }
-}
-
-// Download JSON
-async function downloadJSONIpv6() {
-  try {
-    const res = await fetch('/api/ipv6');
-    const data = await res.json();
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = \`ipv6-addresses-\${new Date().toISOString().split('T')[0]}.json\`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    Toast.success('✅ فایل JSON دانلود شد');
-  } catch (e) {
-    Toast.error('❌ خطا در دانلود فایل');
-  }
-}
-
-// Bulk Add Form Handler
-const bulkForm = document.querySelector('form[action="/api/admin/bulk-add-ipv6"]');
-if (bulkForm) {
-  bulkForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const submitBtn = document.getElementById('bulk-submit');
-    const progressDiv = document.getElementById('bulk-progress');
-    const progressFill = progressDiv.querySelector('.progress-fill');
-    const progressText = progressDiv.querySelector('.progress-text');
-    const currentIpEl = progressDiv.querySelector('.current-ip');
-    const errorList = progressDiv.querySelector('.error-list');
-    const errorItems = errorList.querySelector('.error-items');
-    
-    const addresses = bulkForm.querySelector('textarea[name="addresses"]').value
-      .split('\\n')
-      .map(s => s.trim())
-      .filter(Boolean);
-    
-    if (addresses.length === 0) {
-      Toast.error('❌ لطفاً حداقل یک آدرس وارد کنید');
-      return;
-    }
-    
-    submitBtn.disabled = true;
-    progressDiv.style.display = 'block';
-    currentIpEl.style.display = 'block';
-    errorList.style.display = 'none';
-    errorItems.innerHTML = '';
-    
-    let successCount = 0;
-    let errorCount = 0;
-    const errors = [];
-    
-    for (let i = 0; i < addresses.length; i++) {
-      const ip = addresses[i];
-      const progress = ((i + 1) / addresses.length) * 100;
-      progressFill.style.width = progress + '%';
-      currentIpEl.textContent = \`در حال پردازش: \${ip}\`;
-      progressText.textContent = \`\${i + 1} از \${addresses.length} آدرس پردازش شد\`;
-      
-      try {
-        const formData = new FormData();
-        formData.append('addresses', ip);
-        
-        const res = await fetch('/api/admin/bulk-add-ipv6', {
-          method: 'POST',
-          body: formData
-        });
-        
-        const data = await res.json();
-        
-        if (data.success) {
-          successCount++;
-        } else {
-          errorCount++;
-          errors.push({ ip, reason: data.message || 'خطای نامشخص' });
-        }
-      } catch (e) {
-        errorCount++;
-        errors.push({ ip, reason: 'خطا در ارتباط با سرور' });
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    
-    currentIpEl.style.display = 'none';
-    progressText.textContent = \`✅ پردازش کامل شد: \${successCount} موفق، \${errorCount} خطا\`;
-    
-    if (errors.length > 0) {
-      errorList.style.display = 'block';
-      errorItems.innerHTML = errors.map(e => 
-        \`<div class="error-item"><code>\${e.ip}</code>: \${e.reason}</div>\`
-      ).join('');
-    }
-    
-    Toast.success(\`✅ \${successCount} آدرس با موفقیت اضافه شد\`);
-    
-    setTimeout(() => {
-      submitBtn.disabled = false;
-      if (successCount > 0) {
-        location.reload();
-      }
-    }, 3000);
-  });
-}
-</script>
-</body>
-</html>`;
-}
-
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({
     '&': '&amp;',
@@ -2819,6 +2370,21 @@ function escapeHtml(s) {
     '"': '&quot;',
     "'": '&#39;'
   }[c]));
+}
+
+// === Telegram Bot ===
+async function telegramApi(env, path, body) {
+  try {
+    const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    return await res.json();
+  } catch (e) {
+    console.error('خطا در Telegram API:', e);
+    return {};
+  }
 }
 
 // Cache برای لیست DNS (5 دقیقه)
@@ -3744,29 +3310,17 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
 
-    // صفحه اصلی IPv4
+    // صفحه اصلی
     if (url.pathname === '/' && req.method === 'GET') {
-      // خواندن فایل HTML از پوشه public/templates
-      try {
-        const htmlContent = await env.ASSETS.fetch(new Request(`${url.origin}/public/templates/ipv4.html`, req));
-        return new Response(await htmlContent.text(), {
-          headers: { 'Content-Type': 'text/html; charset=utf-8' }
-        });
-      } catch (e) {
-        return new Response('صفحه یافت نشد', { status: 404 });
-      }
+      const entries = await listDnsEntries(env.DB);
+      const userCount = await countUsers(env.DB);
+      return html(renderMainPage(entries, userCount));
     }
 
     // API: لیست DNS‌ها
     if (url.pathname === '/api/dns' && req.method === 'GET') {
       const entries = await listDnsEntries(env.DB);
       return json(entries);
-    }
-
-    // API: تعداد کاربران
-    if (url.pathname === '/api/users/count' && req.method === 'GET') {
-      const count = await countUsers(env.DB);
-      return json({ count });
     }
 
     // API: افزودن/ویرایش DNS
@@ -4376,390 +3930,6 @@ export default {
 </html>`);
     }
 
-    // === IPv6 APIs ===
-    
-    // صفحه مدیریت IPv6
-    if (url.pathname === '/ipv6' && req.method === 'GET') {
-      // خواندن فایل HTML از پوشه public/templates
-      try {
-        const htmlContent = await env.ASSETS.fetch(new Request(`${url.origin}/public/templates/ipv6.html`, req));
-        return new Response(await htmlContent.text(), {
-          headers: { 'Content-Type': 'text/html; charset=utf-8' }
-        });
-      } catch (e) {
-        return new Response('صفحه یافت نشد', { status: 404 });
-      }
-    }
-
-    // API: لیست IPv6‌ها
-    if (url.pathname === '/api/ipv6' && req.method === 'GET') {
-      const entries = await listIpv6Entries(env.DB);
-      return json(entries);
-    }
-
-    // API: افزودن/ویرایش IPv6
-    if (url.pathname === '/api/admin/add-ipv6' && req.method === 'POST') {
-      const form = await req.formData();
-      const action = form.get('action') || 'new';
-
-      if (action === 'new') {
-        // ایجاد کشور جدید
-        const addresses = (form.get('addresses') || '')
-          .split(/\r?\n/)
-          .map(s => s.trim())
-          .filter(Boolean);
-
-        const code = (form.get('code') || '').toUpperCase().trim();
-        let countryName = (form.get('country') || '').trim();
-        
-        // اگر نام خالی است، از نام فارسی پیش‌فرض استفاده کن
-        if (!countryName && code) {
-          countryName = getCountryNameFromCode(code);
-        }
-
-        const entry = {
-          country: countryName,
-          code: code,
-          addresses: addresses,
-          stock: addresses.length
-        };
-
-        if (!entry.country || !entry.code || entry.code.length !== 2) {
-          return html(`<script>alert('❌ اطلاعات نامعتبر است'); history.back();</script>`);
-        }
-
-        // بررسی عدم تکرار کد کشور
-        const existing = await getIpv6Entry(env.DB, entry.code);
-        if (existing) {
-          return html(`<script>alert('⚠️ این کد کشور قبلاً ثبت شده است'); history.back();</script>`);
-        }
-
-        await putIpv6Entry(env.DB, entry);
-        
-        return html(`<!DOCTYPE html>
-<html dir="rtl" lang="fa">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>✅ کشور جدید اضافه شد</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .success-card {
-      background: white;
-      border-radius: 24px;
-      padding: 40px;
-      max-width: 500px;
-      width: 100%;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      animation: slideUp 0.5s ease;
-    }
-    @keyframes slideUp {
-      from { opacity: 0; transform: translateY(30px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .success-icon {
-      width: 80px;
-      height: 80px;
-      background: linear-gradient(135deg, #10b981, #059669);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 20px;
-      animation: scaleIn 0.5s ease 0.2s both;
-    }
-    @keyframes scaleIn {
-      from { transform: scale(0); }
-      to { transform: scale(1); }
-    }
-    .success-icon::after {
-      content: '✓';
-      color: white;
-      font-size: 48px;
-      font-weight: bold;
-    }
-    h1 {
-      color: #1f2937;
-      text-align: center;
-      margin-bottom: 10px;
-      font-size: 28px;
-    }
-    .subtitle {
-      color: #6b7280;
-      text-align: center;
-      margin-bottom: 30px;
-      font-size: 16px;
-    }
-    .info-box {
-      background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
-      border-radius: 16px;
-      padding: 20px;
-      margin-bottom: 20px;
-    }
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 0;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-    }
-    .info-row:last-child { border-bottom: none; }
-    .info-label {
-      color: #6b7280;
-      font-size: 14px;
-      font-weight: 500;
-    }
-    .info-value {
-      color: #1f2937;
-      font-size: 16px;
-      font-weight: 600;
-    }
-    .country-code {
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: white;
-      padding: 4px 12px;
-      border-radius: 8px;
-      font-family: monospace;
-      font-size: 18px;
-    }
-    .btn-home {
-      width: 100%;
-      padding: 16px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: white;
-      border: none;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.2s;
-    }
-    .btn-home:hover {
-      transform: translateY(-2px);
-    }
-    .countdown {
-      text-align: center;
-      color: #9ca3af;
-      font-size: 13px;
-      margin-top: 15px;
-    }
-  </style>
-</head>
-<body>
-  <div class="success-card">
-    <div class="success-icon"></div>
-    <h1>🎉 کشور IPv6 جدید اضافه شد!</h1>
-    <p class="subtitle">کشور با موفقیت به سیستم اضافه شد</p>
-    
-    <div class="info-box">
-      <div class="info-row">
-        <span class="info-label">🌍 نام کشور</span>
-        <span class="info-value">${entry.country}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">🏳️ کد کشور</span>
-        <span class="country-code">${entry.code}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">📡 تعداد آدرس‌ها</span>
-        <span class="info-value">${entry.addresses.length} آدرس</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">📊 موجودی</span>
-        <span class="info-value">${entry.stock} IPv6</span>
-      </div>
-    </div>
-    
-    <button class="btn-home" onclick="window.location.href='/ipv6'">
-      🏠 بازگشت به صفحه IPv6
-    </button>
-    <p class="countdown">بازگشت خودکار در <span id="timer">3</span> ثانیه...</p>
-  </div>
-  
-  <script>
-    let seconds = 3;
-    const timer = setInterval(() => {
-      seconds--;
-      document.getElementById('timer').textContent = seconds;
-      if (seconds <= 0) {
-        clearInterval(timer);
-        window.location.href = '/ipv6';
-      }
-    }, 1000);
-  </script>
-</body>
-</html>`);
-      }
-      else if (action === 'edit') {
-        // ویرایش کشور موجود
-        const code = (form.get('existing_code') || '').toUpperCase().trim();
-        const newAddresses = (form.get('addresses') || '')
-          .split(/\r?\n/)
-          .map(s => s.trim())
-          .filter(Boolean);
-        const newCountryName = form.get('country') ? form.get('country').trim() : null;
-
-        if (!code || code.length !== 2) {
-          return html(`<script>alert('❌ کد کشور نامعتبر است'); history.back();</script>`);
-        }
-
-        const existing = await getIpv6Entry(env.DB, code);
-        if (!existing) {
-          return html(`<script>alert('❌ کشور انتخابی یافت نشد'); history.back();</script>`);
-        }
-
-        if (newCountryName) {
-          existing.country = newCountryName;
-        }
-
-        if (newAddresses.length > 0) {
-          const currentAddresses = Array.isArray(existing.addresses) ? existing.addresses : [];
-          const combinedAddresses = [...currentAddresses, ...newAddresses];
-          existing.addresses = [...new Set(combinedAddresses)];
-          existing.stock = existing.addresses.length;
-        }
-
-        await putIpv6Entry(env.DB, existing);
-        
-        return html(`<script>alert('✅ کشور بروزرسانی شد'); window.location.href='/ipv6';</script>`);
-      }
-
-      return json({ success: false, message: 'عملیات نامعتبر' });
-    }
-
-    // API: حذف IPv6
-    if (url.pathname === '/api/admin/delete-ipv6' && req.method === 'POST') {
-      const form = await req.formData();
-      const code = (form.get('code') || '').toUpperCase().trim();
-      
-      if (code && code.length === 2) {
-        await deleteIpv6Entry(env.DB, code);
-        return html(`<script>alert('✅ کشور حذف شد'); window.location.href='/ipv6';</script>`);
-      }
-      
-      return html(`<script>alert('❌ کد کشور نامعتبر است'); history.back();</script>`);
-    }
-
-    // API: تبدیل اسم‌های کشورها به فارسی (IPv6)
-    if (url.pathname === '/api/admin/fix-country-names-ipv6' && req.method === 'POST') {
-      const entries = await listIpv6Entries(env.DB);
-      let updated = 0;
-      
-      for (const entry of entries) {
-        const persianName = getCountryNameFromCode(entry.code);
-        if (persianName !== entry.code && persianName !== entry.country) {
-          entry.country = persianName;
-          await putIpv6Entry(env.DB, entry);
-          updated++;
-        }
-      }
-      
-      return json({ success: true, updated });
-    }
-
-    // API: حذف آدرس‌های تکراری (IPv6)
-    if (url.pathname === '/api/admin/remove-duplicates-ipv6' && req.method === 'POST') {
-      const entries = await listIpv6Entries(env.DB);
-      let removed = 0;
-      
-      for (const entry of entries) {
-        if (Array.isArray(entry.addresses)) {
-          const originalLength = entry.addresses.length;
-          entry.addresses = [...new Set(entry.addresses)];
-          const newLength = entry.addresses.length;
-          removed += (originalLength - newLength);
-          entry.stock = newLength;
-          await putIpv6Entry(env.DB, entry);
-        }
-      }
-      
-      return json({ success: true, removed });
-    }
-
-    // API: افزودن گروهی IPv6
-    if (url.pathname === '/api/admin/bulk-add-ipv6' && req.method === 'POST') {
-      const form = await req.formData();
-      const addressesText = form.get('addresses') || '';
-      const addresses = addressesText.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-      
-      const results = { success: 0, failed: 0, countries: {} };
-      
-      for (const addr of addresses) {
-        if (!isValidIPv6(addr)) {
-          results.failed++;
-          continue;
-        }
-        
-        if (!isPublicIPv6(addr)) {
-          results.failed++;
-          continue;
-        }
-        
-        // تشخیص کشور
-        const countryInfo = await detectCountryFromIP(addr);
-        
-        if (!countryInfo || !countryInfo.code) {
-          results.failed++;
-          continue;
-        }
-        
-        const code = countryInfo.code.toUpperCase();
-        const countryName = countryInfo.name || getCountryNameFromCode(code);
-        
-        // دریافت یا ایجاد entry
-        let entry = await getIpv6Entry(env.DB, code);
-        
-        if (!entry) {
-          entry = {
-            country: countryName,
-            code: code,
-            addresses: [],
-            stock: 0
-          };
-        }
-        
-        // اضافه کردن آدرس (اگر تکراری نباشد)
-        if (!entry.addresses.includes(addr)) {
-          entry.addresses.push(addr);
-          entry.stock = entry.addresses.length;
-          await putIpv6Entry(env.DB, entry);
-          results.success++;
-          
-          results.countries[code] = (results.countries[code] || 0) + 1;
-        } else {
-          results.failed++;
-        }
-      }
-      
-      const summary = Object.entries(results.countries)
-        .map(([code, count]) => `${code}: ${count}`)
-        .join(', ');
-      
-      return html(`<!DOCTYPE html>
-<html dir="rtl">
-<meta charset="utf-8">
-<meta http-equiv="refresh" content="2.5;url=/ipv6">
-<title>نتیجه افزودن گروهی IPv6</title>
-<body style="font-family: sans-serif; padding:20px; white-space: pre-wrap;">
-  <p>✅ ${results.success} آدرس IPv6 اضافه شد</p>
-  <p>❌ ${results.failed} ناموفق</p>
-  <p>📊 ${summary || 'بدون خلاصه'}</p>
-  <p>در حال انتقال به صفحه IPv6...</p>
-  <p><a href="/ipv6">بازگشت به صفحه IPv6</a></p>
-  <script>setTimeout(()=>location.href='/ipv6',2500)</script>
-</body>
-</html>`);
-    }
-
     // Webhook تلگرام
     if (url.pathname === '/webhook' && req.method === 'POST') {
       try {
@@ -4870,55 +4040,6 @@ export default {
       } catch (e) {
         return json({ success: false, error: e.message }, 500);
       }
-    }
-
-    // سرو فایل‌های استاتیک از پوشه public
-    if (url.pathname.startsWith('/public/')) {
-      try {
-        const filePath = url.pathname;
-        const response = await env.ASSETS.fetch(new Request(`${url.origin}${filePath}`, req));
-        
-        // تعیین Content-Type بر اساس پسوند فایل
-        let contentType = 'text/plain';
-        if (filePath.endsWith('.html')) contentType = 'text/html; charset=utf-8';
-        else if (filePath.endsWith('.js')) contentType = 'application/javascript; charset=utf-8';
-        else if (filePath.endsWith('.css')) contentType = 'text/css; charset=utf-8';
-        else if (filePath.endsWith('.json')) contentType = 'application/json; charset=utf-8';
-        
-        return new Response(await response.text(), {
-          headers: { 'Content-Type': contentType }
-        });
-      } catch (e) {
-        return new Response('File not found', { status: 404 });
-      }
-    }
-
-    // سرو فایل‌های JavaScript
-    if (url.pathname.startsWith('/js/')) {
-      const fileName = url.pathname.replace('/js/', '');
-      const fileMap = {
-        'common.js': 'public/js/common.js',
-        'ipv4.js': 'public/js/ipv4.js',
-        'ipv6.js': 'public/js/ipv6.js'
-      };
-      
-      if (fileMap[fileName]) {
-        try {
-          const response = await env.ASSETS.fetch(new Request(`${url.origin}/${fileMap[fileName]}`, req));
-          return new Response(await response.text(), {
-            headers: { 'Content-Type': 'application/javascript; charset=utf-8' }
-          });
-        } catch (e) {
-          return new Response('File not found', { status: 404 });
-        }
-      }
-    }
-
-    // سرو CSS
-    if (url.pathname === '/styles.css') {
-      return new Response(getWebCss(), {
-        headers: { 'Content-Type': 'text/css; charset=utf-8' }
-      });
     }
 
     // 404
