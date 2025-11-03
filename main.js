@@ -660,7 +660,14 @@ function renderMainPage(entries, userCount) {
       </div>
       <div id="bulk-progress" class="bulk-progress" style="display:none;">
         <div class="progress-bar"><div class="progress-fill"></div></div>
+        <p class="current-ip" style="display:none;"></p>
         <p class="progress-text">در حال پردازش...</p>
+        <div class="error-list" style="display:none;">
+          <details>
+            <summary class="error-summary">🔴 مشاهده خطاها</summary>
+            <div class="error-items"></div>
+          </details>
+        </div>
       </div>
       <button type="submit" class="btn-submit" id="bulk-submit">🔍 تشخیص و افزودن</button>
     </form>
@@ -837,12 +844,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Bulk add form with live progress
   const bulkForm = document.querySelector('form[action="/api/admin/bulk-add"]');
   if (bulkForm) {
+    let cancelRequested = false;
+    
     bulkForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       
       const progress = document.getElementById('bulk-progress');
       const progressFill = progress.querySelector('.progress-fill');
       const progressText = progress.querySelector('.progress-text');
+      const currentIpText = progress.querySelector('.current-ip');
+      const errorList = progress.querySelector('.error-list');
+      const errorItems = progress.querySelector('.error-items');
       const btn = document.getElementById('bulk-submit');
       const textarea = bulkForm.querySelector('textarea[name="addresses"]');
       
@@ -860,25 +872,64 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       
+      // نمایش تعداد آدرس‌های یافت شده
+      Toast.info(`🔍 ${addresses.length} آدرس IP معتبر یافت شد`);
+      
+      // ریست کردن UI
       progress.style.display = 'block';
+      progressFill.style.width = '0%';
+      currentIpText.style.display = 'none';
+      errorList.style.display = 'none';
+      errorItems.innerHTML = '';
+      
       btn.disabled = true;
-      btn.textContent = '⏳ در حال پردازش...';
+      btn.textContent = '⏸️ لغو';
+      btn.onclick = () => {
+        cancelRequested = true;
+        btn.textContent = '⏳ در حال لغو...';
+        btn.disabled = true;
+      };
       
       let processed = 0;
       let success = 0;
       let failed = 0;
       const byCountry = {};
+      const errors = [];
       
-      // پردازش موازی با batch های 5 تایی برای سرعت بیشتر
-      const BATCH_SIZE = 5;
+      // تنظیم دینامیک batch size بر اساس تعداد آدرس‌ها
+      const BATCH_SIZE = addresses.length > 100 ? 10 : addresses.length > 50 ? 7 : 5;
+      
+      // تابع بروزرسانی UI با requestAnimationFrame برای عملکرد بهتر
+      const updateUI = (currentIp = null) => {
+        requestAnimationFrame(() => {
+          const percent = Math.round((processed / addresses.length) * 100);
+          progressFill.style.width = percent + '%';
+          
+          if (currentIp) {
+            currentIpText.textContent = `🔄 در حال پردازش: ${currentIp}`;
+            currentIpText.style.display = 'block';
+          }
+          
+          progressText.textContent = `📊 ${processed}/${addresses.length} (${percent}%) | ✅ ${success} | ❌ ${failed}`;
+        });
+      };
+      
+      // شروع پردازش
+      const startTime = Date.now();
       
       for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
-        const batch = addresses.slice(i, i + BATCH_SIZE);
-        const percent = Math.round((processed / addresses.length) * 100);
-        progressText.textContent = \`⏳ در حال پردازش... (\${processed}/\${addresses.length}) - \${percent}% | ✅ \${success} | ❌ \${failed}\`;
+        if (cancelRequested) {
+          Toast.warning(`⏸️ عملیات لغو شد. ${processed} از ${addresses.length} آدرس پردازش شد.`);
+          break;
+        }
         
-        // پردازش همزمان 5 IP
+        const batch = addresses.slice(i, i + BATCH_SIZE);
+        
+        // پردازش موازی batch
         const promises = batch.map(async ip => {
+          // نمایش IP در حال پردازش
+          updateUI(ip);
+          
           try {
             const res = await fetch('/api/admin/bulk-add-single', {
               method: 'POST',
@@ -893,9 +944,8 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
         
+        // پردازش نتایج
         const results = await Promise.all(promises);
-        
-        // بروزرسانی آمار
         results.forEach(({ ip, result }) => {
           if (result.success) {
             success++;
@@ -904,24 +954,65 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           } else {
             failed++;
+            errors.push({ ip, error: result.error || 'خطای نامشخص' });
           }
           processed++;
         });
         
-        const newPercent = Math.round((processed / addresses.length) * 100);
-        progressFill.style.width = newPercent + '%';
-        progressText.textContent = \`✨ پردازش شد: \${processed}/\${addresses.length} - \${newPercent}% | ✅ موفق: \${success} | ❌ ناموفق: \${failed}\`;
+        // بروزرسانی UI بعد از هر batch
+        updateUI();
+        
+        // نمایش سرعت پردازش
+        const elapsed = (Date.now() - startTime) / 1000;
+        const speed = (processed / elapsed).toFixed(1);
+        const remaining = addresses.length - processed;
+        const eta = remaining > 0 ? Math.ceil(remaining / speed) : 0;
+        
+        if (eta > 0 && !cancelRequested) {
+          currentIpText.textContent = `⚡ سرعت: ${speed} IP/s | ⏱️ زمان تخمینی: ${eta}s`;
+        }
       }
       
-      const summary = Object.entries(byCountry)
-        .map(([code, count]) => \`\${code}: \${count}\`)
-        .join(', ');
+      // پایان پردازش
+      currentIpText.style.display = 'none';
       
-      progressText.textContent = \`✅ تکمیل شد! \${processed} آدرس پردازش شد | ✅ موفق: \${success} | ❌ ناموفق: \${failed}\`;
-      btn.textContent = '✅ تکمیل شد';
+      if (!cancelRequested) {
+        const summary = Object.entries(byCountry)
+          .sort((a, b) => b[1] - a[1])
+          .map(([code, count]) => `${code}: ${count}`)
+          .join(', ');
+        
+        progressText.textContent = `✅ تکمیل شد! ${processed} آدرس | ✅ ${success} موفق | ❌ ${failed} ناموفق`;
+        btn.textContent = '✅ تکمیل شد';
+        btn.onclick = null;
+        
+        // نمایش خطاها در UI
+        if (errors.length > 0) {
+          errorList.style.display = 'block';
+          errorItems.innerHTML = errors.map(e => 
+            `<div class="error-item"><code>${e.ip}</code>: ${e.error}</div>`
+          ).join('');
+        }
+        
+        // نمایش خلاصه با جزئیات بیشتر
+        let message = `✅ ${success} آدرس با موفقیت اضافه شد`;
+        if (failed > 0) {
+          message += `\n❌ ${failed} آدرس ناموفق`;
+        }
+        if (summary) {
+          message += `\n\n📊 توزیع کشورها:\n${summary}`;
+        }
+        
+        Toast.success(message, 8000);
+        setTimeout(() => window.location.href = '/', 2500);
+      } else {
+        btn.textContent = '❌ لغو شد';
+        btn.disabled = false;
+        btn.onclick = null;
+        progressText.textContent = `⏸️ لغو شد | ${processed}/${addresses.length} پردازش شد`;
+      }
       
-      Toast.success(\`✅ \${success} آدرس با موفقیت اضافه شد\\n❌ \${failed} آدرس ناموفق\\n\\n📊 توزیع کشورها:\\n\${summary}\`, 8000);
-      setTimeout(() => window.location.href = '/', 2000);
+      cancelRequested = false;
     });
   }
 });
@@ -1858,13 +1949,31 @@ body.dark .progress-bar {
   100% { transform: translateX(100%); }
 }
 
+.current-ip {
+  font-size: 13px;
+  color: #6366f1;
+  text-align: center;
+  margin: 8px 0 4px 0;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  animation: fadeInOut 1.5s infinite;
+  padding: 6px 12px;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
 .progress-text {
   font-size: 14px;
   color: #475569;
   text-align: center;
   margin: 0;
   font-weight: 500;
-  animation: pulse 2s infinite;
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 @keyframes pulse {
@@ -1881,8 +1990,83 @@ body.dark .progress-bar {
   background: #1f2937;
 }
 
+body.dark .current-ip {
+  color: #818cf8;
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
 body.dark .progress-text {
   color: #94a3b8;
+}
+
+.error-list {
+  margin-top: 15px;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.error-summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #dc2626;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.error-summary:hover {
+  color: #b91c1c;
+}
+
+.error-items {
+  margin-top: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.error-item {
+  padding: 6px 10px;
+  margin: 4px 0;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #475569;
+  border-left: 3px solid #ef4444;
+}
+
+.error-item code {
+  background: rgba(239, 68, 68, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  color: #dc2626;
+  font-weight: 600;
+}
+
+body.dark .error-list {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+body.dark .error-summary {
+  color: #f87171;
+}
+
+body.dark .error-summary:hover {
+  color: #fca5a5;
+}
+
+body.dark .error-item {
+  background: rgba(15, 23, 42, 0.5);
+  color: #cbd5e1;
+}
+
+body.dark .error-item code {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
 }
 
 /* Toast Notifications */
