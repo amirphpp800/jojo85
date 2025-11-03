@@ -3685,16 +3685,30 @@ export default {
         await deleteDnsEntry(env.DB, code);
         invalidateDnsCache(); // بروزرسانی cache
         
-        return html(`<script>
-          Toast.success('🗑️ کشور ${entry ? entry.country : code} با موفقیت حذف شد', 5000);
-          setTimeout(() => window.location.href="/", 1500);
-        </script>`);
+        return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="1.5;url=/">
+<title>حذف کشور</title>
+<body style="font-family: sans-serif; padding:20px;">
+  <p>🗑️ کشور ${entry ? entry.country : code} با موفقیت حذف شد. انتقال به صفحه اصلی...</p>
+  <p><a href="/">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',1500)</script>
+</body>
+</html>`);
       }
 
-      return html(`<script>
-        Toast.error('❌ خطا در حذف کشور');
-        setTimeout(() => window.location.href="/", 1500);
-      </script>`);
+      return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="2;url=/">
+<title>خطا</title>
+<body style="font-family: sans-serif; padding:20px;">
+  <p>❌ خطا در حذف کشور. انتقال به صفحه اصلی...</p>
+  <p><a href="/">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',2000)</script>
+</body>
+</html>`);
     }
 
     // API: افزودن تک IP (برای نمایش پیشرفت زنده)
@@ -3751,10 +3765,17 @@ export default {
       const addressesRaw = form.get('addresses');
       
       if (!addressesRaw) {
-        return html(`<script>
-          Toast.warning('⚠️ لطفاً آدرس‌ها را وارد کنید');
-          setTimeout(() => history.back(), 2000);
-        </script>`);
+        return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="2;url=/">
+<title>ورودی نامعتبر</title>
+<body style="font-family: sans-serif; padding:20px;">
+  <p>⚠️ لطفاً آدرس‌ها را وارد کنید. انتقال به صفحه اصلی...</p>
+  <p><a href="/">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',2000)</script>
+</body>
+</html>`);
       }
 
       const addresses = Array.from(new Set(
@@ -3764,10 +3785,17 @@ export default {
       ));
 
       if (addresses.length === 0) {
-        return html(`<script>
-          Toast.error('❌ هیچ آدرس IP معتبری یافت نشد');
-          setTimeout(() => history.back(), 2000);
-        </script>`);
+        return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="2;url=/">
+<title>بدون IP معتبر</title>
+<body style="font-family: sans-serif; padding:20px;">
+  <p>❌ هیچ آدرس IP معتبری یافت نشد. انتقال به صفحه اصلی...</p>
+  <p><a href="/">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',2000)</script>
+</body>
+</html>`);
       }
 
       const results = { success: 0, failed: 0, byCountry: {} };
@@ -3817,10 +3845,20 @@ export default {
         .map(([code, count]) => `${code}: ${count}`)
         .join(', ');
       
-      return html(`<script>
-        Toast.success('✅ ${results.success} آدرس اضافه شد\\n❌ ${results.failed} ناموفق\\n\\n📊 ${summary}', 8000);
-        setTimeout(() => window.location.href="/", 2500);
-      </script>`);
+      return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="2.5;url=/">
+<title>نتیجه افزودن گروهی</title>
+<body style="font-family: sans-serif; padding:20px; white-space: pre-wrap;">
+  <p>✅ ${results.success} آدرس اضافه شد</p>
+  <p>❌ ${results.failed} ناموفق</p>
+  <p>📊 ${summary || 'بدون خلاصه'}</p>
+  <p>در حال انتقال به صفحه اصلی...</p>
+  <p><a href="/">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',2500)</script>
+</body>
+</html>`);
     }
 
     // Webhook تلگرام
