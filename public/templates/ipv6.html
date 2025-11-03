@@ -1,141 +1,0 @@
-<!doctype html>
-<html lang="fa" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>🌐 پنل مدیریت IPv6</title>
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css">
-</head>
-<body>
-<div id="toast-container" class="toast-container"></div>
-<div class="container">
-  <header class="main-header">
-    <div class="header-content">
-      <h1>🌐 پنل مدیریت IPv6</h1>
-      <p class="subtitle">مدیریت و پیکربندی سرورهای IPv6 در سراسر دنیا</p>
-    </div>
-    <div class="header-actions">
-      <div class="search-box">
-        <input id="search" type="text" placeholder="جستجو: نام یا کد کشور..." autocomplete="off">
-        <span class="search-icon">🔎</span>
-      </div>
-      <button id="theme-toggle" class="btn-toggle" aria-label="تغییر تم">🌙</button>
-    </div>
-    <div class="header-stats">
-      <div class="stat-box">
-        <span class="stat-number" id="country-count">0</span>
-        <span class="stat-text">کشور</span>
-      </div>
-      <div class="stat-box">
-        <span class="stat-number" id="total-stock">0</span>
-        <span class="stat-text">موجودی کل</span>
-      </div>
-      <div class="stat-box">
-        <span class="stat-number" id="user-count">0</span>
-        <span class="stat-text">کاربر ربات</span>
-      </div>
-    </div>
-    <div style="margin-top: 20px; text-align: center;">
-      <a href="/" class="btn-submit" style="display: inline-block; padding: 12px 24px; text-decoration: none;">
-        🔙 بازگشت به IPv4
-      </a>
-    </div>
-  </header>
-
-  <section class="section">
-    <div class="section-header">
-      <h2>📋 لیست IPv6 های موجود</h2>
-      <span class="badge" id="entries-badge">0 مورد</span>
-    </div>
-    <div id="dns-grid" class="dns-grid">
-      <div class="empty-state">در حال بارگذاری...</div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="section-header">
-      <h2>🚀 افزودن گروهی آدرس‌های IPv6 (تشخیص خودکار کشور)</h2>
-    </div>
-    <form method="POST" action="/api/admin/bulk-add-ipv6" class="dns-form">
-      <div class="form-group full-width">
-        <label>📡 آدرس‌های IPv6 (هر خط یک آدرس)</label>
-        <textarea name="addresses" placeholder="2001:4860:4860::8888&#10;2606:4700:4700::1111&#10;2620:fe::fe" rows="8" required></textarea>
-        <small>هر آدرس IPv6 را در یک خط جداگانه وارد کنید. کشور هر آدرس به‌صورت خودکار تشخیص داده می‌شود.</small>
-      </div>
-      <div id="bulk-progress" class="bulk-progress" style="display:none;">
-        <div class="progress-bar"><div class="progress-fill"></div></div>
-        <p class="current-ip" style="display:none;"></p>
-        <p class="progress-text">در حال پردازش...</p>
-        <div class="error-list" style="display:none;">
-          <details>
-            <summary class="error-summary">🔴 مشاهده خطاها</summary>
-            <div class="error-items"></div>
-          </details>
-        </div>
-      </div>
-      <button type="submit" class="btn-submit" id="bulk-submit">🔍 تشخیص و افزودن</button>
-    </form>
-  </section>
-
-  <section class="section">
-    <div class="section-header">
-      <h2>🔧 ابزارهای مدیریت</h2>
-    </div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-      <div>
-        <button onclick="fixCountryNames()" class="btn-submit" style="background: linear-gradient(135deg, #667eea, #764ba2); width: 100%;">
-          🌍 تبدیل تمام اسم کشورها به فارسی
-        </button>
-        <small style="display: block; margin-top: 10px; color: #64748b;">
-          تبدیل اسم‌های انگلیسی به فارسی
-        </small>
-      </div>
-      <div>
-        <button onclick="removeDuplicates()" class="btn-submit" style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 100%;">
-          🧹 حذف آدرس‌های تکراری
-        </button>
-        <small style="display: block; margin-top: 10px; color: #64748b;">
-          حذف تمام آدرس‌های تکراری از همه کشورها
-        </small>
-      </div>
-      <div>
-        <button onclick="downloadJSON()" class="btn-submit" style="background: linear-gradient(135deg, #10b981, #059669); width: 100%;">
-          📥 دانلود JSON تمام آدرس‌ها
-        </button>
-        <small style="display: block; margin-top: 10px; color: #64748b;">
-          دانلود فایل JSON شامل تمام کشورها و آدرس‌ها
-        </small>
-      </div>
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="section-header">
-      <h2>➕ افزودن IPv6 جدید</h2>
-    </div>
-    <form method="POST" action="/api/admin/add-ipv6" class="dns-form">
-      <div class="form-row">
-        <div class="form-group">
-          <label>🌍 نام کشور (فارسی)</label>
-          <input name="country" placeholder="مثال: ایران" required autocomplete="off">
-        </div>
-        <div class="form-group">
-          <label>🔤 کد کشور (2 حرفی)</label>
-          <input name="code" placeholder="IR" maxlength="2" required autocomplete="off" style="text-transform:uppercase;">
-        </div>
-      </div>
-      <div class="form-group full-width">
-        <label>📡 آدرس‌های IPv6 (هر خط یک آدرس)</label>
-        <textarea name="addresses" placeholder="2001:4860:4860::8888&#10;2606:4700:4700::1111&#10;2620:fe::fe" rows="5" required></textarea>
-        <small>هر آدرس IPv6 را در یک خط جداگانه وارد کنید. موجودی به صورت خودکار بر اساس تعداد آدرس‌ها محاسبه می‌شود.</small>
-      </div>
-      <button type="submit" class="btn-submit">💾 ذخیره اطلاعات</button>
-    </form>
-  </section>
-</div>
-
-<script src="/js/common.js"></script>
-<script src="/js/ipv6.js"></script>
-</body>
-</html>
