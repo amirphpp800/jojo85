@@ -3403,8 +3403,8 @@ export async function handleUpdate(update, env) {
           reply_markup: {
             inline_keyboard: [
               [
-                { text: '🌐 IPv4', callback_data: 'show_dns' },
-                { text: '🌐 IPv6', callback_data: 'show_ipv6' }
+                { text: '🌐 IPv6', callback_data: 'show_ipv6' },
+                { text: '🌐 IPv4', callback_data: 'show_dns' }
               ],
               [{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]
             ]
