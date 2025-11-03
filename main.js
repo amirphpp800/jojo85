@@ -395,6 +395,69 @@ async function removeAddressFromEntry(kv, code, address) {
   return false;
 }
 
+// === IPv6 Database Functions ===
+async function listIpv6Entries(kv) {
+  const list = await kv.list({ prefix: 'ipv6:' });
+  const entries = [];
+  for (const k of list.keys) {
+    const raw = await kv.get(k.name);
+    if (raw) {
+      try {
+        entries.push(JSON.parse(raw));
+      } catch {}
+    }
+  }
+  entries.sort((a, b) => (a.country || '').localeCompare(b.country || ''));
+  return entries;
+}
+
+async function getIpv6Entry(kv, code) {
+  const raw = await kv.get(`ipv6:${code.toUpperCase()}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function putIpv6Entry(kv, entry) {
+  await kv.put(`ipv6:${entry.code.toUpperCase()}`, JSON.stringify(entry));
+}
+
+async function deleteIpv6Entry(kv, code) {
+  await kv.delete(`ipv6:${code.toUpperCase()}`);
+}
+
+// حذف یک آدرس IPv6 از لیست و بروزرسانی موجودی
+async function removeIpv6AddressFromEntry(kv, code, address) {
+  const entry = await getIpv6Entry(kv, code);
+  if (!entry) return false;
+
+  if (Array.isArray(entry.addresses)) {
+    entry.addresses = entry.addresses.filter(addr => addr !== address);
+    entry.stock = entry.addresses.length;
+    await putIpv6Entry(kv, entry);
+    return true;
+  }
+  return false;
+}
+
+// انتخاب یک IPv6 رندوم از لیست
+function getRandomIpv6(entry) {
+  if (!Array.isArray(entry.addresses) || entry.addresses.length === 0) {
+    return null;
+  }
+  return entry.addresses[Math.floor(Math.random() * entry.addresses.length)];
+}
+
+// اعتبارسنجی آدرس IPv6
+function isValidIPv6(ip) {
+  // الگوی ساده برای IPv6
+  const ipv6Pattern = /^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/;
+  return ipv6Pattern.test(ip);
+}
+
 async function saveUser(kv, from) {
   if (!from || !from.id) return;
   const data = {
@@ -702,11 +765,16 @@ function renderMainPage(entries, userCount) {
         <span class="stat-text">کاربر ربات</span>
       </div>
     </div>
+    <div style="margin-top: 20px; text-align: center;">
+      <a href="/ipv6" class="btn-submit" style="display: inline-block; padding: 12px 24px; text-decoration: none; background: linear-gradient(135deg, #3b82f6, #8b5cf6);">
+        🌐 مدیریت IPv6
+      </a>
+    </div>
   </header>
 
   <section class="section">
     <div class="section-header">
-      <h2>📋 لیست DNS‌های موجود</h2>
+      <h2>📋 لیست DNS‌های موجود (IPv4)</h2>
       <span class="badge">${entries.length} مورد</span>
     </div>
     <div id="dns-grid" class="dns-grid">
@@ -2362,6 +2430,296 @@ body.dark .toast.info {
 `;
 }
 
+function renderIpv6Page(entries, userCount) {
+  const rows = entries.map(e => {
+    const flag = countryCodeToFlag(e.code);
+    const count = Array.isArray(e.addresses) ? e.addresses.length : 0;
+    const stockColor = (e.stock || 0) > 5 ? '#10b981' : (e.stock || 0) > 0 ? '#f59e0b' : '#ef4444';
+
+    return `
+    <div class="dns-card">
+      <div class="card-header">
+        <div class="country-info">
+          <span class="country-flag">${flag}</span>
+          <div class="country-details">
+            <h3>${escapeHtml(e.country)}</h3>
+            <span class="country-code">${escapeHtml(e.code)}</span>
+          </div>
+        </div>
+        <div class="card-actions">
+          <button class="btn-edit" onclick="editCountry('${escapeHtml(e.code)}', '${escapeHtml(e.country)}')" title="ویرایش نام">✏️</button>
+          <form method="POST" action="/api/admin/delete-ipv6" style="display:inline;">
+            <input type="hidden" name="code" value="${escapeHtml(e.code)}">
+            <button type="submit" class="btn-delete" onclick="return confirm('آیا مطمئن هستید؟')" title="حذف">🗑️</button>
+          </form>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="stat-item">
+          <span class="stat-label">موجودی:</span>
+          <span class="stat-value" style="color: ${stockColor};">${e.stock ?? 0}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">تعداد آدرس:</span>
+          <span class="stat-value">${count}</span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <details>
+          <summary>مشاهده آدرس‌ها</summary>
+          <div class="addresses-list">
+            ${count > 0 ? e.addresses.map(addr => `<code>${escapeHtml(addr)}</code>`).join('') : '<span class="empty">هیچ آدرسی ثبت نشده</span>'}
+          </div>
+        </details>
+      </div>
+    </div>`;
+  }).join('\n');
+
+  return `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🌐 پنل مدیریت IPv6</title>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>${getWebCss()}</style>
+</head>
+<body>
+<div id="toast-container" class="toast-container"></div>
+<div class="container">
+  <header class="main-header">
+    <div class="header-content">
+      <h1>🌐 پنل مدیریت IPv6</h1>
+      <p class="subtitle">مدیریت و پیکربندی سرورهای IPv6 در سراسر دنیا</p>
+    </div>
+    <div class="header-actions">
+      <div class="search-box">
+        <input id="search" type="text" placeholder="جستجو: نام یا کد کشور..." autocomplete="off">
+        <span class="search-icon">🔎</span>
+      </div>
+      <button id="theme-toggle" class="btn-toggle" aria-label="تغییر تم">🌙</button>
+    </div>
+    <div class="header-stats">
+      <div class="stat-box">
+        <span class="stat-number">${entries.length}</span>
+        <span class="stat-text">کشور</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number">${entries.reduce((sum, e) => sum + (e.stock || 0), 0)}</span>
+        <span class="stat-text">موجودی کل</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-number">${userCount}</span>
+        <span class="stat-text">کاربر ربات</span>
+      </div>
+    </div>
+    <div style="margin-top: 20px; text-align: center;">
+      <a href="/" class="btn-submit" style="display: inline-block; padding: 12px 24px; text-decoration: none; background: linear-gradient(135deg, #3b82f6, #8b5cf6);">
+        🌐 بازگشت به IPv4
+      </a>
+    </div>
+  </header>
+
+  <section class="section">
+    <div class="section-header">
+      <h2>📋 لیست IPv6 های موجود</h2>
+      <span class="badge">${entries.length} مورد</span>
+    </div>
+    <div id="dns-grid" class="dns-grid">
+      ${rows || '<div class="empty-state">هنوز هیچ IPv6 ثبت نشده است</div>'}
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-header">
+      <h2>🚀 افزودن گروهی آدرس‌های IPv6</h2>
+    </div>
+    <form method="POST" action="/api/admin/bulk-add-ipv6" class="dns-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>🌍 نام کشور (فارسی)</label>
+          <input name="country" placeholder="مثال: آلمان" required autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>🔤 کد کشور (2 حرفی)</label>
+          <input name="code" placeholder="DE" maxlength="2" required autocomplete="off" style="text-transform:uppercase;">
+        </div>
+      </div>
+      <div class="form-group full-width">
+        <label>📡 آدرس‌های IPv6 (هر خط یک آدرس)</label>
+        <textarea name="addresses" placeholder="2001:4860:4860::8888&#10;2606:4700:4700::1111" rows="8" required></textarea>
+        <small>هر آدرس IPv6 را در یک خط جداگانه وارد کنید. موجودی به صورت خودکار بر اساس تعداد آدرس‌ها محاسبه می‌شود.</small>
+      </div>
+      <button type="submit" class="btn-submit" id="bulk-submit">💾 افزودن گروهی</button>
+    </form>
+  </section>
+
+  <section class="section">
+    <div class="section-header">
+      <h2>➕ افزودن IPv6 جدید</h2>
+    </div>
+    <form method="POST" action="/api/admin/add-ipv6" class="dns-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label>🌍 نام کشور (فارسی)</label>
+          <input name="country" placeholder="مثال: ایران" required autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>🔤 کد کشور (2 حرفی)</label>
+          <input name="code" placeholder="IR" maxlength="2" required autocomplete="off" style="text-transform:uppercase;">
+        </div>
+      </div>
+      <div class="form-group full-width">
+        <label>📡 آدرس‌های IPv6 (هر خط یک آدرس)</label>
+        <textarea name="addresses" placeholder="2001:4860:4860::8888&#10;2606:4700:4700::1111" rows="5" required></textarea>
+        <small>هر آدرس IPv6 را در یک خط جداگانه وارد کنید. موجودی به صورت خودکار بر اساس تعداد آدرس‌ها محاسبه می‌شود.</small>
+      </div>
+      <button type="submit" class="btn-submit">💾 ذخیره اطلاعات</button>
+    </form>
+  </section>
+</div>
+
+<script>
+// Toast Notification System
+const Toast = {
+  container: null,
+  
+  init() {
+    this.container = document.getElementById('toast-container');
+    if (!this.container) {
+      this.container = document.createElement('div');
+      this.container.id = 'toast-container';
+      this.container.className = 'toast-container';
+      document.body.appendChild(this.container);
+    }
+  },
+  
+  show(message, type = 'info', duration = 5000) {
+    this.init();
+    
+    const icons = {
+      success: '✓',
+      error: '✕',
+      warning: '⚠',
+      info: 'ℹ'
+    };
+    
+    const titles = {
+      success: 'موفقیت',
+      error: 'خطا',
+      warning: 'هشدار',
+      info: 'اطلاعات'
+    };
+    
+    const toast = document.createElement('div');
+    toast.className = \`toast \${type}\`;
+    
+    toast.innerHTML = \`
+      <div class="toast-icon">\${icons[type] || icons.info}</div>
+      <div class="toast-content">
+        <div class="toast-title">\${titles[type] || titles.info}</div>
+        <div class="toast-message">\${message}</div>
+      </div>
+      <button class="toast-close">×</button>
+    \`;
+    
+    this.container.appendChild(toast);
+    
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn.addEventListener('click', () => this.remove(toast));
+    
+    if (duration > 0) {
+      setTimeout(() => this.remove(toast), duration);
+    }
+    
+    return toast;
+  },
+  
+  remove(toast) {
+    toast.classList.add('removing');
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  },
+  
+  success(message, duration) {
+    return this.show(message, 'success', duration);
+  },
+  
+  error(message, duration) {
+    return this.show(message, 'error', duration);
+  },
+  
+  warning(message, duration) {
+    return this.show(message, 'warning', duration);
+  },
+  
+  info(message, duration) {
+    return this.show(message, 'info', duration);
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const cards = document.querySelectorAll('.dns-card');
+  cards.forEach((card, i) => { card.style.animationDelay = (i * 0.05) + 's'; });
+
+  const toggleBtn = document.getElementById('theme-toggle');
+  const savedTheme = localStorage.getItem('theme');
+  if (savedTheme === 'dark') { document.body.classList.add('dark'); toggleBtn.textContent = '☀️'; }
+  toggleBtn.addEventListener('click', () => {
+    document.body.classList.toggle('dark');
+    const dark = document.body.classList.contains('dark');
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+    toggleBtn.textContent = dark ? '☀️' : '🌙';
+  });
+
+  const search = document.getElementById('search');
+  const grid = document.getElementById('dns-grid');
+  if (search && grid) {
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      grid.querySelectorAll('.dns-card').forEach(card => {
+        const name = card.querySelector('.country-details h3')?.textContent?.toLowerCase() || '';
+        const code = card.querySelector('.country-code')?.textContent?.toLowerCase() || '';
+        const addrs = Array.from(card.querySelectorAll('.addresses-list code')).map(c => c.textContent.toLowerCase()).join(' ');
+        const ok = !q || name.includes(q) || code.includes(q) || addrs.includes(q);
+        card.style.display = ok ? '' : 'none';
+      });
+    });
+  }
+});
+
+function editCountry(code, currentName) {
+  const newName = prompt('نام جدید کشور را وارد کنید:', currentName);
+  if (newName && newName.trim() && newName.trim() !== currentName) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/api/admin/update-ipv6-name';
+    
+    const codeInput = document.createElement('input');
+    codeInput.type = 'hidden';
+    codeInput.name = 'code';
+    codeInput.value = code;
+    
+    const nameInput = document.createElement('input');
+    nameInput.type = 'hidden';
+    nameInput.name = 'country';
+    nameInput.value = newName.trim();
+    
+    form.appendChild(codeInput);
+    form.appendChild(nameInput);
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+</script>
+</body>
+</html>
+`;
+}
+
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({
     '&': '&amp;',
@@ -2408,12 +2766,16 @@ function invalidateDnsCache() {
 // ساخت کیبورد اصلی
 function buildMainKeyboard(userId) {
   const rows = [];
-  // سطر اول: وایرگارد و دی ان اس کنار هم
+  // سطر اول: وایرگارد
   rows.push([
-    { text: '🛰️ وایرگارد', callback_data: 'wireguard' },
-    { text: '🧭 دی ان اس', callback_data: 'show_dns' }
+    { text: '🛰️ وایرگارد', callback_data: 'wireguard' }
   ]);
-  // سطر دوم: حساب کاربری
+  // سطر دوم: IPv4 و IPv6 کنار هم
+  rows.push([
+    { text: '🌐 IPv4', callback_data: 'show_dns' },
+    { text: '🌐 IPv6', callback_data: 'show_ipv6' }
+  ]);
+  // سطر سوم: حساب کاربری
   rows.push([{ text: '👤 حساب کاربری', callback_data: 'account' }]);
   // سطر سوم: ادمین (در صورت نیاز)
   if (Number(userId) === Number(ADMIN_ID)) {
@@ -2607,6 +2969,170 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
         [{ text: '🔍 بررسی فیلتر آدرس', url: checkUrl }],
         [{ text: '🔄 دریافت DNS جدید', callback_data: `dns:${code}` }],
         [{ text: '🔙 بازگشت', callback_data: 'show_dns' }]
+      ]
+    }
+  });
+}
+
+// ساخت کیبورد لیست کشورها برای IPv6 با صفحه‌بندی
+function buildIpv6Keyboard(entries, page = 0) {
+  const ITEMS_PER_PAGE = 12;
+  const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
+  const startIndex = page * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const currentEntries = entries.slice(startIndex, endIndex);
+
+  const rows = [];
+
+  currentEntries.forEach(e => {
+    const flag = countryCodeToFlag(e.code);
+    const stock = e.stock ?? 0;
+    const countryName = ensurePersianCountryName(e.country, e.code);
+
+    let stockEmoji = '🔴';
+    if (stock > 10) {
+      stockEmoji = '🟢';
+    } else if (stock > 5) {
+      stockEmoji = '🟡';
+    } else if (stock > 0) {
+      stockEmoji = '🟡';
+    }
+
+    rows.push([
+      {
+        text: `${stockEmoji}`,
+        callback_data: `stock_ipv6:${e.code.toUpperCase()}`
+      },
+      {
+        text: `${stock}`,
+        callback_data: `stock_ipv6:${e.code.toUpperCase()}`
+      },
+      {
+        text: `${flag} ${countryName}`,
+        callback_data: `ipv6:${e.code.toUpperCase()}`
+      }
+    ]);
+  });
+
+  // دکمه‌های صفحه‌بندی
+  if (totalPages > 1) {
+    const paginationRow = [];
+    if (page > 0) {
+      paginationRow.push({
+        text: '⬅️ قبلی',
+        callback_data: `page_ipv6:${page - 1}`
+      });
+    }
+    paginationRow.push({
+      text: `${page + 1}/${totalPages}`,
+      callback_data: `current_page_ipv6`
+    });
+    if (page < totalPages - 1) {
+      paginationRow.push({
+        text: 'بعدی ➡️',
+        callback_data: `page_ipv6:${page + 1}`
+      });
+    }
+    rows.push(paginationRow);
+  }
+
+  rows.push([{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]);
+
+  return { inline_keyboard: rows };
+}
+
+// نمایش یک IPv6 رندوم از کشور انتخابی
+async function handleIpv6Selection(chat, messageId, code, env, userId) {
+  const entry = await getIpv6Entry(env.DB, code);
+
+  if (!entry) {
+    return telegramApi(env, '/editMessageText', {
+      chat_id: chat,
+      message_id: messageId,
+      text: '❌ هیچ IPv6 برای این کشور یافت نشد.',
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]] }
+    });
+  }
+
+  const countryName = ensurePersianCountryName(entry.country, entry.code);
+
+  // بررسی موجودی
+  if (!entry.stock || entry.stock <= 0) {
+    const flag = countryCodeToFlag(entry.code);
+    return telegramApi(env, '/editMessageText', {
+      chat_id: chat,
+      message_id: messageId,
+      text: `${flag} IPv6 ${countryName}\n\nناموجود. کشور دیگری را انتخاب کنید.`,
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]] }
+    });
+  }
+
+  // بررسی وجود آدرس
+  if (!Array.isArray(entry.addresses) || entry.addresses.length === 0) {
+    const flag = countryCodeToFlag(entry.code);
+    return telegramApi(env, '/editMessageText', {
+      chat_id: chat,
+      message_id: messageId,
+      text: `${flag} IPv6 ${countryName}\n\nهیچ آدرسی ثبت نشده است.`,
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]] }
+    });
+  }
+
+  // محدودیت روزانه کاربر برای دریافت IPv6
+  const quota = await getUserQuota(env.DB, userId, 'ipv6');
+  if (quota.count >= quota.limit) {
+    const timeLeft = getTimeUntilReset();
+    return telegramApi(env, '/editMessageText', {
+      chat_id: chat,
+      message_id: messageId,
+      text: `⏳ محدودیت روزانه دریافت IPv6 شما به پایان رسیده است.\n\n📊 امروز مجاز: ${quota.limit} مورد\n⏰ زمان باقی‌مانده تا ریست: ${timeLeft}`,
+      reply_markup: { inline_keyboard: [[{ text: '👤 حساب کاربری', callback_data: 'account' }],[{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]] }
+    });
+  }
+
+  // انتخاب یک IPv6 رندوم
+  const selectedIpv6 = getRandomIpv6(entry);
+
+  if (!selectedIpv6) {
+    const flag = countryCodeToFlag(entry.code);
+    return telegramApi(env, '/editMessageText', {
+      chat_id: chat,
+      message_id: messageId,
+      text: `${flag} IPv6 ${countryName}\n\nهیچ آدرسی موجود نیست.`,
+      reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]] }
+    });
+  }
+
+  const flag = countryCodeToFlag(entry.code);
+
+  // افزایش مصرف کاربر و حذف آدرس از لیست
+  await incUserQuota(env.DB, userId, 'ipv6');
+  const newQuota = await getUserQuota(env.DB, userId, 'ipv6');
+  await addUserHistory(env.DB, userId, 'ipv6', `${entry.code}:${selectedIpv6}`);
+  await removeIpv6AddressFromEntry(env.DB, code, selectedIpv6);
+  
+  // دریافت موجودی جدید
+  const updatedEntry = await getIpv6Entry(env.DB, code);
+  const remainingStock = updatedEntry ? updatedEntry.stock : 0;
+
+  // پیام مینیمال
+  let msg = `${flag} IPv6 ${countryName}\n\n`;
+  msg += `آدرس اختصاصی شما:\n\`${selectedIpv6}\`\n\n`;
+  msg += `📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}\n`;
+  msg += `📦 موجودی باقی‌مانده ${countryName}: ${remainingStock}`;
+
+  const checkUrl = `https://check-host.net/check-ping?host=${selectedIpv6}`;
+
+  return telegramApi(env, '/editMessageText', {
+    chat_id: chat,
+    message_id: messageId,
+    text: msg,
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🔍 بررسی فیلتر آدرس', url: checkUrl }],
+        [{ text: '🔄 دریافت IPv6 جدید', callback_data: `ipv6:${code}` }],
+        [{ text: '🔙 بازگشت', callback_data: 'show_ipv6' }]
       ]
     }
   });
@@ -2854,14 +3380,14 @@ export async function handleUpdate(update, env) {
         });
       }
 
-      // نمایش لیست DNS
+      // نمایش لیست DNS IPv4
       else if (data === 'show_dns' || data.startsWith('page:')) {
         const entries = await getCachedDnsList(env.DB);
         if (entries.length === 0) {
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
             message_id: messageId,
-            text: '❌ *هیچ DNSی موجود نیست*\n\nلطفاً ابتدا از پنل مدیریت، DNS‌های موردنظر را اضافه کنید.',
+            text: '❌ *هیچ IPv4 موجود نیست*\n\nلطفاً ابتدا از پنل مدیریت، آدرس‌های IPv4 موردنظر را اضافه کنید.',
             parse_mode: 'Markdown',
             reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
           });
@@ -2876,21 +3402,65 @@ export async function handleUpdate(update, env) {
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
             message_id: messageId,
-            text: `🌍 *لیست کشورهای موجود*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n📄 صفحه: *${currentPage}/${totalPages}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (1-10)\n🔴 ناموجود`,
+            text: `🌍 *لیست کشورهای موجود (IPv4)*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n📄 صفحه: *${currentPage}/${totalPages}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (1-10)\n🔴 ناموجود`,
             parse_mode: 'Markdown',
             reply_markup: kb
           });
         }
       }
 
-      // انتخاب یک کشور و دریافت DNS رندوم
+      // نمایش لیست IPv6
+      else if (data === 'show_ipv6' || data.startsWith('page_ipv6:')) {
+        const entries = await listIpv6Entries(env.DB);
+        if (entries.length === 0) {
+          await telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: '❌ *هیچ IPv6 موجود نیست*\n\nلطفاً ابتدا از پنل مدیریت، آدرس‌های IPv6 موردنظر را اضافه کنید.',
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
+          });
+        } else {
+          // تعیین شماره صفحه
+          const page = data.startsWith('page_ipv6:') ? parseInt(data.split(':')[1]) || 0 : 0;
+          const kb = buildIpv6Keyboard(entries, page);
+          const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
+          const totalPages = Math.ceil(entries.length / 12);
+          const currentPage = page + 1;
+
+          await telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: `🌍 *لیست کشورهای موجود (IPv6)*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n📄 صفحه: *${currentPage}/${totalPages}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (1-10)\n🔴 ناموجود`,
+            parse_mode: 'Markdown',
+            reply_markup: kb
+          });
+        }
+      }
+
+      // انتخاب یک کشور و دریافت DNS IPv4 رندوم
       else if (data.startsWith('dns:')) {
         const code = data.split(':')[1];
         await handleDnsSelection(chat, messageId, code, env, from.id);
       }
 
-      // کلیک روی موجودی DNS (راهنمایی کاربر)
+      // انتخاب یک کشور و دریافت IPv6 رندوم
+      else if (data.startsWith('ipv6:')) {
+        const code = data.split(':')[1];
+        await handleIpv6Selection(chat, messageId, code, env, from.id);
+      }
+
+      // کلیک روی موجودی DNS IPv4 (راهنمایی کاربر)
       else if (data.startsWith('stock:')) {
+        await telegramApi(env, '/answerCallbackQuery', {
+          callback_query_id: cb.id,
+          text: 'برای دریافت آدرس، روی دکمه اسم کشور کلیک کنید',
+          show_alert: true
+        });
+      }
+
+      // کلیک روی موجودی IPv6 (راهنمایی کاربر)
+      else if (data.startsWith('stock_ipv6:')) {
         await telegramApi(env, '/answerCallbackQuery', {
           callback_query_id: cb.id,
           text: 'برای دریافت آدرس، روی دکمه اسم کشور کلیک کنید',
@@ -2908,7 +3478,7 @@ export async function handleUpdate(update, env) {
       }
 
       // کلیک روی شماره صفحه فعلی
-      else if (data === 'current_page' || data === 'wg_current_page') {
+      else if (data === 'current_page' || data === 'wg_current_page' || data === 'current_page_ipv6') {
         await telegramApi(env, '/answerCallbackQuery', {
           callback_query_id: cb.id,
           text: 'این صفحه فعلی است',
@@ -3926,6 +4496,179 @@ export default {
   <p>در حال انتقال به صفحه اصلی...</p>
   <p><a href="/">بازگشت به صفحه اصلی</a></p>
   <script>setTimeout(()=>location.href='/',2500)</script>
+</body>
+</html>`);
+    }
+
+    // صفحه IPv6
+    if (url.pathname === '/ipv6' && req.method === 'GET') {
+      const entries = await listIpv6Entries(env.DB);
+      const userCount = await countUsers(env.DB);
+      return html(renderIpv6Page(entries, userCount));
+    }
+
+    // API: افزودن IPv6 جدید
+    if (url.pathname === '/api/admin/add-ipv6' && req.method === 'POST') {
+      const form = await req.formData();
+      const addresses = (form.get('addresses') || '')
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const code = (form.get('code') || '').toUpperCase().trim();
+      let countryName = (form.get('country') || '').trim();
+      
+      if (!countryName && code) {
+        countryName = getCountryNameFromCode(code);
+      }
+
+      const entry = {
+        country: countryName,
+        code: code,
+        addresses: addresses,
+        stock: addresses.length
+      };
+
+      if (!entry.country || !entry.code || entry.code.length !== 2) {
+        return html(`<script>
+          alert('❌ اطلاعات نامعتبر است');
+          setTimeout(() => history.back(), 1000);
+        </script>`);
+      }
+
+      const existing = await getIpv6Entry(env.DB, entry.code);
+      if (existing) {
+        return html(`<script>
+          alert('⚠️ این کد کشور قبلاً ثبت شده است');
+          setTimeout(() => history.back(), 1000);
+        </script>`);
+      }
+
+      await putIpv6Entry(env.DB, entry);
+      
+      return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="2;url=/ipv6">
+<title>موفقیت</title>
+<body style="font-family: sans-serif; padding:20px;">
+  <p>✅ IPv6 ${entry.country} با موفقیت اضافه شد!</p>
+  <p><a href="/ipv6">بازگشت به صفحه IPv6</a></p>
+  <script>setTimeout(()=>location.href='/ipv6',2000)</script>
+</body>
+</html>`);
+    }
+
+    // API: افزودن گروهی IPv6
+    if (url.pathname === '/api/admin/bulk-add-ipv6' && req.method === 'POST') {
+      const form = await req.formData();
+      const addresses = (form.get('addresses') || '')
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .filter(s => s && isValidIPv6(s));
+
+      const code = (form.get('code') || '').toUpperCase().trim();
+      let countryName = (form.get('country') || '').trim();
+      
+      if (!countryName && code) {
+        countryName = getCountryNameFromCode(code);
+      }
+
+      if (!code || code.length !== 2 || addresses.length === 0) {
+        return html(`<script>
+          alert('❌ اطلاعات نامعتبر است');
+          setTimeout(() => history.back(), 1000);
+        </script>`);
+      }
+
+      const existing = await getIpv6Entry(env.DB, code);
+      
+      if (existing) {
+        // اضافه کردن به کشور موجود
+        existing.addresses = [...new Set([...existing.addresses, ...addresses])];
+        existing.stock = existing.addresses.length;
+        await putIpv6Entry(env.DB, existing);
+      } else {
+        // ایجاد کشور جدید
+        const newEntry = {
+          code: code,
+          country: countryName,
+          addresses: [...new Set(addresses)],
+          stock: addresses.length
+        };
+        await putIpv6Entry(env.DB, newEntry);
+      }
+
+      return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="2;url=/ipv6">
+<title>موفقیت</title>
+<body style="font-family: sans-serif; padding:20px;">
+  <p>✅ ${addresses.length} آدرس IPv6 برای ${countryName} اضافه شد!</p>
+  <p><a href="/ipv6">بازگشت به صفحه IPv6</a></p>
+  <script>setTimeout(()=>location.href='/ipv6',2000)</script>
+</body>
+</html>`);
+    }
+
+    // API: حذف IPv6
+    if (url.pathname === '/api/admin/delete-ipv6' && req.method === 'POST') {
+      const form = await req.formData();
+      const code = form.get('code');
+
+      if (code) {
+        const entry = await getIpv6Entry(env.DB, code);
+        await deleteIpv6Entry(env.DB, code);
+        
+        return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="1.5;url=/ipv6">
+<title>حذف کشور</title>
+<body style="font-family: sans-serif; padding:20px;">
+  <p>🗑️ IPv6 ${entry ? entry.country : code} با موفقیت حذف شد.</p>
+  <p><a href="/ipv6">بازگشت به صفحه IPv6</a></p>
+  <script>setTimeout(()=>location.href='/ipv6',1500)</script>
+</body>
+</html>`);
+      }
+
+      return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="2;url=/ipv6">
+<title>خطا</title>
+<body style="font-family: sans-serif; padding:20px;">
+  <p>❌ خطا در حذف. انتقال به صفحه IPv6...</p>
+  <p><a href="/ipv6">بازگشت به صفحه IPv6</a></p>
+  <script>setTimeout(()=>location.href='/ipv6',2000)</script>
+</body>
+</html>`);
+    }
+
+    // API: بروزرسانی نام کشور IPv6
+    if (url.pathname === '/api/admin/update-ipv6-name' && req.method === 'POST') {
+      const form = await req.formData();
+      const code = (form.get('code') || '').toUpperCase().trim();
+      const newName = (form.get('country') || '').trim();
+
+      if (code && newName) {
+        const entry = await getIpv6Entry(env.DB, code);
+        if (entry) {
+          entry.country = newName;
+          await putIpv6Entry(env.DB, entry);
+        }
+      }
+
+      return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="1;url=/ipv6">
+<title>بروزرسانی</title>
+<body style="font-family: sans-serif; padding:20px;">
+  <p>✅ نام کشور بروزرسانی شد.</p>
+  <script>setTimeout(()=>location.href='/ipv6',1000)</script>
 </body>
 </html>`);
     }
