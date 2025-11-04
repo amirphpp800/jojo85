@@ -1,14 +1,3 @@
-// ╔═══════════════════════════════════════════════════════════════════════════╗
-// ║                                                                           ║
-// ║                    🌐 WIREGUARD & DNS TELEGRAM BOT                       ║
-// ║                                                                           ║
-// ║  📝 توضیحات: ربات تلگرام برای مدیریت و توزیع DNS و WireGuard           ║
-// ║  🏗️  معماری: Cloudflare Workers + KV Database                           ║
-// ║  👤 ادمین: 7240662021                                                     ║
-// ║  📅 آخرین بروزرسانی: 2024                                                ║
-// ║                                                                           ║
-// ╚═══════════════════════════════════════════════════════════════════════════╝
-
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 🔧 CONFIGURATION & CONSTANTS
@@ -703,9 +692,6 @@ function getCountryNameFromCode(code) {
 'IN': 'هند', 'PK': 'پاکستان', 'BD': 'بنگلادش', 'LK': 'سری‌لانکا', 'NP': 'نپال',
 'BT': 'بوتان', 'MV': 'مالدیو', 'AF': 'افغانستان',
 
-// آسیای مرکزی و قفقاز
-'TM': 'ترکمنستان', 'KG': 'قرقیزستان', 'TJ': 'تاجیکستان', 'KZ': 'قزاقستان', 'UZ': 'ازبکستان',
-
 // اقیانوسیه
 'AU': 'استرالیا', 'NZ': 'نیوزیلند', 'FJ': 'فیجی', 'PG': 'پاپوآ گینه نو',
 'SB': 'جزایر سلیمان', 'VU': 'وانواتو', 'WS': 'ساموآ', 'TO': 'تونگا', 'KI': 'کیریباتی',
@@ -721,11 +707,7 @@ function getCountryNameFromCode(code) {
 'CR': 'کاستاریکا', 'CU': 'کوبا', 'DM': 'دومینیکا', 'DO': 'جمهوری دومینیکن',
 'GD': 'گرانادا', 'GT': 'گواتمالا', 'HT': 'هائیتی', 'HN': 'هندوراس', 'JM': 'جامائیکا',
 'KN': 'سنت کیتس و نویس', 'LC': 'سنت لوسیا', 'VC': 'سنت وینسنت و گرنادین‌ها',
-'NI': 'نیکاراگوئه', 'PA': 'پاناما', 'SV': 'السالوادور', 'TT': 'ترینیداد و توباگو',
-
-// سایر (به‌طور رسمی کشور مستقل ولی کوچک)
-'QA': 'قطر', 'BH': 'بحرین', 'LU': 'لوکزامبورگ', 'MT': 'مالت', 'MC': 'موناکو',
-'LI': 'لیختن‌اشتاین', 'SM': 'سان مارینو', 'VA': 'واتیکان'
+'NI': 'نیکاراگوئه', 'PA': 'پاناما', 'SV': 'السالوادور', 'TT': 'ترینیداد و توباگو'
 
   };
   return map[code.toUpperCase()] || code.toUpperCase();
@@ -4650,7 +4632,23 @@ export async function handleUpdate(update, env) {
 
 export default {
   async fetch(req, env) {
-    const url = new URL(req.url);
+    try {
+      // بررسی وجود env variables ضروری
+      if (!env || !env.DB) {
+        return new Response(
+          JSON.stringify({
+            error: 'تنظیمات محیطی ناقص است',
+            message: 'KV namespace (DB) تنظیم نشده است. لطفاً در تنظیمات Cloudflare Pages، KV binding با نام DB را اضافه کنید.',
+            help: 'Settings > Functions > KV namespace bindings > Add binding (Variable name: DB)'
+          }, null, 2),
+          {
+            status: 500,
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+          }
+        );
+      }
+      
+      const url = new URL(req.url);
 
     // ─────────────────────────────────────────────────────────────────────────────
     // 🏠 Web Pages Routes
@@ -4668,6 +4666,196 @@ export default {
       const entries = await listDnsEntries(env.DB);
       const userCount = await countUsers(env.DB);
       return html(renderMainPage(entries, userCount));
+    }
+
+    // صفحه تست برای بررسی تنظیمات
+    if (url.pathname === '/health' && req.method === 'GET') {
+      const checks = {
+        timestamp: new Date().toISOString(),
+        env_db: !!env.DB,
+        env_bot_token: !!env.BOT_TOKEN,
+        status: 'OK'
+      };
+      
+      // تست اتصال به KV
+      try {
+        await env.DB.put('health_check', Date.now().toString(), { expirationTtl: 60 });
+        const testValue = await env.DB.get('health_check');
+        checks.kv_connection = !!testValue;
+      } catch (e) {
+        checks.kv_connection = false;
+        checks.kv_error = e.message;
+      }
+      
+      // تست اتصال به Telegram API
+      if (env.BOT_TOKEN) {
+        try {
+          const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/getMe`);
+          const data = await res.json();
+          checks.telegram_api = data.ok;
+          if (data.ok) {
+            checks.bot_info = {
+              username: data.result.username,
+              first_name: data.result.first_name,
+              id: data.result.id
+            };
+          }
+        } catch (e) {
+          checks.telegram_api = false;
+          checks.telegram_error = e.message;
+        }
+      }
+      
+      const allOk = checks.env_db && checks.env_bot_token && checks.kv_connection && checks.telegram_api;
+      
+      return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Health Check</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: ${allOk ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'};
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    h1 {
+      color: ${allOk ? '#27ae60' : '#e74c3c'};
+      margin-bottom: 10px;
+      font-size: 32px;
+      text-align: center;
+    }
+    .status-icon {
+      text-align: center;
+      font-size: 60px;
+      margin-bottom: 20px;
+    }
+    .check-item {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 15px 20px;
+      margin: 10px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .check-label {
+      font-weight: bold;
+      color: #2c3e50;
+    }
+    .check-value {
+      font-family: 'Courier New', monospace;
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-size: 14px;
+    }
+    .check-value.ok {
+      background: #d4edda;
+      color: #155724;
+    }
+    .check-value.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .bot-info {
+      background: #e3f2fd;
+      border-radius: 10px;
+      padding: 15px;
+      margin: 20px 0;
+      border-right: 4px solid #2196f3;
+    }
+    .bot-info h3 {
+      color: #1976d2;
+      margin-bottom: 10px;
+    }
+    .bot-info p {
+      margin: 5px 0;
+      color: #424242;
+    }
+    .timestamp {
+      text-align: center;
+      color: #7f8c8d;
+      font-size: 14px;
+      margin-top: 20px;
+    }
+    .btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px 30px;
+      border-radius: 25px;
+      text-decoration: none;
+      font-weight: bold;
+      transition: transform 0.2s;
+      margin: 20px 10px 0 10px;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+    .btn-group {
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="status-icon">${allOk ? '✅' : '⚠️'}</div>
+    <h1>${allOk ? 'همه چیز آماده است!' : 'مشکلاتی وجود دارد'}</h1>
+    
+    <div class="check-item">
+      <span class="check-label">🗄️ KV Database (DB)</span>
+      <span class="check-value ${checks.env_db ? 'ok' : 'error'}">${checks.env_db ? 'متصل' : 'تنظیم نشده'}</span>
+    </div>
+    
+    <div class="check-item">
+      <span class="check-label">🔑 Bot Token</span>
+      <span class="check-value ${checks.env_bot_token ? 'ok' : 'error'}">${checks.env_bot_token ? 'تنظیم شده' : 'تنظیم نشده'}</span>
+    </div>
+    
+    <div class="check-item">
+      <span class="check-label">💾 اتصال KV</span>
+      <span class="check-value ${checks.kv_connection ? 'ok' : 'error'}">${checks.kv_connection ? 'موفق' : 'ناموفق'}</span>
+    </div>
+    
+    <div class="check-item">
+      <span class="check-label">🤖 Telegram API</span>
+      <span class="check-value ${checks.telegram_api ? 'ok' : 'error'}">${checks.telegram_api ? 'موفق' : 'ناموفق'}</span>
+    </div>
+    
+    ${checks.bot_info ? `
+    <div class="bot-info">
+      <h3>🤖 اطلاعات ربات</h3>
+      <p><strong>نام کاربری:</strong> @${checks.bot_info.username}</p>
+      <p><strong>نام:</strong> ${checks.bot_info.first_name}</p>
+      <p><strong>شناسه:</strong> ${checks.bot_info.id}</p>
+    </div>
+    ` : ''}
+    
+    ${checks.kv_error ? `<p style="color: #e74c3c; margin-top: 15px;">❌ خطای KV: ${checks.kv_error}</p>` : ''}
+    ${checks.telegram_error ? `<p style="color: #e74c3c; margin-top: 15px;">❌ خطای Telegram: ${checks.telegram_error}</p>` : ''}
+    
+    <div class="btn-group">
+      <a href="/" class="btn">🏠 صفحه اصلی</a>
+      <a href="/health" class="btn">🔄 بررسی مجدد</a>
+    </div>
+    
+    <div class="timestamp">
+      زمان بررسی: ${new Date().toLocaleString('fa-IR')}
+    </div>
+  </div>
+</body>
+</html>`);
     }
 
 
@@ -5657,6 +5845,13 @@ export default {
 
     // تنظیم webhook
     if (url.pathname === '/api/set-webhook' && req.method === 'GET') {
+      if (!env.BOT_TOKEN) {
+        return json({ 
+          ok: false, 
+          error: 'BOT_TOKEN تنظیم نشده است',
+          help: 'لطفاً در Settings > Functions > Environment variables متغیر BOT_TOKEN را اضافه کنید'
+        }, 500);
+      }
       const webhookUrl = `${url.origin}/webhook`;
       const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/setWebhook`, {
         method: 'POST',
@@ -5766,5 +5961,131 @@ export default {
     // ─────────────────────────────────────────────────────────────────────────────
 
     return html('<h1>404 - صفحه یافت نشد</h1>');
+    
+    } catch (error) {
+      // مدیریت خطاهای غیرمنتظره برای جلوگیری از خطای 1101
+      console.error('خطای Worker:', error);
+      console.error('Stack:', error.stack);
+      
+      // بررسی نوع درخواست برای ارسال پاسخ مناسب
+      const acceptHeader = req.headers.get('accept') || '';
+      const isJsonRequest = acceptHeader.includes('application/json');
+      
+      if (isJsonRequest) {
+        // پاسخ JSON برای API requests
+        return new Response(
+          JSON.stringify({
+            error: 'خطای داخلی سرور',
+            message: error.message || 'خطای نامشخص',
+            stack: error.stack,
+            timestamp: new Date().toISOString()
+          }, null, 2),
+          {
+            status: 500,
+            headers: { 
+              'Content-Type': 'application/json; charset=utf-8',
+              'Access-Control-Allow-Origin': '*'
+            }
+          }
+        );
+      } else {
+        // پاسخ HTML برای browser requests
+        return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>خطای سرور</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .error-container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 600px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+    .error-icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #e74c3c;
+      margin-bottom: 15px;
+      font-size: 28px;
+    }
+    .error-message {
+      color: #555;
+      margin-bottom: 20px;
+      line-height: 1.6;
+      font-size: 16px;
+    }
+    .error-details {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 10px;
+      padding: 15px;
+      margin: 20px 0;
+      text-align: right;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #d63031;
+      max-height: 200px;
+      overflow-y: auto;
+      word-break: break-word;
+    }
+    .btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px 30px;
+      border-radius: 25px;
+      text-decoration: none;
+      font-weight: bold;
+      transition: transform 0.2s;
+      margin-top: 20px;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+    .help-text {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #7f8c8d;
+    }
+  </style>
+</head>
+<body>
+  <div class="error-container">
+    <div class="error-icon">⚠️</div>
+    <h1>خطای داخلی سرور</h1>
+    <div class="error-message">
+      متأسفانه یک خطای غیرمنتظره رخ داده است. لطفاً دوباره تلاش کنید.
+    </div>
+    <div class="error-details">
+      <strong>پیام خطا:</strong><br>
+      ${error.message || 'خطای نامشخص'}
+    </div>
+    <div class="help-text">
+      اگر این خطا همچنان ادامه دارد، لطفاً با مدیر سیستم تماس بگیرید.
+      <br>
+      <small>زمان: ${new Date().toLocaleString('fa-IR')}</small>
+    </div>
+    <a href="/" class="btn">🏠 بازگشت به صفحه اصلی</a>
+  </div>
+</body>
+</html>`);
+      }
+    }
   }
 };
