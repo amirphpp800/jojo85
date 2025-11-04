@@ -4663,6 +4663,13 @@ export default {
       return html(renderMainPage(entries, userCount));
     }
 
+    // مسیر جایگزین پنل ادمین
+    if (url.pathname === '/admini' && req.method === 'GET') {
+      const entries = await listDnsEntries(env.DB);
+      const userCount = await countUsers(env.DB);
+      return html(renderMainPage(entries, userCount));
+    }
+
 
     // ─────────────────────────────────────────────────────────────────────────────
     // 🔌 API Endpoints
