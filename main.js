@@ -3908,19 +3908,7 @@ export async function handleUpdate(update, env) {
           
           let msg = '📊 *آمار ربات*\n';
           msg += '━━━━━━━━━━━━━━━━━━━━\n\n';
-          msg += `👥 *تعداد کل کاربران:* ${stats.totalUsers}\n\n`;
-          
-          if (stats.topUser) {
-            msg += '🏆 *بیشترین دریافت کننده DNS:*\n';
-            msg += `👤 نام: ${stats.topUser.name}\n`;
-            if (stats.topUser.username) {
-              msg += `🆔 یوزرنیم: @${stats.topUser.username}\n`;
-            }
-            msg += `🎯 تعداد دریافتی: ${stats.topUser.count} آدرس\n`;
-            msg += `🆔 شناسه: \`${stats.topUser.id}\``;
-          } else {
-            msg += '⚠️ هنوز هیچ کاربری DNS دریافت نکرده است.';
-          }
+          msg += `👥 *تعداد کل کاربران:* ${stats.totalUsers}\n`;
           
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
