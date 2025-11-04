@@ -1,6 +1,25 @@
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║                                                                           ║
+// ║                    🌐 WIREGUARD & DNS TELEGRAM BOT                       ║
+// ║                                                                           ║
+// ║  📝 توضیحات: ربات تلگرام برای مدیریت و توزیع DNS و WireGuard           ║
+// ║  🏗️  معماری: Cloudflare Workers + KV Database                           ║
+// ║  👤 ادمین: 7240662021                                                     ║
+// ║  📅 آخرین بروزرسانی: 2024                                                ║
+// ║                                                                           ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🔧 CONFIGURATION & CONSTANTS
+// ═════════════════════════════════════════════════════════════════════════════
 
 const TELEGRAM_BASE = (token) => `https://api.telegram.org/bot${token}`;
 const ADMIN_ID = 7240662021;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📤 Response Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj, null, 2), {
@@ -8,7 +27,10 @@ const json = (obj, status = 200) =>
     headers: { 'Content-Type': 'application/json; charset=utf-8' }
   });
 
-// === Per-user Daily Quotas & History ===
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 👥 USER QUOTA & HISTORY MANAGEMENT
+// ═════════════════════════════════════════════════════════════════════════════
 function todayKey() {
   const d = new Date();
   const y = d.getUTCFullYear();
@@ -69,7 +91,14 @@ const html = (s) =>
     headers: { 'Content-Type': 'text/html; charset=utf-8' }
   });
 
-// ارسال فایل به تلگرام (sendDocument)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 📨 TELEGRAM API HELPERS
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📤 ارسال فایل به تلگرام (sendDocument)
+// ─────────────────────────────────────────────────────────────────────────────
 async function telegramUpload(env, method, formData) {
   try {
     const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/${method}`, {
@@ -83,7 +112,15 @@ async function telegramUpload(env, method, formData) {
   }
 }
 
-// === WireGuard Helpers ===
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🛰️ WIREGUARD CONFIGURATION & HELPERS
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔢 WireGuard Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
 const WG_MTUS = [1280, 1320, 1360, 1380, 1400, 1420, 1440, 1480, 1500];
 const WG_FIXED_DNS = [
   '1.1.1.1','1.0.0.1','8.8.8.8','8.8.4.4','9.9.9.9','10.202.10.10','78.157.42.100','208.67.222.222','208.67.220.220','185.55.226.26','185.55.225.25','185.51.200.2'
@@ -190,6 +227,10 @@ MTU = ${mtu}
 `;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ⌨️ WireGuard Keyboard Builders
+// ─────────────────────────────────────────────────────────────────────────────
+
 function buildWireguardOperatorKb() {
   const rows = [];
   const ops = [
@@ -227,6 +268,10 @@ function buildWireguardDnsKb() {
   rows.push([{ text: '🔙 بازگشت', callback_data: 'wireguard' }]);
   return { inline_keyboard: rows };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 💾 WireGuard State Management
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function setWgState(kv, userId, state) {
   await kv.put(`wg_state:${userId}`, JSON.stringify(state), { expirationTtl: 900 });
@@ -287,12 +332,13 @@ function buildWireguardCountryKb(entries, page = 0, sortOrder = 'default') {
     ]);
   });
 
-  // اضافه کردن دکمه فیلتر
+  // اضافه کردن دکمه فیلتر در اول با نمایش حالت فعلی
   const filterEmoji = sortOrder === 'low_to_high' ? '📈' : sortOrder === 'high_to_low' ? '📉' : '🔀';
+  const filterLabel = sortOrder === 'low_to_high' ? 'کم به زیاد' : sortOrder === 'high_to_low' ? 'زیاد به کم' : 'پیش‌فرض';
   const nextSortOrder = sortOrder === 'default' ? 'low_to_high' : sortOrder === 'low_to_high' ? 'high_to_low' : 'default';
-  rows.push([{
-    text: `${filterEmoji} فیلتر`,
-    callback_data: `wg_sort:${nextSortOrder}:0`
+  rows.unshift([{
+    text: `${filterEmoji} فیلتر: ${filterLabel}`,
+    callback_data: `wg_sort:${nextSortOrder}:${page}`
   }]);
 
   // اضافه کردن دکمه‌های صفحه‌بندی
@@ -328,7 +374,15 @@ function buildWireguardCountryKb(entries, page = 0, sortOrder = 'default') {
   return { inline_keyboard: rows };
 }
 
-// تبدیل کد کشور به پرچم
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🌍 COUNTRY & LOCALIZATION HELPERS
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🏳️ تبدیل کد کشور به پرچم
+// ─────────────────────────────────────────────────────────────────────────────
+
 function countryCodeToFlag(code) {
   if (!code || code.length !== 2) return '🌐';
   const A = 0x1F1E6;
@@ -337,7 +391,15 @@ function countryCodeToFlag(code) {
     .join('');
 }
 
-// انتخاب رندوم از آرایه
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🎲 UTILITY FUNCTIONS
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎯 انتخاب رندوم از آرایه
+// ─────────────────────────────────────────────────────────────────────────────
+
 function getRandomItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -359,7 +421,15 @@ function isPublicIPv4(ip) {
   return true;
 }
 
-// === KV Helpers ===
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 💾 KV DATABASE OPERATIONS
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📡 DNS IPv4 Database Functions
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function listDnsEntries(kv) {
   const res = await kv.list({ prefix: 'dns:' });
   // بارگذاری موازی برای سرعت بیشتر
@@ -412,7 +482,11 @@ async function removeAddressFromEntry(kv, code, address) {
   return false;
 }
 
-// === IPv6 Database Functions ===
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🌐 IPv6 Database Functions
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function listIpv6Entries(kv) {
   const list = await kv.list({ prefix: 'ipv6:' });
   const entries = [];
@@ -475,6 +549,11 @@ function isValidIPv6(ip) {
   return ipv6Pattern.test(ip);
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 👤 User Management
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function saveUser(kv, from) {
   if (!from || !from.id) return;
   const data = {
@@ -493,6 +572,11 @@ function getRandomDns(entry) {
   }
   return entry.addresses[Math.floor(Math.random() * entry.addresses.length)];
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔍 IP Geolocation & Country Detection
+// ─────────────────────────────────────────────────────────────────────────────
 
 // تشخیص کشور از IP با استفاده از API و cache در KV
 async function detectCountryFromIP(ip, kv) {
@@ -647,7 +731,15 @@ function getCountryNameFromCode(code) {
   return map[code.toUpperCase()] || code.toUpperCase();
 }
 
-// === Web UI ===
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🎨 WEB UI RENDERING & MANAGEMENT
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📊 User Statistics
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function countUsers(kv) {
   try {
     const res = await kv.list({ prefix: 'users:' });
@@ -704,6 +796,11 @@ async function getUserStats(kv) {
     };
   }
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🖥️ Main Page Renderer (IPv4 DNS Management)
+// ─────────────────────────────────────────────────────────────────────────────
 
 function renderMainPage(entries, userCount) {
   const rows = entries.map(e => {
@@ -1348,6 +1445,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔧 Web Panel JavaScript Functions
+// ─────────────────────────────────────────────────────────────────────────────
+
 function showTab(tabName) {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -1356,33 +1458,102 @@ function showTab(tabName) {
 }
 
 async function editCountry(code, currentName) {
-  const newName = prompt('نام جدید کشور را وارد کنید:', currentName);
+  // ایجاد فرم ویرایش با SweetAlert یا Modal ساده
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;';
   
-  if (!newName || newName === currentName) {
-    return;
-  }
+  const isDark = document.body.classList.contains('dark');
+  const bgColor = isDark ? '#1f2937' : 'white';
+  const textColor = isDark ? '#f3f4f6' : '#1f2937';
+  const labelColor = isDark ? '#9ca3af' : '#6b7280';
+  const borderColor = isDark ? '#374151' : '#e5e7eb';
   
-  try {
-    const formData = new FormData();
-    formData.append('action', 'edit');
-    formData.append('existing_code', code);
-    formData.append('country', newName);
-    formData.append('addresses', '');
-    
-    const response = await fetch('/api/admin/add-dns', {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (response.ok) {
-      Toast.success('نام کشور با موفقیت تغییر کرد');
-      setTimeout(() => window.location.reload(), 1500);
-    } else {
-      Toast.error('خطا در تغییر نام کشور');
+  modal.innerHTML = \`
+    <div style="background:${bgColor};border-radius:16px;padding:30px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <h2 style="margin:0 0 20px;color:${textColor};font-size:24px;">✏️ ویرایش کشور</h2>
+      <form id="edit-form">
+        <div style="margin-bottom:20px;">
+          <label style="display:block;margin-bottom:8px;color:${labelColor};font-weight:600;">🌍 نام کشور (فارسی)</label>
+          <input type="text" id="edit-name" value="\${currentName}" required style="width:100%;padding:12px;border:2px solid ${borderColor};border-radius:8px;font-size:16px;font-family:inherit;background:${isDark ? '#374151' : 'white'};color:${textColor};">
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="display:block;margin-bottom:8px;color:${labelColor};font-weight:600;">🔤 کد کشور (2 حرفی)</label>
+          <input type="text" id="edit-code" value="\${code}" maxlength="2" required style="width:100%;padding:12px;border:2px solid ${borderColor};border-radius:8px;font-size:16px;text-transform:uppercase;font-family:monospace;background:${isDark ? '#374151' : 'white'};color:${textColor};">
+          <small style="color:${labelColor};display:block;margin-top:5px;">⚠️ تغییر کد کشور ممکن است بر داده‌های مرتبط تأثیر بگذارد</small>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button type="submit" style="flex:1;padding:12px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">💾 ذخیره</button>
+          <button type="button" id="cancel-btn" style="flex:1;padding:12px;background:${isDark ? '#374151' : '#e5e7eb'};color:${isDark ? '#9ca3af' : '#6b7280'};border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">❌ لغو</button>
+        </div>
+      </form>
+    </div>
+  \`;
+  
+  document.body.appendChild(modal);
+  
+  const form = modal.querySelector('#edit-form');
+  const cancelBtn = modal.querySelector('#cancel-btn');
+  const nameInput = modal.querySelector('#edit-name');
+  const codeInput = modal.querySelector('#edit-code');
+  
+  // فوکوس روی اولین فیلد
+  nameInput.focus();
+  nameInput.select();
+  
+  // بستن با کلیک روی پس‌زمینه
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      document.body.removeChild(modal);
     }
-  } catch (error) {
-    Toast.error('خطا: ' + error.message);
-  }
+  });
+  
+  // دکمه لغو
+  cancelBtn.addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+  
+  // ارسال فرم
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const newName = nameInput.value.trim();
+    const newCode = codeInput.value.trim().toUpperCase();
+    
+    if (!newName || !newCode || newCode.length !== 2) {
+      Toast.error('لطفاً تمام فیلدها را به درستی پر کنید');
+      return;
+    }
+    
+    if (newName === currentName && newCode === code) {
+      Toast.info('هیچ تغییری اعمال نشد');
+      document.body.removeChild(modal);
+      return;
+    }
+    
+    try {
+      const formData = new FormData();
+      formData.append('action', 'edit_full');
+      formData.append('old_code', code);
+      formData.append('new_code', newCode);
+      formData.append('country', newName);
+      
+      const response = await fetch('/api/admin/edit-dns', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (response.ok) {
+        Toast.success('✅ کشور با موفقیت ویرایش شد');
+        document.body.removeChild(modal);
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        const result = await response.text();
+        Toast.error('خطا در ویرایش: ' + result);
+      }
+    } catch (error) {
+      Toast.error('خطا: ' + error.message);
+    }
+  });
 }
 
 async function fixCountryNames() {
@@ -1499,6 +1670,11 @@ async function loadCountryData(code) {
 </body>
 </html>`;
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎨 CSS Styles for Web Panel
+// ─────────────────────────────────────────────────────────────────────────────
 
 function getWebCss() {
   return `
@@ -2930,6 +3106,11 @@ body.dark .toast.info {
 `;
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🌐 IPv6 Page Renderer
+// ─────────────────────────────────────────────────────────────────────────────
+
 function renderIpv6Page(entries, userCount) {
   const rows = entries.map(e => {
     const flag = countryCodeToFlag(e.code);
@@ -3230,10 +3411,14 @@ function escapeHtml(s) {
   }[c]));
 }
 
-// === Telegram Bot ===
-async function telegramApi(env, path, body) {
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📡 Telegram API Communication
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function telegramApi(env, method, body = {}) {
   try {
-    const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}${path}`, {
+    const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}${method}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -3264,6 +3449,15 @@ function invalidateDnsCache() {
 }
 
 // ساخت کیبورد اصلی
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🤖 TELEGRAM BOT HANDLERS & KEYBOARDS
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⌨️ Telegram Keyboard Builders
+// ─────────────────────────────────────────────────────────────────────────────
+
 function buildMainKeyboard(userId) {
   const rows = [];
   // سطر اول: وایرگارد و دی ان اس کنار هم
@@ -3284,15 +3478,33 @@ function buildMainKeyboard(userId) {
   return { inline_keyboard: rows };
 }
 
-// ساخت کیبورد لیست کشورها با صفحه‌بندی
-function buildDnsKeyboard(entries, page = 0) {
+// ساخت کیبورد لیست کشورها با صفحه‌بندی و فیلتر
+function buildDnsKeyboard(entries, page = 0, sortOrder = 'default') {
   const ITEMS_PER_PAGE = 12;
-  const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
+  
+  // مرتب‌سازی بر اساس موجودی
+  let sortedEntries = [...entries];
+  if (sortOrder === 'low_to_high') {
+    sortedEntries.sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0));
+  } else if (sortOrder === 'high_to_low') {
+    sortedEntries.sort((a, b) => (b.stock ?? 0) - (a.stock ?? 0));
+  }
+  
+  const totalPages = Math.ceil(sortedEntries.length / ITEMS_PER_PAGE);
   const startIndex = page * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
-  const currentEntries = entries.slice(startIndex, endIndex);
+  const currentEntries = sortedEntries.slice(startIndex, endIndex);
 
   const rows = [];
+  
+  // اضافه کردن دکمه فیلتر در اول با نمایش حالت فعلی
+  const filterEmoji = sortOrder === 'low_to_high' ? '📈' : sortOrder === 'high_to_low' ? '📉' : '🔀';
+  const filterLabel = sortOrder === 'low_to_high' ? 'کم به زیاد' : sortOrder === 'high_to_low' ? 'زیاد به کم' : 'پیش‌فرض';
+  const nextSortOrder = sortOrder === 'default' ? 'low_to_high' : sortOrder === 'low_to_high' ? 'high_to_low' : 'default';
+  rows.push([{
+    text: `${filterEmoji} فیلتر: ${filterLabel}`,
+    callback_data: `dns_sort:${nextSortOrder}:${page}`
+  }]);
 
   currentEntries.forEach(e => {
     const flag = countryCodeToFlag(e.code);
@@ -3336,21 +3548,21 @@ function buildDnsKeyboard(entries, page = 0) {
     if (page > 0) {
       paginationRow.push({
         text: '⬅️ قبلی',
-        callback_data: `page:${page - 1}`
+        callback_data: `dns_page:${page - 1}:${sortOrder}`
       });
     }
 
     // نمایش شماره صفحه فعلی
     paginationRow.push({
       text: `${page + 1}/${totalPages}`,
-      callback_data: `current_page`
+      callback_data: `dns_current_page`
     });
 
     // دکمه صفحه بعد
     if (page < totalPages - 1) {
       paginationRow.push({
         text: 'بعدی ➡️',
-        callback_data: `page:${page + 1}`
+        callback_data: `dns_page:${page + 1}:${sortOrder}`
       });
     }
 
@@ -3363,6 +3575,11 @@ function buildDnsKeyboard(entries, page = 0) {
 }
 
 // نمایش یک DNS رندوم از کشور انتخابی
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎯 DNS & IPv6 Selection Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function handleDnsSelection(chat, messageId, code, env, userId) {
   const entry = await getDnsEntry(env.DB, code);
 
@@ -3652,7 +3869,12 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
 }
 
 // مدیریت آپدیت‌های تلگرام
-export async function handleUpdate(update, env) {
+export 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔄 Main Update Handler (Telegram Webhook)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleUpdate(update, env) {
   try {
     // پیام‌های عادی
     if (update.message) {
@@ -3913,7 +4135,7 @@ export async function handleUpdate(update, env) {
       }
 
       // نمایش لیست DNS IPv4
-      else if (data === 'show_dns' || data.startsWith('page:')) {
+      else if (data === 'show_dns' || data.startsWith('dns_page:') || data.startsWith('dns_sort:')) {
         const entries = await getCachedDnsList(env.DB);
         if (entries.length === 0) {
           await telegramApi(env, '/editMessageText', {
@@ -3924,17 +4146,31 @@ export async function handleUpdate(update, env) {
             reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
           });
         } else {
-          // تعیین شماره صفحه
-          const page = data.startsWith('page:') ? parseInt(data.split(':')[1]) || 0 : 0;
-          const kb = buildDnsKeyboard(entries, page);
+          // تعیین شماره صفحه و ترتیب
+          let page = 0;
+          let sortOrder = 'default';
+          
+          if (data.startsWith('dns_page:')) {
+            const parts = data.split(':');
+            page = parseInt(parts[1]) || 0;
+            sortOrder = parts[2] || 'default';
+          } else if (data.startsWith('dns_sort:')) {
+            const parts = data.split(':');
+            sortOrder = parts[1] || 'default';
+            page = parseInt(parts[2]) || 0;
+          }
+          
+          const kb = buildDnsKeyboard(entries, page, sortOrder);
           const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
           const totalPages = Math.ceil(entries.length / 12);
           const currentPage = page + 1;
+          
+          const sortText = sortOrder === 'low_to_high' ? '📈 (کم به زیاد)' : sortOrder === 'high_to_low' ? '📉 (زیاد به کم)' : '🔀 (پیش‌فرض)';
 
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
             message_id: messageId,
-            text: `🌍 *لیست کشورهای موجود (IPv4)*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n📄 صفحه: *${currentPage}/${totalPages}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (1-10)\n🔴 ناموجود`,
+            text: `🌍 *لیست کشورهای موجود (IPv4)*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n📄 صفحه: *${currentPage}/${totalPages}*\n🔀 ترتیب: *${sortText}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (1-10)\n🔴 ناموجود`,
             parse_mode: 'Markdown',
             reply_markup: kb
           });
@@ -4010,7 +4246,7 @@ export async function handleUpdate(update, env) {
       }
 
       // کلیک روی شماره صفحه فعلی
-      else if (data === 'current_page' || data === 'wg_current_page' || data === 'current_page_ipv6') {
+      else if (data === 'current_page' || data === 'dns_current_page' || data === 'wg_current_page' || data === 'current_page_ipv6') {
         await telegramApi(env, '/answerCallbackQuery', {
           callback_query_id: cb.id,
           text: 'این صفحه فعلی است',
@@ -4409,10 +4645,18 @@ export async function handleUpdate(update, env) {
   }
 }
 
-// === Fetch Handler ===
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🌐 CLOUDFLARE WORKER FETCH HANDLER
+// ═════════════════════════════════════════════════════════════════════════════
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 🏠 Web Pages Routes
+    // ─────────────────────────────────────────────────────────────────────────────
 
     // صفحه اصلی
     if (url.pathname === '/' && req.method === 'GET') {
@@ -4420,6 +4664,11 @@ export default {
       const userCount = await countUsers(env.DB);
       return html(renderMainPage(entries, userCount));
     }
+
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 🔌 API Endpoints
+    // ─────────────────────────────────────────────────────────────────────────────
 
     // API: لیست DNS‌ها
     if (url.pathname === '/api/dns' && req.method === 'GET') {
@@ -4846,6 +5095,60 @@ export default {
       }
 
       return html('<script>window.location.href="/";</script>');
+    }
+
+    // API: ویرایش کامل DNS (نام و کد کشور)
+    if (url.pathname === '/api/admin/edit-dns' && req.method === 'POST') {
+      try {
+        const form = await req.formData();
+        const oldCode = (form.get('old_code') || '').toUpperCase().trim();
+        const newCode = (form.get('new_code') || '').toUpperCase().trim();
+        const newName = (form.get('country') || '').trim();
+
+        if (!oldCode || !newCode || !newName || oldCode.length !== 2 || newCode.length !== 2) {
+          return html('<script>alert("❌ اطلاعات نامعتبر است"); history.back();</script>');
+        }
+
+        // دریافت اطلاعات فعلی
+        const existing = await getDnsEntry(env.DB, oldCode);
+        if (!existing) {
+          return html('<script>alert("❌ کشور یافت نشد"); history.back();</script>');
+        }
+
+        // اگر کد تغییر کرده، بررسی تکراری بودن کد جدید
+        if (oldCode !== newCode) {
+          const duplicate = await getDnsEntry(env.DB, newCode);
+          if (duplicate) {
+            return html('<script>alert("⚠️ کد کشور جدید قبلاً استفاده شده است"); history.back();</script>');
+          }
+          
+          // حذف کشور قدیم و ایجاد با کد جدید
+          await deleteDnsEntry(env.DB, oldCode);
+          existing.code = newCode;
+        }
+
+        // بروزرسانی نام
+        existing.country = newName;
+        await putDnsEntry(env.DB, existing);
+        invalidateDnsCache();
+
+        return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="2;url=/">
+<title>موفقیت</title>
+<body style="font-family: sans-serif; padding:20px; text-align:center;">
+  <h2>✅ کشور با موفقیت ویرایش شد</h2>
+  <p>نام: ${newName}</p>
+  <p>کد: ${newCode}</p>
+  <p><a href="/">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',2000)</script>
+</body>
+</html>`);
+      } catch (e) {
+        console.error('خطا در ویرایش DNS:', e);
+        return html(`<script>alert("❌ خطا: ${e.message}"); history.back();</script>`);
+      }
     }
 
     // API: حذف DNS
@@ -5325,6 +5628,11 @@ export default {
 </html>`);
     }
 
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 📨 Telegram Webhook
+    // ─────────────────────────────────────────────────────────────────────────────
+
     // Webhook تلگرام
     if (url.pathname === '/webhook' && req.method === 'POST') {
       try {
@@ -5336,6 +5644,11 @@ export default {
         return json({ ok: false, error: e.message }, 500);
       }
     }
+
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ⚙️ Webhook Management
+    // ─────────────────────────────────────────────────────────────────────────────
 
     // تنظیم webhook
     if (url.pathname === '/api/set-webhook' && req.method === 'GET') {
@@ -5364,6 +5677,11 @@ export default {
       const result = await res.json();
       return json(result);
     }
+
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 🛠️ Admin Utilities
+    // ─────────────────────────────────────────────────────────────────────────────
 
     // تبدیل تمام اسم کشورها به فارسی
     if (url.pathname === '/api/admin/fix-country-names' && req.method === 'GET') {
@@ -5437,7 +5755,11 @@ export default {
       }
     }
 
-    // 404
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ❌ 404 Handler
+    // ─────────────────────────────────────────────────────────────────────────────
+
     return html('<h1>404 - صفحه یافت نشد</h1>');
   }
 };
