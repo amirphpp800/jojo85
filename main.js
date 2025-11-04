@@ -596,7 +596,7 @@ async function detectCountryFromIP(ip, kv) {
     
     // استفاده از ip-api.com که سریع‌تر و قابل اعتمادتر است
     // توجه: این API محدودیت 45 درخواست در دقیقه دارد
-    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,countryCode,country`, {
+    const res = await fetch(`https://ip-api.com/json/${ip}?fields=status,countryCode,country`, {
       signal: controller.signal
     });
     
