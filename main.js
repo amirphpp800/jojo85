@@ -1,3 +1,12 @@
+// ═════════════════════════════════════════════════════════════════════════════
+// 📦 IMPORTS
+// ═════════════════════════════════════════════════════════════════════════════
+
+import { 
+  handleGroupCommands, 
+  handleMyChatMember,
+  getBotUsername
+} from './group.js';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 🔧 CONFIGURATION & CONSTANTS
@@ -3512,7 +3521,7 @@ function invalidateDnsCache() {
 // ⌨️ Telegram Keyboard Builders
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildMainKeyboard(userId) {
+function buildMainKeyboard(userId, botUsername = '') {
   const rows = [];
   // سطر اول: وایرگارد و دی ان اس کنار هم
   rows.push([
@@ -3524,7 +3533,13 @@ function buildMainKeyboard(userId) {
     { text: '💬 ارسال بازخورد', callback_data: 'send_feedback' },
     { text: '👤 حساب کاربری', callback_data: 'account' }
   ]);
-  // سطر سوم: ادمین (در صورت نیاز)
+  // سطر سوم: افزودن ربات به گروه
+  if (botUsername) {
+    rows.push([
+      { text: '➕ افزودن ربات به گروه', url: `https://t.me/${botUsername}?startgroup=true` }
+    ]);
+  }
+  // سطر چهارم: ادمین (در صورت نیاز)
   if (Number(userId) === Number(ADMIN_ID)) {
     rows.push([
       { text: '📢 پیام همگانی', callback_data: 'broadcast' },
@@ -4255,19 +4270,45 @@ export async function handleUpdate(update, env) {
         }
       }
 
-      if (text.startsWith('/start')) {
-        const kb = buildMainKeyboard(from.id);
-        await telegramApi(env, '/sendMessage', {
-          chat_id: chat,
-          text: '🌍 *به ربات دسترسی جهانی خوش آمدید*\n\n🛡️ دریافت سرورهای DNS و WireGuard از لوکیشن‌های مختلف جهان\n\n🔻 لطفاً سرویس موردنظر خود را انتخاب کنید:',
-          parse_mode: 'Markdown',
-          reply_markup: kb
-        });
-      } else {
-        await telegramApi(env, '/sendMessage', {
-          chat_id: chat,
-          text: '❌ دستور نامعتبر است.\n\nلطفاً /start را ارسال کنید.'
-        });
+      // دستورات گروهی - استفاده از ماژول group.js
+      const groupHandled = await handleGroupCommands({
+        msg,
+        env,
+        chat,
+        text,
+        from,
+        telegramApi,
+        telegramUpload,
+        listDnsEntries,
+        randItem,
+        randInt,
+        generateWireGuardKeys,
+        generateWgFilename,
+        buildWgConf,
+        countryCodeToFlag,
+        WG_MTUS,
+        WG_FIXED_DNS
+      });
+      
+      if (groupHandled) return;
+
+      // دستورات خصوصی (فقط در چت خصوصی)
+      if (msg.chat.type === 'private') {
+        if (text.startsWith('/start')) {
+          const botUsername = await getBotUsername(env, telegramApi);
+          const kb = buildMainKeyboard(from.id, botUsername);
+          await telegramApi(env, '/sendMessage', {
+            chat_id: chat,
+            text: '🌍 *به ربات دسترسی جهانی خوش آمدید*\n\n🛡️ دریافت سرورهای DNS و WireGuard از لوکیشن‌های مختلف جهان\n\n🔻 لطفاً سرویس موردنظر خود را انتخاب کنید:',
+            parse_mode: 'Markdown',
+            reply_markup: kb
+          });
+        } else {
+          await telegramApi(env, '/sendMessage', {
+            chat_id: chat,
+            text: '❌ دستور نامعتبر است.\n\nلطفاً /start را ارسال کنید.'
+          });
+        }
       }
     }
 
@@ -4287,7 +4328,8 @@ export async function handleUpdate(update, env) {
 
       // نمایش منوی اصلی
       if (data === 'back_main') {
-        const kb = buildMainKeyboard(from.id);
+        const botUsername = await getBotUsername(env, telegramApi);
+        const kb = buildMainKeyboard(from.id, botUsername);
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
@@ -4875,6 +4917,12 @@ export async function handleUpdate(update, env) {
         }
       }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 👥 my_chat_member - تشخیص اضافه شدن ربات به گروه (استفاده از ماژول group.js)
+    // ─────────────────────────────────────────────────────────────────────────────
+    await handleMyChatMember(update, env, telegramApi);
+
   } catch (e) {
     console.error('خطا در handleUpdate:', e);
   }
