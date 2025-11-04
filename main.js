@@ -1355,31 +1355,33 @@ function showTab(tabName) {
   document.getElementById(\`\${tabName}-form\`).classList.add('active');
 }
 
-async function loadCountryData(code) {
-  if (!code) {
-    document.getElementById('current-addresses').innerHTML = 'انتخاب کشور را برای مشاهده آدرس‌های فعلی انجام دهید';
-    document.getElementById('edit-stock').value = '0';
+async function editCountry(code, currentName) {
+  const newName = prompt('نام جدید کشور را وارد کنید:', currentName);
+  
+  if (!newName || newName === currentName) {
     return;
   }
+  
   try {
-    const response = await fetch('/api/dns');
-    const entries = await response.json();
-    const country = entries.find(e => e.code.toUpperCase() === code.toUpperCase());
+    const formData = new FormData();
+    formData.append('action', 'edit');
+    formData.append('existing_code', code);
+    formData.append('country', newName);
+    formData.append('addresses', '');
     
-    if (country) {
-      document.getElementById('edit-stock').value = country.stock || 0;
-      
-      const addressesDiv = document.getElementById('current-addresses');
-      if (country.addresses && country.addresses.length > 0) {
-        addressesDiv.innerHTML = country.addresses.map(addr => 
-          \`<code>\${addr}</code>\`
-        ).join('');
-      } else {
-        addressesDiv.innerHTML = '<em style="color: #64748b;">هیچ آدرسی برای این کشور ثبت نشده</em>';
-      }
+    const response = await fetch('/api/admin/add-dns', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (response.ok) {
+      Toast.success('نام کشور با موفقیت تغییر کرد');
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      Toast.error('خطا در تغییر نام کشور');
     }
   } catch (error) {
-    console.error('خطا در بارگذاری اطلاعات:', error);
+    Toast.error('خطا: ' + error.message);
   }
 }
 
@@ -1400,36 +1402,6 @@ async function fixCountryNames() {
     }
   } catch (error) {
     Toast.error('خطا در ارتباط با سرور: ' + error.message);
-  }
-}
-
-async function editCountry(code, currentName) {
-  const newName = prompt('نام جدید کشور را وارد کنید:', currentName);
-  
-  if (!newName || newName === currentName) {
-    return;
-  }
-  
-  try {
-    const formData = new FormData();
-    formData.append('action', 'edit');
-    formData.append('existing_code', code);
-    formData.append('country', newName);
-    formData.append('addresses', ''); // آدرس جدیدی اضافه نمی‌شود
-    
-    const response = await fetch('/api/admin/add-dns', {
-      method: 'POST',
-      body: formData
-    });
-    
-    if (response.ok) {
-      Toast.success('نام کشور با موفقیت تغییر کرد');
-      setTimeout(() => window.location.reload(), 1500);
-    } else {
-      Toast.error('خطا در تغییر نام کشور');
-    }
-  } catch (error) {
-    Toast.error('خطا: ' + error.message);
   }
 }
 
@@ -1477,12 +1449,10 @@ async function downloadJSON() {
       return;
     }
     
-    // ساخت فایل JSON با فرمت زیبا
     const jsonString = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     
-    // ساخت لینک دانلود
     const a = document.createElement('a');
     a.href = url;
     const date = new Date().toISOString().split('T')[0];
@@ -1492,9 +1462,37 @@ async function downloadJSON() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    Toast.success('فایل JSON با موفقیت دانلود شد\n📊 تعداد کشورها: ' + data.length);
+    Toast.success('فایل JSON با موفقیت دانلود شد\\n📊 تعداد کشورها: ' + data.length);
   } catch (error) {
     Toast.error('خطا در دانلود فایل: ' + error.message);
+  }
+}
+
+async function loadCountryData(code) {
+  if (!code) {
+    document.getElementById('current-addresses').innerHTML = 'انتخاب کشور را برای مشاهده آدرس‌های فعلی انجام دهید';
+    document.getElementById('edit-stock').value = '0';
+    return;
+  }
+  try {
+    const response = await fetch('/api/dns');
+    const entries = await response.json();
+    const country = entries.find(e => e.code.toUpperCase() === code.toUpperCase());
+    
+    if (country) {
+      document.getElementById('edit-stock').value = country.stock || 0;
+      
+      const addressesDiv = document.getElementById('current-addresses');
+      if (country.addresses && country.addresses.length > 0) {
+        addressesDiv.innerHTML = country.addresses.map(addr => 
+          \`<code>\${addr}</code>\`
+        ).join('');
+      } else {
+        addressesDiv.innerHTML = '<em style="color: #64748b;">هیچ آدرسی برای این کشور ثبت نشده</em>';
+      }
+    }
+  } catch (error) {
+    console.error('خطا در بارگذاری اطلاعات:', error);
   }
 }
 </script>
