@@ -33,11 +33,11 @@ function getTimeUntilReset() {
   const now = new Date();
   const tomorrow = new Date(now);
   tomorrow.setUTCHours(24, 0, 0, 0);
-  
+
   const diff = tomorrow - now;
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  
+
   return `${hours} ساعت و ${minutes} دقیقه`;
 }
 
@@ -112,14 +112,14 @@ async function telegramUpload(env, method, formData) {
 
 const WG_MTUS = [1280, 1320, 1360, 1380, 1400, 1420, 1440, 1480, 1500];
 const WG_FIXED_DNS = [
-  '1.1.1.1','1.0.0.1','8.8.8.8','8.8.4.4','9.9.9.9','10.202.10.10','78.157.42.100','208.67.222.222','208.67.220.220','185.55.226.26','185.55.225.25','185.51.200.2'
+  '1.1.1.1', '1.0.0.1', '8.8.8.8', '8.8.4.4', '9.9.9.9', '10.202.10.10', '78.157.42.100', '208.67.222.222', '208.67.220.220', '185.55.226.26', '185.55.225.25', '185.51.200.2'
 ];
 const OPERATORS = {
   irancell: { title: 'ایرانسل', addresses: ['2.144.0.0/16'] },
   mci: { title: 'همراه اول', addresses: ['5.52.0.0/16'] },
-  tci: { title: 'مخابرات', addresses: ['2.176.0.0/15','2.190.0.0/15'] },
-  rightel: { title: 'رایتل', addresses: ['37.137.128.0/17','95.162.0.0/17'] },
-  shatel: { title: 'شاتل موبایل', addresses: ['94.182.0.0/16','37.148.0.0/18'] }
+  tci: { title: 'مخابرات', addresses: ['2.176.0.0/15', '2.190.0.0/15'] },
+  rightel: { title: 'رایتل', addresses: ['37.137.128.0/17', '95.162.0.0/17'] },
+  shatel: { title: 'شاتل موبایل', addresses: ['94.182.0.0/16', '37.148.0.0/18'] }
 };
 
 function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
@@ -186,7 +186,7 @@ async function generateWireGuardKeys() {
   // Generate a WireGuard-compatible private key (32 random bytes, base64)
   const rawPriv = new Uint8Array(32);
   crypto.getRandomValues(rawPriv);
-  
+
   // Apply WireGuard key clamping:
   // - Clear the 3 least significant bits of the first byte
   // - Clear the most significant bit of the last byte
@@ -194,7 +194,7 @@ async function generateWireGuardKeys() {
   rawPriv[0] &= 248;  // 11111000 - clear bottom 3 bits
   rawPriv[31] &= 127; // 01111111 - clear top bit
   rawPriv[31] |= 64;  // 01000000 - set second top bit
-  
+
   return { privateKey: b64(rawPriv), publicKey: null };
 }
 
@@ -223,8 +223,8 @@ MTU = ${mtu}
 function buildWireguardOperatorKb() {
   const rows = [];
   const ops = [
-    ['irancell','mci'],
-    ['tci','rightel'],
+    ['irancell', 'mci'],
+    ['tci', 'rightel'],
     ['shatel']
   ];
   ops.forEach(pair => {
@@ -249,7 +249,7 @@ function buildWireguardDnsKb() {
   const rows = [];
   for (let i = 0; i < WG_FIXED_DNS.length; i += 2) {
     const a = WG_FIXED_DNS[i];
-    const b = WG_FIXED_DNS[i+1];
+    const b = WG_FIXED_DNS[i + 1];
     const row = [{ text: a, callback_data: `wg_dns_fixed:${a}` }];
     if (b) row.push({ text: b, callback_data: `wg_dns_fixed:${b}` });
     rows.push(row);
@@ -273,7 +273,7 @@ async function clearWgState(kv, userId) { await kv.delete(`wg_state:${userId}`);
 
 function buildWireguardCountryKb(entries, page = 0, sortOrder = 'default') {
   const ITEMS_PER_PAGE = 12;
-  
+
   // ترتیب‌دهی بر اساس موجودی
   let sortedEntries = [...entries];
   if (sortOrder === 'low_to_high') {
@@ -281,14 +281,14 @@ function buildWireguardCountryKb(entries, page = 0, sortOrder = 'default') {
   } else if (sortOrder === 'high_to_low') {
     sortedEntries.sort((a, b) => (b.stock ?? 0) - (a.stock ?? 0));
   }
-  
+
   const totalPages = Math.ceil(sortedEntries.length / ITEMS_PER_PAGE);
   const startIndex = page * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const currentEntries = sortedEntries.slice(startIndex, endIndex);
-  
+
   const rows = [];
-  
+
   currentEntries.forEach(e => {
     const flag = countryCodeToFlag(e.code);
     const stock = e.stock ?? 0;
@@ -427,7 +427,7 @@ async function listDnsEntries(kv) {
     if (raw) {
       try {
         return JSON.parse(raw);
-      } catch {}
+      } catch { }
     }
     return null;
   });
@@ -484,7 +484,7 @@ async function listIpv6Entries(kv) {
     if (raw) {
       try {
         entries.push(JSON.parse(raw));
-      } catch {}
+      } catch { }
     }
   }
   entries.sort((a, b) => (a.country || '').localeCompare(b.country || ''));
@@ -575,28 +575,28 @@ async function detectCountryFromIP(ip, kv) {
   if (cached) {
     try {
       return JSON.parse(cached);
-    } catch {}
+    } catch { }
   }
-  
+
   try {
     // timeout 4 ثانیه برای سرعت بیشتر
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
-    
+
     // استفاده از ip-api.com که سریع‌تر و قابل اعتمادتر است
     // توجه: این API محدودیت 45 درخواست در دقیقه دارد
     const res = await fetch(`https://ip-api.com/json/${ip}?fields=status,countryCode,country`, {
       signal: controller.signal
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
-    
+
     const data = await res.json();
-    
+
     if (data && data.status === 'success' && data.countryCode) {
       const result = {
         code: data.countryCode.toUpperCase(),
@@ -606,7 +606,7 @@ async function detectCountryFromIP(ip, kv) {
       await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: 2592000 });
       return result;
     }
-    
+
     // ذخیره null در cache با TTL کوتاه‌تر (1 روز)
     await kv.put(cacheKey, JSON.stringify(null), { expirationTtl: 86400 });
     return null;
@@ -634,80 +634,80 @@ function ensurePersianCountryName(countryName, countryCode) {
 // نقشه نام کشورها به فارسی
 function getCountryNameFromCode(code) {
   const map = {
-// آمریکا و کانادا
-'US': 'ایالات متحده آمریکا', 'CA': 'کانادا', 'MX': 'مکزیک',
+    // آمریکا و کانادا
+    'US': 'ایالات متحده آمریکا', 'CA': 'کانادا', 'MX': 'مکزیک',
 
-// اروپای غربی
-'GB': 'بریتانیا', 'DE': 'آلمان', 'FR': 'فرانسه', 'NL': 'هلند', 'BE': 'بلژیک',
-'CH': 'سوئیس', 'AT': 'اتریش', 'IE': 'ایرلند', 'LU': 'لوکزامبورگ',
-'LI': 'لیختن‌اشتاین', 'MC': 'موناکو',
+    // اروپای غربی
+    'GB': 'بریتانیا', 'DE': 'آلمان', 'FR': 'فرانسه', 'NL': 'هلند', 'BE': 'بلژیک',
+    'CH': 'سوئیس', 'AT': 'اتریش', 'IE': 'ایرلند', 'LU': 'لوکزامبورگ',
+    'LI': 'لیختن‌اشتاین', 'MC': 'موناکو',
 
-// اروپای جنوبی
-'IT': 'ایتالیا', 'ES': 'اسپانیا', 'PT': 'پرتغال', 'GR': 'یونان', 'MT': 'مالت',
-'SM': 'سان مارینو', 'VA': 'واتیکان', 'AD': 'آندورا',
+    // اروپای جنوبی
+    'IT': 'ایتالیا', 'ES': 'اسپانیا', 'PT': 'پرتغال', 'GR': 'یونان', 'MT': 'مالت',
+    'SM': 'سان مارینو', 'VA': 'واتیکان', 'AD': 'آندورا',
 
-// اروپای شمالی
-'SE': 'سوئد', 'NO': 'نروژ', 'DK': 'دانمارک', 'FI': 'فنلاند', 'IS': 'ایسلند',
-'EE': 'استونی', 'LV': 'لتونی', 'LT': 'لیتوانی',
+    // اروپای شمالی
+    'SE': 'سوئد', 'NO': 'نروژ', 'DK': 'دانمارک', 'FI': 'فنلاند', 'IS': 'ایسلند',
+    'EE': 'استونی', 'LV': 'لتونی', 'LT': 'لیتوانی',
 
-// اروپای شرقی
-'PL': 'لهستان', 'CZ': 'جمهوری چک', 'SK': 'اسلواکی', 'HU': 'مجارستان', 'RO': 'رومانی',
-'BG': 'بلغارستان', 'UA': 'اوکراین', 'BY': 'بلاروس', 'MD': 'مولداوی',
-'RS': 'صربستان', 'HR': 'کرواسی', 'SI': 'اسلوونی', 'BA': 'بوسنی و هرزگوین',
-'MK': 'مقدونیه شمالی', 'AL': 'آلبانی', 'ME': 'مونته‌نگرو', 'XK': 'کوزوو',
+    // اروپای شرقی
+    'PL': 'لهستان', 'CZ': 'جمهوری چک', 'SK': 'اسلواکی', 'HU': 'مجارستان', 'RO': 'رومانی',
+    'BG': 'بلغارستان', 'UA': 'اوکراین', 'BY': 'بلاروس', 'MD': 'مولداوی',
+    'RS': 'صربستان', 'HR': 'کرواسی', 'SI': 'اسلوونی', 'BA': 'بوسنی و هرزگوین',
+    'MK': 'مقدونیه شمالی', 'AL': 'آلبانی', 'ME': 'مونته‌نگرو', 'XK': 'کوزوو',
 
-// روسیه و همسایگان
-'RU': 'روسیه', 'KZ': 'قزاقستان', 'UZ': 'ازبکستان', 'TM': 'ترکمنستان',
-'KG': 'قرقیزستان', 'TJ': 'تاجیکستان', 'AM': 'ارمنستان', 'AZ': 'آذربایجان', 'GE': 'گرجستان',
+    // روسیه و همسایگان
+    'RU': 'روسیه', 'KZ': 'قزاقستان', 'UZ': 'ازبکستان', 'TM': 'ترکمنستان',
+    'KG': 'قرقیزستان', 'TJ': 'تاجیکستان', 'AM': 'ارمنستان', 'AZ': 'آذربایجان', 'GE': 'گرجستان',
 
-// خاورمیانه
-'IR': 'ایران', 'TR': 'ترکیه', 'AE': 'امارات متحده عربی', 'SA': 'عربستان سعودی', 'IL': 'اسرائیل',
-'IQ': 'عراق', 'SY': 'سوریه', 'JO': 'اردن', 'LB': 'لبنان', 'PS': 'فلسطین',
-'KW': 'کویت', 'QA': 'قطر', 'BH': 'بحرین', 'OM': 'عمان', 'YE': 'یمن', 'CY': 'قبرس',
+    // خاورمیانه
+    'IR': 'ایران', 'TR': 'ترکیه', 'AE': 'امارات متحده عربی', 'SA': 'عربستان سعودی', 'IL': 'اسرائیل',
+    'IQ': 'عراق', 'SY': 'سوریه', 'JO': 'اردن', 'LB': 'لبنان', 'PS': 'فلسطین',
+    'KW': 'کویت', 'QA': 'قطر', 'BH': 'بحرین', 'OM': 'عمان', 'YE': 'یمن', 'CY': 'قبرس',
 
-// آفریقا
-'DZ': 'الجزایر', 'AO': 'آنگولا', 'BJ': 'بنین', 'BW': 'بوتسوانا', 'BF': 'بورکینافاسو',
-'BI': 'بوروندی', 'CV': 'کیپ ورد', 'CM': 'کامرون', 'CF': 'جمهوری آفریقای مرکزی',
-'TD': 'چاد', 'KM': 'کومور', 'CG': 'کنگو', 'CD': 'جمهوری دموکراتیک کنگو',
-'CI': 'ساحل عاج', 'DJ': 'جیبوتی', 'EG': 'مصر', 'GQ': 'گینه استوایی', 'ER': 'اریتره',
-'SZ': 'اسواتینی', 'ET': 'اتیوپی', 'GA': 'گابن', 'GM': 'گامبیا', 'GH': 'غنا',
-'GN': 'گینه', 'GW': 'گینه بیسائو', 'KE': 'کنیا', 'LS': 'لسوتو', 'LR': 'لیبریا',
-'LY': 'لیبی', 'MG': 'ماداگاسکار', 'MW': 'مالاوی', 'ML': 'مالی', 'MR': 'موریتانی',
-'MU': 'موریس', 'MA': 'مراکش', 'MZ': 'موزامبیک', 'NA': 'نامیبیا', 'NE': 'نیجر',
-'NG': 'نیجریه', 'RW': 'رواندا', 'ST': 'سائوتومه و پرنسیپ', 'SN': 'سنگال',
-'SC': 'سیشل', 'SL': 'سیرالئون', 'SO': 'سومالی', 'ZA': 'آفریقای جنوبی',
-'SS': 'سودان جنوبی', 'SD': 'سودان', 'TZ': 'تانزانیا', 'TG': 'توگو',
-'TN': 'تونس', 'UG': 'اوگاندا', 'ZM': 'زامبیا', 'ZW': 'زیمبابوه',
+    // آفریقا
+    'DZ': 'الجزایر', 'AO': 'آنگولا', 'BJ': 'بنین', 'BW': 'بوتسوانا', 'BF': 'بورکینافاسو',
+    'BI': 'بوروندی', 'CV': 'کیپ ورد', 'CM': 'کامرون', 'CF': 'جمهوری آفریقای مرکزی',
+    'TD': 'چاد', 'KM': 'کومور', 'CG': 'کنگو', 'CD': 'جمهوری دموکراتیک کنگو',
+    'CI': 'ساحل عاج', 'DJ': 'جیبوتی', 'EG': 'مصر', 'GQ': 'گینه استوایی', 'ER': 'اریتره',
+    'SZ': 'اسواتینی', 'ET': 'اتیوپی', 'GA': 'گابن', 'GM': 'گامبیا', 'GH': 'غنا',
+    'GN': 'گینه', 'GW': 'گینه بیسائو', 'KE': 'کنیا', 'LS': 'لسوتو', 'LR': 'لیبریا',
+    'LY': 'لیبی', 'MG': 'ماداگاسکار', 'MW': 'مالاوی', 'ML': 'مالی', 'MR': 'موریتانی',
+    'MU': 'موریس', 'MA': 'مراکش', 'MZ': 'موزامبیک', 'NA': 'نامیبیا', 'NE': 'نیجر',
+    'NG': 'نیجریه', 'RW': 'رواندا', 'ST': 'سائوتومه و پرنسیپ', 'SN': 'سنگال',
+    'SC': 'سیشل', 'SL': 'سیرالئون', 'SO': 'سومالی', 'ZA': 'آفریقای جنوبی',
+    'SS': 'سودان جنوبی', 'SD': 'سودان', 'TZ': 'تانزانیا', 'TG': 'توگو',
+    'TN': 'تونس', 'UG': 'اوگاندا', 'ZM': 'زامبیا', 'ZW': 'زیمبابوه',
 
-// آسیای شرقی
-'CN': 'چین', 'JP': 'ژاپن', 'KR': 'کره جنوبی', 'KP': 'کره شمالی', 'TW': 'تایوان',
-'HK': 'هنگ‌کنگ', 'MO': 'ماکائو', 'MN': 'مغولستان',
+    // آسیای شرقی
+    'CN': 'چین', 'JP': 'ژاپن', 'KR': 'کره جنوبی', 'KP': 'کره شمالی', 'TW': 'تایوان',
+    'HK': 'هنگ‌کنگ', 'MO': 'ماکائو', 'MN': 'مغولستان',
 
-// جنوب شرقی آسیا
-'TH': 'تایلند', 'VN': 'ویتنام', 'SG': 'سنگاپور', 'MY': 'مالزی', 'ID': 'اندونزی',
-'PH': 'فیلیپین', 'MM': 'میانمار', 'KH': 'کامبوج', 'LA': 'لائوس', 'BN': 'برونئی',
-'TL': 'تیمور شرقی',
+    // جنوب شرقی آسیا
+    'TH': 'تایلند', 'VN': 'ویتنام', 'SG': 'سنگاپور', 'MY': 'مالزی', 'ID': 'اندونزی',
+    'PH': 'فیلیپین', 'MM': 'میانمار', 'KH': 'کامبوج', 'LA': 'لائوس', 'BN': 'برونئی',
+    'TL': 'تیمور شرقی',
 
-// جنوب آسیا
-'IN': 'هند', 'PK': 'پاکستان', 'BD': 'بنگلادش', 'LK': 'سری‌لانکا', 'NP': 'نپال',
-'BT': 'بوتان', 'MV': 'مالدیو', 'AF': 'افغانستان',
+    // جنوب آسیا
+    'IN': 'هند', 'PK': 'پاکستان', 'BD': 'بنگلادش', 'LK': 'سری‌لانکا', 'NP': 'نپال',
+    'BT': 'بوتان', 'MV': 'مالدیو', 'AF': 'افغانستان',
 
-// اقیانوسیه
-'AU': 'استرالیا', 'NZ': 'نیوزیلند', 'FJ': 'فیجی', 'PG': 'پاپوآ گینه نو',
-'SB': 'جزایر سلیمان', 'VU': 'وانواتو', 'WS': 'ساموآ', 'TO': 'تونگا', 'KI': 'کیریباتی',
-'TV': 'تووالو', 'FM': 'میکرونزی', 'MH': 'جزایر مارشال', 'NR': 'نائورو', 'PW': 'پالائو',
+    // اقیانوسیه
+    'AU': 'استرالیا', 'NZ': 'نیوزیلند', 'FJ': 'فیجی', 'PG': 'پاپوآ گینه نو',
+    'SB': 'جزایر سلیمان', 'VU': 'وانواتو', 'WS': 'ساموآ', 'TO': 'تونگا', 'KI': 'کیریباتی',
+    'TV': 'تووالو', 'FM': 'میکرونزی', 'MH': 'جزایر مارشال', 'NR': 'نائورو', 'PW': 'پالائو',
 
-// آمریکای جنوبی
-'AR': 'آرژانتین', 'BO': 'بولیوی', 'BR': 'برزیل', 'CL': 'شیلی', 'CO': 'کلمبیا',
-'EC': 'اکوادور', 'GY': 'گویان', 'PY': 'پاراگوئه', 'PE': 'پرو', 'SR': 'سورینام',
-'UY': 'اروگوئه', 'VE': 'ونزوئلا',
+    // آمریکای جنوبی
+    'AR': 'آرژانتین', 'BO': 'بولیوی', 'BR': 'برزیل', 'CL': 'شیلی', 'CO': 'کلمبیا',
+    'EC': 'اکوادور', 'GY': 'گویان', 'PY': 'پاراگوئه', 'PE': 'پرو', 'SR': 'سورینام',
+    'UY': 'اروگوئه', 'VE': 'ونزوئلا',
 
-// آمریکای مرکزی و کارائیب
-'AG': 'آنتیگوا و باربودا', 'BS': 'باهاما', 'BB': 'باربادوس', 'BZ': 'بلیز',
-'CR': 'کاستاریکا', 'CU': 'کوبا', 'DM': 'دومینیکا', 'DO': 'جمهوری دومینیکن',
-'GD': 'گرانادا', 'GT': 'گواتمالا', 'HT': 'هائیتی', 'HN': 'هندوراس', 'JM': 'جامائیکا',
-'KN': 'سنت کیتس و نویس', 'LC': 'سنت لوسیا', 'VC': 'سنت وینسنت و گرنادین‌ها',
-'NI': 'نیکاراگوئه', 'PA': 'پاناما', 'SV': 'السالوادور', 'TT': 'ترینیداد و توباگو'
+    // آمریکای مرکزی و کارائیب
+    'AG': 'آنتیگوا و باربودا', 'BS': 'باهاما', 'BB': 'باربادوس', 'BZ': 'بلیز',
+    'CR': 'کاستاریکا', 'CU': 'کوبا', 'DM': 'دومینیکا', 'DO': 'جمهوری دومینیکن',
+    'GD': 'گرانادا', 'GT': 'گواتمالا', 'HT': 'هائیتی', 'HN': 'هندوراس', 'JM': 'جامائیکا',
+    'KN': 'سنت کیتس و نویس', 'LC': 'سنت لوسیا', 'VC': 'سنت وینسنت و گرنادین‌ها',
+    'NI': 'نیکاراگوئه', 'PA': 'پاناما', 'SV': 'السالوادور', 'TT': 'ترینیداد و توباگو'
 
   };
   return map[code.toUpperCase()] || code.toUpperCase();
@@ -736,12 +736,12 @@ async function getUserStats(kv) {
   try {
     const usersRes = await kv.list({ prefix: 'users:' });
     const totalUsers = usersRes.keys.length;
-    
+
     // محاسبه بیشترین دریافت کننده DNS
     const historyRes = await kv.list({ prefix: 'history:dns:' });
     let topUser = null;
     let maxCount = 0;
-    
+
     for (const key of historyRes.keys) {
       const userId = key.name.replace('history:dns:', '');
       const raw = await kv.get(key.name);
@@ -762,10 +762,10 @@ async function getUserStats(kv) {
               };
             }
           }
-        } catch {}
+        } catch { }
       }
     }
-    
+
     return {
       totalUsers,
       topUser
@@ -1043,16 +1043,14 @@ const Toast = {
     };
     
     const toast = document.createElement('div');
-    toast.className = \`toast \${type}\`;
+    toast.className = 'toast ' + type;
     
-    toast.innerHTML = \`
-      <div class="toast-icon">\${icons[type] || icons.info}</div>
-      <div class="toast-content">
-        <div class="toast-title">\${titles[type] || titles.info}</div>
-        <div class="toast-message">\${message}</div>
-      </div>
-      <button class="toast-close">×</button>
-    \`;
+    toast.innerHTML = '<div class="toast-icon">' + (icons[type] || icons.info) + '</div>' +
+      '<div class="toast-content">' +
+        '<div class="toast-title">' + (titles[type] || titles.info) + '</div>' +
+        '<div class="toast-message">' + message + '</div>' +
+      '</div>' +
+      '<button class="toast-close">×</button>';
     
     this.container.appendChild(toast);
     
@@ -1435,8 +1433,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function showTab(tabName) {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-  document.querySelector(\`[onclick="showTab('\${tabName}')"]\`).classList.add('active');
-  document.getElementById(\`\${tabName}-form\`).classList.add('active');
+  document.querySelector('[onclick="showTab(\'' + tabName + '\')"]').classList.add('active');
+  document.getElementById(tabName + '-form').classList.add('active');
 }
 
 async function editCountry(code, currentName) {
@@ -1449,27 +1447,28 @@ async function editCountry(code, currentName) {
   const textColor = isDark ? '#f3f4f6' : '#1f2937';
   const labelColor = isDark ? '#9ca3af' : '#6b7280';
   const borderColor = isDark ? '#374151' : '#e5e7eb';
+  const inputBg = isDark ? '#374151' : 'white';
+  const btnCancelBg = isDark ? '#374151' : '#e5e7eb';
+  const btnCancelColor = isDark ? '#9ca3af' : '#6b7280';
   
-  modal.innerHTML = \`
-    <div style="background:${bgColor};border-radius:16px;padding:30px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-      <h2 style="margin:0 0 20px;color:${textColor};font-size:24px;">✏️ ویرایش کشور</h2>
-      <form id="edit-form">
-        <div style="margin-bottom:20px;">
-          <label style="display:block;margin-bottom:8px;color:${labelColor};font-weight:600;">🌍 نام کشور (فارسی)</label>
-          <input type="text" id="edit-name" value="\${currentName}" required style="width:100%;padding:12px;border:2px solid ${borderColor};border-radius:8px;font-size:16px;font-family:inherit;background:${isDark ? '#374151' : 'white'};color:${textColor};">
-        </div>
-        <div style="margin-bottom:20px;">
-          <label style="display:block;margin-bottom:8px;color:${labelColor};font-weight:600;">🔤 کد کشور (2 حرفی)</label>
-          <input type="text" id="edit-code" value="\${code}" maxlength="2" required style="width:100%;padding:12px;border:2px solid ${borderColor};border-radius:8px;font-size:16px;text-transform:uppercase;font-family:monospace;background:${isDark ? '#374151' : 'white'};color:${textColor};">
-          <small style="color:${labelColor};display:block;margin-top:5px;">⚠️ تغییر کد کشور ممکن است بر داده‌های مرتبط تأثیر بگذارد</small>
-        </div>
-        <div style="display:flex;gap:10px;">
-          <button type="submit" style="flex:1;padding:12px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">💾 ذخیره</button>
-          <button type="button" id="cancel-btn" style="flex:1;padding:12px;background:${isDark ? '#374151' : '#e5e7eb'};color:${isDark ? '#9ca3af' : '#6b7280'};border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">❌ لغو</button>
-        </div>
-      </form>
-    </div>
-  \`;
+  modal.innerHTML = '<div style="background:' + bgColor + ';border-radius:16px;padding:30px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
+    '<h2 style="margin:0 0 20px;color:' + textColor + ';font-size:24px;">✏️ ویرایش کشور</h2>' +
+    '<form id="edit-form">' +
+      '<div style="margin-bottom:20px;">' +
+        '<label style="display:block;margin-bottom:8px;color:' + labelColor + ';font-weight:600;">🌍 نام کشور (فارسی)</label>' +
+        '<input type="text" id="edit-name" required style="width:100%;padding:12px;border:2px solid ' + borderColor + ';border-radius:8px;font-size:16px;font-family:inherit;background:' + inputBg + ';color:' + textColor + ';">' +
+      '</div>' +
+      '<div style="margin-bottom:20px;">' +
+        '<label style="display:block;margin-bottom:8px;color:' + labelColor + ';font-weight:600;">🔤 کد کشور (2 حرفی)</label>' +
+        '<input type="text" id="edit-code" maxlength="2" required style="width:100%;padding:12px;border:2px solid ' + borderColor + ';border-radius:8px;font-size:16px;text-transform:uppercase;font-family:monospace;background:' + inputBg + ';color:' + textColor + ';">' +
+        '<small style="color:' + labelColor + ';display:block;margin-top:5px;">⚠️ تغییر کد کشور ممکن است بر داده‌های مرتبط تأثیر بگذارد</small>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;">' +
+        '<button type="submit" style="flex:1;padding:12px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">💾 ذخیره</button>' +
+        '<button type="button" id="cancel-btn" style="flex:1;padding:12px;background:' + btnCancelBg + ';color:' + btnCancelColor + ';border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">❌ لغو</button>' +
+      '</div>' +
+    '</form>' +
+  '</div>';
   
   document.body.appendChild(modal);
   
@@ -1477,6 +1476,10 @@ async function editCountry(code, currentName) {
   const cancelBtn = modal.querySelector('#cancel-btn');
   const nameInput = modal.querySelector('#edit-name');
   const codeInput = modal.querySelector('#edit-code');
+  
+  // تنظیم مقادیر به صورت ایمن
+  nameInput.value = currentName;
+  codeInput.value = code;
   
   // فوکوس روی اولین فیلد
   nameInput.focus();
@@ -1638,7 +1641,7 @@ async function loadCountryData(code) {
       const addressesDiv = document.getElementById('current-addresses');
       if (country.addresses && country.addresses.length > 0) {
         addressesDiv.innerHTML = country.addresses.map(addr => 
-          \`<code>\${addr}</code>\`
+          '<code>' + addr + '</code>'
         ).join('');
       } else {
         addressesDiv.innerHTML = '<em style="color: #64748b;">هیچ آدرسی برای این کشور ثبت نشده</em>';
@@ -3275,16 +3278,14 @@ const Toast = {
     };
     
     const toast = document.createElement('div');
-    toast.className = \`toast \${type}\`;
+    toast.className = 'toast ' + type;
     
-    toast.innerHTML = \`
-      <div class="toast-icon">\${icons[type] || icons.info}</div>
-      <div class="toast-content">
-        <div class="toast-title">\${titles[type] || titles.info}</div>
-        <div class="toast-message">\${message}</div>
-      </div>
-      <button class="toast-close">×</button>
-    \`;
+    toast.innerHTML = '<div class="toast-icon">' + (icons[type] || icons.info) + '</div>' +
+      '<div class="toast-content">' +
+        '<div class="toast-title">' + (titles[type] || titles.info) + '</div>' +
+        '<div class="toast-message">' + message + '</div>' +
+      '</div>' +
+      '<button class="toast-close">×</button>';
     
     this.container.appendChild(toast);
     
@@ -3354,29 +3355,105 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-function editCountry(code, currentName) {
-  const newName = prompt('نام جدید کشور را وارد کنید:', currentName);
-  if (newName && newName.trim() && newName.trim() !== currentName) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/api/admin/update-ipv6-name';
+async function editCountry(code, currentName) {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;';
+  
+  const isDark = document.body.classList.contains('dark');
+  const bgColor = isDark ? '#1f2937' : 'white';
+  const textColor = isDark ? '#f3f4f6' : '#1f2937';
+  const labelColor = isDark ? '#9ca3af' : '#6b7280';
+  const borderColor = isDark ? '#374151' : '#e5e7eb';
+  const inputBg = isDark ? '#374151' : 'white';
+  const btnCancelBg = isDark ? '#374151' : '#e5e7eb';
+  const btnCancelColor = isDark ? '#9ca3af' : '#6b7280';
+  
+  modal.innerHTML = '<div style="background:' + bgColor + ';border-radius:16px;padding:30px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
+    '<h2 style="margin:0 0 20px;color:' + textColor + ';font-size:24px;">✏️ ویرایش کشور</h2>' +
+    '<form id="edit-form">' +
+      '<div style="margin-bottom:20px;">' +
+        '<label style="display:block;margin-bottom:8px;color:' + labelColor + ';font-weight:600;">🌍 نام کشور (فارسی)</label>' +
+        '<input type="text" id="edit-name" required style="width:100%;padding:12px;border:2px solid ' + borderColor + ';border-radius:8px;font-size:16px;font-family:inherit;background:' + inputBg + ';color:' + textColor + ';">' +
+      '</div>' +
+      '<div style="margin-bottom:20px;">' +
+        '<label style="display:block;margin-bottom:8px;color:' + labelColor + ';font-weight:600;">🔤 کد کشور (2 حرفی)</label>' +
+        '<input type="text" id="edit-code" maxlength="2" required style="width:100%;padding:12px;border:2px solid ' + borderColor + ';border-radius:8px;font-size:16px;text-transform:uppercase;font-family:monospace;background:' + inputBg + ';color:' + textColor + ';">' +
+        '<small style="color:' + labelColor + ';display:block;margin-top:5px;">⚠️ تغییر کد کشور ممکن است بر داده‌های مرتبط تأثیر بگذارد</small>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;">' +
+        '<button type="submit" style="flex:1;padding:12px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">💾 ذخیره</button>' +
+        '<button type="button" id="cancel-btn" style="flex:1;padding:12px;background:' + btnCancelBg + ';color:' + btnCancelColor + ';border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">❌ لغو</button>' +
+      '</div>' +
+    '</form>' +
+  '</div>';
+  
+  document.body.appendChild(modal);
+  
+  const form = modal.querySelector('#edit-form');
+  const cancelBtn = modal.querySelector('#cancel-btn');
+  const nameInput = modal.querySelector('#edit-name');
+  const codeInput = modal.querySelector('#edit-code');
+  
+  // تنظیم مقادیر به صورت ایمن
+  nameInput.value = currentName;
+  codeInput.value = code;
+  
+  nameInput.focus();
+  nameInput.select();
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      document.body.removeChild(modal);
+    }
+  });
+  
+  cancelBtn.addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+  
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
     
-    const codeInput = document.createElement('input');
-    codeInput.type = 'hidden';
-    codeInput.name = 'code';
-    codeInput.value = code;
+    const newName = nameInput.value.trim();
+    const newCode = codeInput.value.trim().toUpperCase();
     
-    const nameInput = document.createElement('input');
-    nameInput.type = 'hidden';
-    nameInput.name = 'country';
-    nameInput.value = newName.trim();
+    if (!newName || !newCode || newCode.length !== 2) {
+      Toast.error('لطفاً تمام فیلدها را به درستی پر کنید');
+      return;
+    }
     
-    form.appendChild(codeInput);
-    form.appendChild(nameInput);
-    document.body.appendChild(form);
-    form.submit();
-  }
+    if (newName === currentName && newCode === code) {
+      Toast.info('هیچ تغییری اعمال نشد');
+      document.body.removeChild(modal);
+      return;
+    }
+    
+    try {
+      const formData = new FormData();
+      formData.append('action', 'edit_full');
+      formData.append('old_code', code);
+      formData.append('new_code', newCode);
+      formData.append('country', newName);
+      
+      const response = await fetch('/api/admin/update-ipv6-name', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (response.ok) {
+        Toast.success('کشور با موفقیت ویرایش شد!');
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        Toast.error('خطا در ویرایش کشور');
+      }
+    } catch (error) {
+      Toast.error('خطا در ارتباط با سرور');
+    }
+    
+    document.body.removeChild(modal);
+  });
 }
+
 </script>
 </body>
 </html>
@@ -3447,8 +3524,11 @@ function buildMainKeyboard(userId) {
     { text: '🛰️ وایرگارد', callback_data: 'wireguard' },
     { text: '🧭 دی ان اس', callback_data: 'show_dns_menu' }
   ]);
-  // سطر دوم: حساب کاربری
-  rows.push([{ text: '👤 حساب کاربری', callback_data: 'account' }]);
+  // سطر دوم: حساب کاربری و ارسال بازخورد
+  rows.push([
+    { text: '👤 حساب کاربری', callback_data: 'account' },
+    { text: '💬 ارسال بازخورد', callback_data: 'send_feedback' }
+  ]);
   // سطر سوم: ادمین (در صورت نیاز)
   if (Number(userId) === Number(ADMIN_ID)) {
     rows.push([
@@ -3463,7 +3543,7 @@ function buildMainKeyboard(userId) {
 // ساخت کیبورد لیست کشورها با صفحه‌بندی و فیلتر
 function buildDnsKeyboard(entries, page = 0, sortOrder = 'default') {
   const ITEMS_PER_PAGE = 12;
-  
+
   // مرتب‌سازی بر اساس موجودی
   let sortedEntries = [...entries];
   if (sortOrder === 'low_to_high') {
@@ -3471,14 +3551,14 @@ function buildDnsKeyboard(entries, page = 0, sortOrder = 'default') {
   } else if (sortOrder === 'high_to_low') {
     sortedEntries.sort((a, b) => (b.stock ?? 0) - (a.stock ?? 0));
   }
-  
+
   const totalPages = Math.ceil(sortedEntries.length / ITEMS_PER_PAGE);
   const startIndex = page * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const currentEntries = sortedEntries.slice(startIndex, endIndex);
 
   const rows = [];
-  
+
   // اضافه کردن دکمه فیلتر در اول با نمایش حالت فعلی
   const filterEmoji = sortOrder === 'low_to_high' ? '📈' : sortOrder === 'high_to_low' ? '📉' : '🔀';
   const filterLabel = sortOrder === 'low_to_high' ? 'کم به زیاد' : sortOrder === 'high_to_low' ? 'زیاد به کم' : 'پیش‌فرض';
@@ -3607,7 +3687,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: `⏳ محدودیت روزانه دریافت DNS شما به پایان رسیده است.\n\n📊 امروز مجاز: ${quota.limit} مورد\n⏰ زمان باقی‌مانده تا ریست: ${timeLeft}`,
-      reply_markup: { inline_keyboard: [[{ text: '👤 حساب کاربری', callback_data: 'account' }],[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '👤 حساب کاربری', callback_data: 'account' }], [{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
@@ -3632,7 +3712,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
   await addUserHistory(env.DB, userId, 'dns', `${entry.code}:${selectedDns}`);
   // حذف آدرس استفاده شده از لیست و بروزرسانی خودکار موجودی
   await removeAddressFromEntry(env.DB, code, selectedDns);
-  
+
   // دریافت موجودی جدید
   const updatedEntry = await getDnsEntry(env.DB, code);
   const remainingStock = updatedEntry ? updatedEntry.stock : 0;
@@ -3781,13 +3861,13 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
       chat_id: chat,
       message_id: messageId,
       text: `⏳ محدودیت روزانه دریافت IPv6 شما به پایان رسیده است.\n\n📊 امروز مجاز: ${quota.limit} مورد\n⏰ زمان باقی‌مانده تا ریست: ${timeLeft}`,
-      reply_markup: { inline_keyboard: [[{ text: '👤 حساب کاربری', callback_data: 'account' }],[{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
+      reply_markup: { inline_keyboard: [[{ text: '👤 حساب کاربری', callback_data: 'account' }], [{ text: '🔙 بازگشت', callback_data: 'show_dns_menu' }]] }
     });
   }
 
   // انتخاب 2 آدرس IPv6 رندوم
   const selectedIpv6_1 = getRandomIpv6(entry);
-  
+
   if (!selectedIpv6_1) {
     const flag = countryCodeToFlag(entry.code);
     return telegramApi(env, '/editMessageText', {
@@ -3800,11 +3880,11 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
 
   // حذف آدرس اول از لیست
   await removeIpv6AddressFromEntry(env.DB, code, selectedIpv6_1);
-  
+
   // دریافت entry بروزرسانی شده برای انتخاب آدرس دوم
   const updatedEntry1 = await getIpv6Entry(env.DB, code);
   const selectedIpv6_2 = updatedEntry1 ? getRandomIpv6(updatedEntry1) : null;
-  
+
   // حذف آدرس دوم از لیست (اگر موجود باشد)
   if (selectedIpv6_2) {
     await removeIpv6AddressFromEntry(env.DB, code, selectedIpv6_2);
@@ -3815,13 +3895,13 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
   // افزایش مصرف کاربر
   await incUserQuota(env.DB, userId, 'ipv6');
   const newQuota = await getUserQuota(env.DB, userId, 'ipv6');
-  
+
   // ذخیره در تاریخچه
-  const historyItem = selectedIpv6_2 
-    ? `${entry.code}:${selectedIpv6_1},${selectedIpv6_2}` 
+  const historyItem = selectedIpv6_2
+    ? `${entry.code}:${selectedIpv6_1},${selectedIpv6_2}`
     : `${entry.code}:${selectedIpv6_1}`;
   await addUserHistory(env.DB, userId, 'ipv6', historyItem);
-  
+
   // دریافت موجودی جدید
   const updatedEntry = await getIpv6Entry(env.DB, code);
   const remainingStock = updatedEntry ? updatedEntry.stock : 0;
@@ -3867,7 +3947,7 @@ export async function handleUpdate(update, env) {
 
       if (Number(from.id) === Number(ADMIN_ID)) {
         const state = await env.DB.get(`admin_state:${ADMIN_ID}`);
-        
+
         // ارسال پیام همگانی (متن، عکس، ویدیو، فایل با کپشن)
         if (state === 'broadcast_waiting') {
           const res = await env.DB.list({ prefix: 'users:' });
@@ -3875,22 +3955,22 @@ export async function handleUpdate(update, env) {
             const userId = Number(k.name.split(':')[1]);
             return userId && userId !== ADMIN_ID;
           }).length;
-          
+
           let sent = 0;
           let failed = 0;
-          
+
           // ارسال پیام شروع
-          const progressMsg = await telegramApi(env, '/sendMessage', { 
-            chat_id: chat, 
+          const progressMsg = await telegramApi(env, '/sendMessage', {
+            chat_id: chat,
             text: `⏳ در حال ارسال به ${totalUsers} کاربر...\n\n✅ موفق: 0\n❌ ناموفق: 0`
           });
           const progressMsgId = progressMsg?.result?.message_id;
-          
+
           // بررسی عکس
           if (msg.photo && msg.photo.length > 0) {
             const photo = msg.photo[msg.photo.length - 1]; // بزرگترین سایز
             const caption = msg.caption || '';
-            
+
             for (const k of res.keys) {
               const userId = Number(k.name.split(':')[1]);
               if (!userId || userId === ADMIN_ID) continue;
@@ -3902,7 +3982,7 @@ export async function handleUpdate(update, env) {
                   parse_mode: caption ? 'Markdown' : undefined
                 });
                 sent++;
-                
+
                 // بروزرسانی پیشرفت هر 5 ارسال
                 if (progressMsgId && (sent + failed) % 5 === 0) {
                   await telegramApi(env, '/editMessageText', {
@@ -3911,7 +3991,7 @@ export async function handleUpdate(update, env) {
                     text: `⏳ در حال ارسال عکس...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
                   });
                 }
-                
+
                 await new Promise(r => setTimeout(r, 50));
               } catch (e) {
                 failed++;
@@ -3919,7 +3999,7 @@ export async function handleUpdate(update, env) {
               }
             }
             await env.DB.delete(`admin_state:${ADMIN_ID}`);
-            
+
             // پیام نهایی
             if (progressMsgId) {
               await telegramApi(env, '/editMessageText', {
@@ -3934,7 +4014,7 @@ export async function handleUpdate(update, env) {
           // بررسی ویدیو
           else if (msg.video) {
             const caption = msg.caption || '';
-            
+
             for (const k of res.keys) {
               const userId = Number(k.name.split(':')[1]);
               if (!userId || userId === ADMIN_ID) continue;
@@ -3946,7 +4026,7 @@ export async function handleUpdate(update, env) {
                   parse_mode: caption ? 'Markdown' : undefined
                 });
                 sent++;
-                
+
                 if (progressMsgId && (sent + failed) % 5 === 0) {
                   await telegramApi(env, '/editMessageText', {
                     chat_id: chat,
@@ -3954,7 +4034,7 @@ export async function handleUpdate(update, env) {
                     text: `⏳ در حال ارسال ویدیو...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
                   });
                 }
-                
+
                 await new Promise(r => setTimeout(r, 50));
               } catch (e) {
                 failed++;
@@ -3962,7 +4042,7 @@ export async function handleUpdate(update, env) {
               }
             }
             await env.DB.delete(`admin_state:${ADMIN_ID}`);
-            
+
             if (progressMsgId) {
               await telegramApi(env, '/editMessageText', {
                 chat_id: chat,
@@ -3976,7 +4056,7 @@ export async function handleUpdate(update, env) {
           // بررسی فایل
           else if (msg.document) {
             const caption = msg.caption || '';
-            
+
             for (const k of res.keys) {
               const userId = Number(k.name.split(':')[1]);
               if (!userId || userId === ADMIN_ID) continue;
@@ -3988,7 +4068,7 @@ export async function handleUpdate(update, env) {
                   parse_mode: caption ? 'Markdown' : undefined
                 });
                 sent++;
-                
+
                 if (progressMsgId && (sent + failed) % 5 === 0) {
                   await telegramApi(env, '/editMessageText', {
                     chat_id: chat,
@@ -3996,7 +4076,7 @@ export async function handleUpdate(update, env) {
                     text: `⏳ در حال ارسال فایل...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
                   });
                 }
-                
+
                 await new Promise(r => setTimeout(r, 50));
               } catch (e) {
                 failed++;
@@ -4004,7 +4084,7 @@ export async function handleUpdate(update, env) {
               }
             }
             await env.DB.delete(`admin_state:${ADMIN_ID}`);
-            
+
             if (progressMsgId) {
               await telegramApi(env, '/editMessageText', {
                 chat_id: chat,
@@ -4023,7 +4103,7 @@ export async function handleUpdate(update, env) {
               try {
                 await telegramApi(env, '/sendMessage', { chat_id: userId, text, parse_mode: 'Markdown' });
                 sent++;
-                
+
                 if (progressMsgId && (sent + failed) % 5 === 0) {
                   await telegramApi(env, '/editMessageText', {
                     chat_id: chat,
@@ -4031,7 +4111,7 @@ export async function handleUpdate(update, env) {
                     text: `⏳ در حال ارسال پیام...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
                   });
                 }
-                
+
                 await new Promise(r => setTimeout(r, 50));
               } catch (e) {
                 failed++;
@@ -4039,7 +4119,7 @@ export async function handleUpdate(update, env) {
               }
             }
             await env.DB.delete(`admin_state:${ADMIN_ID}`);
-            
+
             if (progressMsgId) {
               await telegramApi(env, '/editMessageText', {
                 chat_id: chat,
@@ -4050,6 +4130,133 @@ export async function handleUpdate(update, env) {
             }
             return;
           }
+        }
+
+        // پاسخ ادمین به بازخورد کاربر
+        else if (state && state.startsWith('reply_feedback:')) {
+          const targetUserId = state.split(':')[1];
+
+          // ارسال پاسخ به کاربر
+          try {
+            if (msg.photo && msg.photo.length > 0) {
+              const photo = msg.photo[msg.photo.length - 1];
+              const caption = msg.caption || '';
+              await telegramApi(env, '/sendPhoto', {
+                chat_id: targetUserId,
+                photo: photo.file_id,
+                caption: `💬 *پاسخ از مدیر:*\n━━━━━━━━━━━━━━━━━━━━\n\n${caption}`,
+                parse_mode: 'Markdown'
+              });
+            } else if (msg.video) {
+              const caption = msg.caption || '';
+              await telegramApi(env, '/sendVideo', {
+                chat_id: targetUserId,
+                video: msg.video.file_id,
+                caption: `💬 *پاسخ از مدیر:*\n━━━━━━━━━━━━━━━━━━━━\n\n${caption}`,
+                parse_mode: 'Markdown'
+              });
+            } else if (msg.document) {
+              const caption = msg.caption || '';
+              await telegramApi(env, '/sendDocument', {
+                chat_id: targetUserId,
+                document: msg.document.file_id,
+                caption: `💬 *پاسخ از مدیر:*\n━━━━━━━━━━━━━━━━━━━━\n\n${caption}`,
+                parse_mode: 'Markdown'
+              });
+            } else if (text) {
+              await telegramApi(env, '/sendMessage', {
+                chat_id: targetUserId,
+                text: `💬 *پاسخ از مدیر:*\n━━━━━━━━━━━━━━━━━━━━\n\n${text}`,
+                parse_mode: 'Markdown'
+              });
+            }
+
+            await env.DB.delete(`admin_state:${ADMIN_ID}`);
+            await telegramApi(env, '/sendMessage', {
+              chat_id: chat,
+              text: '✅ پاسخ شما با موفقیت به کاربر ارسال شد!'
+            });
+          } catch (e) {
+            await telegramApi(env, '/sendMessage', {
+              chat_id: chat,
+              text: '❌ خطا در ارسال پاسخ به کاربر!'
+            });
+          }
+          return;
+        }
+      }
+
+      // دریافت بازخورد از کاربران عادی
+      else {
+        const userState = await env.DB.get(`user_state:${from.id}`);
+
+        if (userState === 'feedback_waiting') {
+          // ارسال بازخورد به ادمین
+          try {
+            let feedbackMsg = `💬 *بازخورد جدید از کاربر*\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+            feedbackMsg += `👤 نام: ${from.first_name || 'کاربر'}\n`;
+            if (from.username) feedbackMsg += `🆔 یوزرنیم: @${from.username}\n`;
+            feedbackMsg += `🔢 شناسه: \`${from.id}\`\n`;
+            feedbackMsg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+            if (msg.photo && msg.photo.length > 0) {
+              const photo = msg.photo[msg.photo.length - 1];
+              const caption = msg.caption || '';
+              await telegramApi(env, '/sendPhoto', {
+                chat_id: ADMIN_ID,
+                photo: photo.file_id,
+                caption: feedbackMsg + (caption ? `📝 متن:\n${caption}` : '🖼️ عکس بدون متن'),
+                parse_mode: 'Markdown',
+                reply_markup: {
+                  inline_keyboard: [[{ text: '💬 پاسخ', callback_data: `reply_feedback:${from.id}` }]]
+                }
+              });
+            } else if (msg.video) {
+              const caption = msg.caption || '';
+              await telegramApi(env, '/sendVideo', {
+                chat_id: ADMIN_ID,
+                video: msg.video.file_id,
+                caption: feedbackMsg + (caption ? `📝 متن:\n${caption}` : '🎬 ویدیو بدون متن'),
+                parse_mode: 'Markdown',
+                reply_markup: {
+                  inline_keyboard: [[{ text: '💬 پاسخ', callback_data: `reply_feedback:${from.id}` }]]
+                }
+              });
+            } else if (msg.document) {
+              const caption = msg.caption || '';
+              await telegramApi(env, '/sendDocument', {
+                chat_id: ADMIN_ID,
+                document: msg.document.file_id,
+                caption: feedbackMsg + (caption ? `📝 متن:\n${caption}` : '📎 فایل بدون متن'),
+                parse_mode: 'Markdown',
+                reply_markup: {
+                  inline_keyboard: [[{ text: '💬 پاسخ', callback_data: `reply_feedback:${from.id}` }]]
+                }
+              });
+            } else if (text) {
+              feedbackMsg += `📝 متن:\n${text}`;
+              await telegramApi(env, '/sendMessage', {
+                chat_id: ADMIN_ID,
+                text: feedbackMsg,
+                parse_mode: 'Markdown',
+                reply_markup: {
+                  inline_keyboard: [[{ text: '💬 پاسخ', callback_data: `reply_feedback:${from.id}` }]]
+                }
+              });
+            }
+
+            await env.DB.delete(`user_state:${from.id}`);
+            await telegramApi(env, '/sendMessage', {
+              chat_id: chat,
+              text: '✅ بازخورد شما با موفقیت ارسال شد!\n\n💡 مدیر به زودی به شما پاسخ خواهد داد.'
+            });
+          } catch (e) {
+            await telegramApi(env, '/sendMessage', {
+              chat_id: chat,
+              text: '❌ خطا در ارسال بازخورد! لطفاً دوباره تلاش کنید.'
+            });
+          }
+          return;
         }
       }
 
@@ -4129,7 +4336,7 @@ export async function handleUpdate(update, env) {
           // تعیین شماره صفحه و ترتیب
           let page = 0;
           let sortOrder = 'default';
-          
+
           if (data.startsWith('dns_page:')) {
             const parts = data.split(':');
             page = parseInt(parts[1]) || 0;
@@ -4139,12 +4346,12 @@ export async function handleUpdate(update, env) {
             sortOrder = parts[1] || 'default';
             page = parseInt(parts[2]) || 0;
           }
-          
+
           const kb = buildDnsKeyboard(entries, page, sortOrder);
           const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
           const totalPages = Math.ceil(entries.length / 12);
           const currentPage = page + 1;
-          
+
           const sortText = sortOrder === 'low_to_high' ? '📈 (کم به زیاد)' : sortOrder === 'high_to_low' ? '📉 (زیاد به کم)' : '🔀 (پیش‌فرض)';
 
           await telegramApi(env, '/editMessageText', {
@@ -4238,11 +4445,11 @@ export async function handleUpdate(update, env) {
       else if (data === 'wireguard' || data.startsWith('wg_page:') || data.startsWith('wg_sort:')) {
         await clearWgState(env.DB, from.id);
         const entries = await getCachedDnsList(env.DB);
-        
+
         // تعیین شماره صفحه و ترتیب
         let page = 0;
         let sortOrder = 'default';
-        
+
         if (data.startsWith('wg_page:')) {
           const parts = data.split(':');
           page = parseInt(parts[1]) || 0;
@@ -4252,14 +4459,14 @@ export async function handleUpdate(update, env) {
           sortOrder = parts[1] || 'default';
           page = parseInt(parts[2]) || 0;
         }
-        
+
         const kb = buildWireguardCountryKb(entries, page, sortOrder);
         const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
         const totalPages = Math.ceil(entries.length / 12);
         const currentPage = page + 1;
-        
+
         const sortText = sortOrder === 'low_to_high' ? '📈 (کم به زیاد)' : sortOrder === 'high_to_low' ? '📉 (زیاد به کم)' : '🔀 (پیش‌فرض)';
-        
+
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
@@ -4291,9 +4498,9 @@ export async function handleUpdate(update, env) {
               });
             } else {
               // پاسخ به callback
-              await telegramApi(env, '/answerCallbackQuery', { 
-                callback_query_id: cb.id, 
-                text: 'در حال ساخت فایل...' 
+              await telegramApi(env, '/answerCallbackQuery', {
+                callback_query_id: cb.id,
+                text: 'در حال ساخت فایل...'
               });
 
               // ساخت و ارسال فایل
@@ -4305,17 +4512,17 @@ export async function handleUpdate(update, env) {
               const conf = buildWgConf({ privateKey: keys.privateKey, addresses, dns: dnsList.join(', '), mtu, listenPort });
               const namingType = state.namingType || 'custom'; // پیش‌فرض: اسم اختصاصی
               const filename = `${generateWgFilename(namingType, state.country)}.conf`;
-              
+
               const fd = new FormData();
               fd.append('chat_id', String(chat));
               const captionText = `📄 <b>نام:</b> ${filename}\n• <b>اپراتور:</b> ${OPERATORS[opCode].title}\n• <b>دی ان اس:</b> ${dnsList.join(' , ')}\n• <b>MTU:</b> ${mtu}\n• <b>پورت شنونده:</b> ${listenPort}\n\n💡 <i>نکته:</i> ListenPort بین 49000 تا 60000 باشد.`;
               fd.append('caption', captionText);
               fd.append('parse_mode', 'HTML');
-              
+
               // استفاده از File برای اطمینان از وجود نام فایل در multipart
               const file = new File([conf], filename, { type: 'text/plain' });
               fd.append('document', file);
-              
+
               const uploadRes = await telegramUpload(env, 'sendDocument', fd);
               if (!uploadRes || uploadRes.ok !== true) {
                 const err = uploadRes && uploadRes.description ? uploadRes.description : 'ارسال فایل ناموفق بود';
@@ -4329,23 +4536,23 @@ export async function handleUpdate(update, env) {
                 await incUserQuota(env.DB, from.id, 'wg');
                 const newQuota = await getUserQuota(env.DB, from.id, 'wg');
                 await addUserHistory(env.DB, from.id, 'wg', `${state.country}|${dnsList.join('+')}|${mtu}|${listenPort}`);
-                
+
                 // حذف DNS استفاده شده از لیست (اگر از کشور انتخاب شده بود)
                 if (dnsList.length > 1) {
                   // DNS دوم (randomDns) را حذف می‌کنیم
                   const usedDns = dnsList[1];
                   await removeAddressFromEntry(env.DB, state.country, usedDns);
                 }
-                
+
                 await clearWgState(env.DB, from.id);
-                
+
                 // پیام موفقیت
                 await telegramApi(env, '/editMessageText', {
                   chat_id: chat,
                   message_id: messageId,
                   text: `✅ فایل وایرگارد با موفقیت ارسال شد!\n\n📊 سهمیه امروز شما: ${newQuota.count}/${newQuota.limit}`,
                   parse_mode: 'Markdown',
-                  reply_markup: { 
+                  reply_markup: {
                     inline_keyboard: [
                       [{ text: '🔄 دریافت فایل جدید', callback_data: 'wireguard' }],
                       [{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]
@@ -4364,7 +4571,7 @@ export async function handleUpdate(update, env) {
         const kb = buildWireguardCountryKb(entries, 0);
         const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
         const totalPages = Math.ceil(entries.length / 12);
-        
+
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
@@ -4380,7 +4587,7 @@ export async function handleUpdate(update, env) {
         const kb = buildWireguardCountryKb(entries, 0);
         const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
         const totalPages = Math.ceil(entries.length / 12);
-        
+
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
@@ -4394,13 +4601,13 @@ export async function handleUpdate(update, env) {
       else if (data.startsWith('wg_dns_country_pick:')) {
         // پاسخ سریع به callback
         await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id });
-        
+
         const code = data.split(':')[1];
         const entry = await getDnsEntry(env.DB, code);
         const flag = countryCodeToFlag(code);
         // تبدیل نام کشور به فارسی
         const countryName = entry ? ensurePersianCountryName(entry.country, entry.code) : getCountryNameFromCode(code);
-        
+
         await setWgState(env.DB, from.id, { country: code, step: 'dns' });
         const kb = buildWireguardDnsKb();
         await telegramApi(env, '/editMessageText', {
@@ -4466,7 +4673,7 @@ export async function handleUpdate(update, env) {
         msg += `👋 نام: ${from.first_name || 'کاربر'}\n`;
         if (from.username) msg += `🆔 یوزرنیم: @${from.username}\n`;
         msg += `🔢 شناسه: \`${from.id}\`\n\n`;
-        
+
         msg += '📊 *سهمیه روزانه:*\n';
         msg += `🧭 DNS: ${dnsQuota.count}/${dnsQuota.limit}\n`;
         msg += `🛰️ WireGuard: ${wgQuota.count}/${wgQuota.limit}\n\n`;
@@ -4494,6 +4701,57 @@ export async function handleUpdate(update, env) {
           text: msg,
           parse_mode: 'Markdown',
           reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت به منو اصلی', callback_data: 'back_main' }]] }
+        });
+      }
+
+      // ارسال بازخورد
+      else if (data === 'send_feedback') {
+        await env.DB.put(`user_state:${from.id}`, 'feedback_waiting');
+        await telegramApi(env, '/editMessageText', {
+          chat_id: chat,
+          message_id: messageId,
+          text: '💬 *ارسال بازخورد*\n━━━━━━━━━━━━━━━━━━━━\n\n✍️ پیام خود را ارسال کنید:\n\n📝 *می‌توانید ارسال کنید:*\n• پیشنهادات\n• انتقادات\n• گزارش باگ\n• سوالات\n• هر بازخورد دیگری\n\n💡 *نکات:*\n• پیام شما مستقیماً به مدیر ارسال می‌شود\n• می‌توانید متن، عکس، ویدیو یا فایل ارسال کنید\n• مدیر می‌تواند به شما پاسخ دهد',
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'cancel_feedback' }]] }
+        });
+      }
+
+      else if (data === 'cancel_feedback') {
+        await env.DB.delete(`user_state:${from.id}`);
+        await telegramApi(env, '/editMessageText', {
+          chat_id: chat,
+          message_id: messageId,
+          text: '❌ لغو شد',
+          reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'back_main' }]] }
+        });
+      }
+
+      // پاسخ به بازخورد کاربر (فقط ادمین)
+      else if (data.startsWith('reply_feedback:')) {
+        if (Number(from.id) !== Number(ADMIN_ID)) {
+          await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اجازه دسترسی ندارید', show_alert: true });
+        } else {
+          const targetUserId = data.split(':')[1];
+          await env.DB.put(`admin_state:${ADMIN_ID}`, `reply_feedback:${targetUserId}`);
+          await telegramApi(env, '/editMessageText', {
+            chat_id: chat,
+            message_id: messageId,
+            text: `💬 *پاسخ به بازخورد کاربر*\n━━━━━━━━━━━━━━━━━━━━\n\n👤 شناسه کاربر: \`${targetUserId}\`\n\n✍️ پاسخ خود را ارسال کنید:\n\n💡 می‌توانید متن، عکس، ویدیو یا فایل ارسال کنید`,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: [[{ text: '❌ لغو', callback_data: 'cancel_reply_feedback' }]] }
+          });
+        }
+      }
+
+      else if (data === 'cancel_reply_feedback') {
+        if (Number(from.id) === Number(ADMIN_ID)) {
+          await env.DB.delete(`admin_state:${ADMIN_ID}`);
+        }
+        await telegramApi(env, '/editMessageText', {
+          chat_id: chat,
+          message_id: messageId,
+          text: '❌ لغو شد',
+          reply_markup: { inline_keyboard: [[{ text: '🔙 بازگشت', callback_data: 'back_main' }]] }
         });
       }
 
@@ -4535,10 +4793,12 @@ export async function handleUpdate(update, env) {
             message_id: messageId,
             text: '🎁 *ریست محدودیت کاربران*\n\nآیا مطمئن هستید که می‌خواهید محدودیت روزانه تمام کاربران را صفر کنید؟\n\n⚠️ این عمل قابل بازگشت نیست و به همه کاربران اطلاع داده می‌شود.',
             parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [
-              [{ text: '✅ بله، ریست کن', callback_data: 'confirm_reset_quota' }],
-              [{ text: '❌ لغو', callback_data: 'back_main' }]
-            ]}
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '✅ بله، ریست کن', callback_data: 'confirm_reset_quota' }],
+                [{ text: '❌ لغو', callback_data: 'back_main' }]
+              ]
+            }
           });
         }
       }
@@ -4549,11 +4809,11 @@ export async function handleUpdate(update, env) {
           await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اجازه دسترسی ندارید', show_alert: true });
         } else {
           const stats = await getUserStats(env.DB);
-          
+
           let msg = '📊 *آمار ربات*\n';
           msg += '━━━━━━━━━━━━━━━━━━━━\n\n';
           msg += `👥 *تعداد کل کاربران:* ${stats.totalUsers}\n`;
-          
+
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
             message_id: messageId,
@@ -4573,7 +4833,7 @@ export async function handleUpdate(update, env) {
           const today = todayKey();
           const dnsKeys = await env.DB.list({ prefix: `quota:dns:` });
           const wgKeys = await env.DB.list({ prefix: `quota:wg:` });
-          
+
           let deleted = 0;
           for (const k of dnsKeys.keys) {
             if (k.name.includes(today)) {
@@ -4592,7 +4852,7 @@ export async function handleUpdate(update, env) {
           const users = await env.DB.list({ prefix: 'users:' });
           let notified = 0;
           const giftMsg = '🎁 *خبر خوش!*\n\nمحدودیت روزانه شما توسط مدیریت ربات ریست شد!\n\n✨ می‌توانید مجدداً از خدمات استفاده کنید.\n\n💝 از صبر و همراهی شما سپاسگزاریم.';
-          
+
           for (const k of users.keys) {
             try {
               const userId = k.name.replace('users:', '');
@@ -4647,68 +4907,68 @@ export default {
           }
         );
       }
-      
+
       const url = new URL(req.url);
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // 🏠 Web Pages Routes
-    // ─────────────────────────────────────────────────────────────────────────────
+      // ─────────────────────────────────────────────────────────────────────────────
+      // 🏠 Web Pages Routes
+      // ─────────────────────────────────────────────────────────────────────────────
 
-    // صفحه اصلی
-    if (url.pathname === '/' && req.method === 'GET') {
-      const entries = await listDnsEntries(env.DB);
-      const userCount = await countUsers(env.DB);
-      return html(renderMainPage(entries, userCount));
-    }
-
-    // مسیر جایگزین پنل ادمین
-    if (url.pathname === '/admini' && req.method === 'GET') {
-      const entries = await listDnsEntries(env.DB);
-      const userCount = await countUsers(env.DB);
-      return html(renderMainPage(entries, userCount));
-    }
-
-    // صفحه تست برای بررسی تنظیمات
-    if (url.pathname === '/health' && req.method === 'GET') {
-      const checks = {
-        timestamp: new Date().toISOString(),
-        env_db: !!env.DB,
-        env_bot_token: !!env.BOT_TOKEN,
-        status: 'OK'
-      };
-      
-      // تست اتصال به KV
-      try {
-        await env.DB.put('health_check', Date.now().toString(), { expirationTtl: 60 });
-        const testValue = await env.DB.get('health_check');
-        checks.kv_connection = !!testValue;
-      } catch (e) {
-        checks.kv_connection = false;
-        checks.kv_error = e.message;
+      // صفحه اصلی
+      if (url.pathname === '/' && req.method === 'GET') {
+        const entries = await listDnsEntries(env.DB);
+        const userCount = await countUsers(env.DB);
+        return html(renderMainPage(entries, userCount));
       }
-      
-      // تست اتصال به Telegram API
-      if (env.BOT_TOKEN) {
+
+      // مسیر جایگزین پنل ادمین
+      if (url.pathname === '/admini' && req.method === 'GET') {
+        const entries = await listDnsEntries(env.DB);
+        const userCount = await countUsers(env.DB);
+        return html(renderMainPage(entries, userCount));
+      }
+
+      // صفحه تست برای بررسی تنظیمات
+      if (url.pathname === '/health' && req.method === 'GET') {
+        const checks = {
+          timestamp: new Date().toISOString(),
+          env_db: !!env.DB,
+          env_bot_token: !!env.BOT_TOKEN,
+          status: 'OK'
+        };
+
+        // تست اتصال به KV
         try {
-          const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/getMe`);
-          const data = await res.json();
-          checks.telegram_api = data.ok;
-          if (data.ok) {
-            checks.bot_info = {
-              username: data.result.username,
-              first_name: data.result.first_name,
-              id: data.result.id
-            };
-          }
+          await env.DB.put('health_check', Date.now().toString(), { expirationTtl: 60 });
+          const testValue = await env.DB.get('health_check');
+          checks.kv_connection = !!testValue;
         } catch (e) {
-          checks.telegram_api = false;
-          checks.telegram_error = e.message;
+          checks.kv_connection = false;
+          checks.kv_error = e.message;
         }
-      }
-      
-      const allOk = checks.env_db && checks.env_bot_token && checks.kv_connection && checks.telegram_api;
-      
-      return html(`<!doctype html>
+
+        // تست اتصال به Telegram API
+        if (env.BOT_TOKEN) {
+          try {
+            const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/getMe`);
+            const data = await res.json();
+            checks.telegram_api = data.ok;
+            if (data.ok) {
+              checks.bot_info = {
+                username: data.result.username,
+                first_name: data.result.first_name,
+                id: data.result.id
+              };
+            }
+          } catch (e) {
+            checks.telegram_api = false;
+            checks.telegram_error = e.message;
+          }
+        }
+
+        const allOk = checks.env_db && checks.env_bot_token && checks.kv_connection && checks.telegram_api;
+
+        return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
@@ -4856,67 +5116,67 @@ export default {
   </div>
 </body>
 </html>`);
-    }
+      }
 
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // 🔌 API Endpoints
-    // ─────────────────────────────────────────────────────────────────────────────
+      // ─────────────────────────────────────────────────────────────────────────────
+      // 🔌 API Endpoints
+      // ─────────────────────────────────────────────────────────────────────────────
 
-    // API: لیست DNS‌ها
-    if (url.pathname === '/api/dns' && req.method === 'GET') {
-      const entries = await listDnsEntries(env.DB);
-      return json(entries);
-    }
+      // API: لیست DNS‌ها
+      if (url.pathname === '/api/dns' && req.method === 'GET') {
+        const entries = await listDnsEntries(env.DB);
+        return json(entries);
+      }
 
-    // API: افزودن/ویرایش DNS
-    if (url.pathname === '/api/admin/add-dns' && req.method === 'POST') {
-      const form = await req.formData();
-      const action = form.get('action') || 'new';
+      // API: افزودن/ویرایش DNS
+      if (url.pathname === '/api/admin/add-dns' && req.method === 'POST') {
+        const form = await req.formData();
+        const action = form.get('action') || 'new';
 
-      if (action === 'new') {
-        // ایجاد کشور جدید
-        const addresses = (form.get('addresses') || '')
-          .split(/\r?\n/)
-          .map(s => s.trim())
-          .filter(Boolean);
+        if (action === 'new') {
+          // ایجاد کشور جدید
+          const addresses = (form.get('addresses') || '')
+            .split(/\r?\n/)
+            .map(s => s.trim())
+            .filter(Boolean);
 
-        const code = (form.get('code') || '').toUpperCase().trim();
-        let countryName = (form.get('country') || '').trim();
-        
-        // اگر نام خالی است، از نام فارسی پیش‌فرض استفاده کن
-        if (!countryName && code) {
-          countryName = getCountryNameFromCode(code);
-        }
+          const code = (form.get('code') || '').toUpperCase().trim();
+          let countryName = (form.get('country') || '').trim();
 
-        const entry = {
-          country: countryName,
-          code: code,
-          addresses: addresses,
-          stock: addresses.length  // موجودی خودکار بر اساس تعداد آدرس‌ها
-        };
+          // اگر نام خالی است، از نام فارسی پیش‌فرض استفاده کن
+          if (!countryName && code) {
+            countryName = getCountryNameFromCode(code);
+          }
 
-        if (!entry.country || !entry.code || entry.code.length !== 2) {
-          return html(`<script>
+          const entry = {
+            country: countryName,
+            code: code,
+            addresses: addresses,
+            stock: addresses.length  // موجودی خودکار بر اساس تعداد آدرس‌ها
+          };
+
+          if (!entry.country || !entry.code || entry.code.length !== 2) {
+            return html(`<script>
             Toast.error('❌ اطلاعات نامعتبر است');
             setTimeout(() => history.back(), 2000);
           </script>`);
-        }
+          }
 
-        // بررسی عدم تکرار کد کشور
-        const existing = await getDnsEntry(env.DB, entry.code);
-        if (existing) {
-          return html(`<script>
+          // بررسی عدم تکرار کد کشور
+          const existing = await getDnsEntry(env.DB, entry.code);
+          if (existing) {
+            return html(`<script>
             Toast.warning('⚠️ این کد کشور قبلاً ثبت شده است');
             setTimeout(() => history.back(), 2000);
           </script>`);
-        }
+          }
 
-        await putDnsEntry(env.DB, entry);
-        invalidateDnsCache();
-        
-        // نمایش صفحه موفقیت با جزئیات
-        return html(`<!DOCTYPE html>
+          await putDnsEntry(env.DB, entry);
+          invalidateDnsCache();
+
+          // نمایش صفحه موفقیت با جزئیات
+          return html(`<!DOCTYPE html>
 <html dir="rtl" lang="fa">
 <head>
   <meta charset="UTF-8">
@@ -5078,54 +5338,54 @@ export default {
   </script>
 </body>
 </html>`);
-      }
-      else if (action === 'edit') {
-        // ویرایش کشور موجود - اضافه کردن آدرس‌های جدید
-        const code = (form.get('existing_code') || '').toUpperCase().trim();
-        const newAddresses = (form.get('addresses') || '')
-          .split(/\r?\n/)
-          .map(s => s.trim())
-          .filter(Boolean);
-        const newCountryName = form.get('country') ? form.get('country').trim() : null;
+        }
+        else if (action === 'edit') {
+          // ویرایش کشور موجود - اضافه کردن آدرس‌های جدید
+          const code = (form.get('existing_code') || '').toUpperCase().trim();
+          const newAddresses = (form.get('addresses') || '')
+            .split(/\r?\n/)
+            .map(s => s.trim())
+            .filter(Boolean);
+          const newCountryName = form.get('country') ? form.get('country').trim() : null;
 
-        if (!code || code.length !== 2) {
-          return html(`<script>
+          if (!code || code.length !== 2) {
+            return html(`<script>
             Toast.error('❌ کد کشور نامعتبر است');
             setTimeout(() => history.back(), 2000);
           </script>`);
-        }
+          }
 
-        // دریافت اطلاعات فعلی
-        const existing = await getDnsEntry(env.DB, code);
-        if (!existing) {
-          return html(`<script>
+          // دریافت اطلاعات فعلی
+          const existing = await getDnsEntry(env.DB, code);
+          if (!existing) {
+            return html(`<script>
             Toast.error('❌ کشور انتخابی یافت نشد');
             setTimeout(() => history.back(), 2000);
           </script>`);
-        }
+          }
 
-        // بروزرسانی نام کشور (در صورت وجود)
-        if (newCountryName) {
-          existing.country = newCountryName;
-        }
+          // بروزرسانی نام کشور (در صورت وجود)
+          if (newCountryName) {
+            existing.country = newCountryName;
+          }
 
-        // اضافه کردن آدرس‌های جدید به آدرس‌های موجود
-        if (newAddresses.length > 0) {
-          const currentAddresses = Array.isArray(existing.addresses) ? existing.addresses : [];
-          const combinedAddresses = [...currentAddresses, ...newAddresses];
-          // حذف آدرس‌های تکراری
-          existing.addresses = [...new Set(combinedAddresses)];
-          // بروزرسانی خودکار موجودی بر اساس تعداد کل آدرس‌ها
-          existing.stock = existing.addresses.length;
-        }
+          // اضافه کردن آدرس‌های جدید به آدرس‌های موجود
+          if (newAddresses.length > 0) {
+            const currentAddresses = Array.isArray(existing.addresses) ? existing.addresses : [];
+            const combinedAddresses = [...currentAddresses, ...newAddresses];
+            // حذف آدرس‌های تکراری
+            existing.addresses = [...new Set(combinedAddresses)];
+            // بروزرسانی خودکار موجودی بر اساس تعداد کل آدرس‌ها
+            existing.stock = existing.addresses.length;
+          }
 
-        await putDnsEntry(env.DB, existing);
-        invalidateDnsCache(); // بروزرسانی cache
-        
-        // نمایش صفحه موفقیت برای ویرایش
-        const addedCount = newAddresses.length;
-        const totalCount = existing.addresses.length;
-        return html(`<!DOCTYPE html>
+          await putDnsEntry(env.DB, existing);
+          invalidateDnsCache(); // بروزرسانی cache
+
+          // نمایش صفحه موفقیت برای ویرایش
+          const addedCount = newAddresses.length;
+          const totalCount = existing.addresses.length;
+          return html(`<!DOCTYPE html>
 <html dir="rtl" lang="fa">
 <head>
   <meta charset="UTF-8">
@@ -5285,47 +5545,47 @@ export default {
   </script>
 </body>
 </html>`);
+        }
+
+        return html('<script>window.location.href="/";</script>');
       }
 
-      return html('<script>window.location.href="/";</script>');
-    }
+      // API: ویرایش کامل DNS (نام و کد کشور)
+      if (url.pathname === '/api/admin/edit-dns' && req.method === 'POST') {
+        try {
+          const form = await req.formData();
+          const oldCode = (form.get('old_code') || '').toUpperCase().trim();
+          const newCode = (form.get('new_code') || '').toUpperCase().trim();
+          const newName = (form.get('country') || '').trim();
 
-    // API: ویرایش کامل DNS (نام و کد کشور)
-    if (url.pathname === '/api/admin/edit-dns' && req.method === 'POST') {
-      try {
-        const form = await req.formData();
-        const oldCode = (form.get('old_code') || '').toUpperCase().trim();
-        const newCode = (form.get('new_code') || '').toUpperCase().trim();
-        const newName = (form.get('country') || '').trim();
-
-        if (!oldCode || !newCode || !newName || oldCode.length !== 2 || newCode.length !== 2) {
-          return html('<script>alert("❌ اطلاعات نامعتبر است"); history.back();</script>');
-        }
-
-        // دریافت اطلاعات فعلی
-        const existing = await getDnsEntry(env.DB, oldCode);
-        if (!existing) {
-          return html('<script>alert("❌ کشور یافت نشد"); history.back();</script>');
-        }
-
-        // اگر کد تغییر کرده، بررسی تکراری بودن کد جدید
-        if (oldCode !== newCode) {
-          const duplicate = await getDnsEntry(env.DB, newCode);
-          if (duplicate) {
-            return html('<script>alert("⚠️ کد کشور جدید قبلاً استفاده شده است"); history.back();</script>');
+          if (!oldCode || !newCode || !newName || oldCode.length !== 2 || newCode.length !== 2) {
+            return html('<script>alert("❌ اطلاعات نامعتبر است"); history.back();</script>');
           }
-          
-          // حذف کشور قدیم و ایجاد با کد جدید
-          await deleteDnsEntry(env.DB, oldCode);
-          existing.code = newCode;
-        }
 
-        // بروزرسانی نام
-        existing.country = newName;
-        await putDnsEntry(env.DB, existing);
-        invalidateDnsCache();
+          // دریافت اطلاعات فعلی
+          const existing = await getDnsEntry(env.DB, oldCode);
+          if (!existing) {
+            return html('<script>alert("❌ کشور یافت نشد"); history.back();</script>');
+          }
 
-        return html(`<!doctype html>
+          // اگر کد تغییر کرده، بررسی تکراری بودن کد جدید
+          if (oldCode !== newCode) {
+            const duplicate = await getDnsEntry(env.DB, newCode);
+            if (duplicate) {
+              return html('<script>alert("⚠️ کد کشور جدید قبلاً استفاده شده است"); history.back();</script>');
+            }
+
+            // حذف کشور قدیم و ایجاد با کد جدید
+            await deleteDnsEntry(env.DB, oldCode);
+            existing.code = newCode;
+          }
+
+          // بروزرسانی نام
+          existing.country = newName;
+          await putDnsEntry(env.DB, existing);
+          invalidateDnsCache();
+
+          return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="2;url=/">
@@ -5338,23 +5598,23 @@ export default {
   <script>setTimeout(()=>location.href='/',2000)</script>
 </body>
 </html>`);
-      } catch (e) {
-        console.error('خطا در ویرایش DNS:', e);
-        return html(`<script>alert("❌ خطا: ${e.message}"); history.back();</script>`);
+        } catch (e) {
+          console.error('خطا در ویرایش DNS:', e);
+          return html(`<script>alert("❌ خطا: ${e.message}"); history.back();</script>`);
+        }
       }
-    }
 
-    // API: حذف DNS
-    if (url.pathname === '/api/admin/delete-dns' && req.method === 'POST') {
-      const form = await req.formData();
-      const code = form.get('code');
+      // API: حذف DNS
+      if (url.pathname === '/api/admin/delete-dns' && req.method === 'POST') {
+        const form = await req.formData();
+        const code = form.get('code');
 
-      if (code) {
-        const entry = await getDnsEntry(env.DB, code);
-        await deleteDnsEntry(env.DB, code);
-        invalidateDnsCache(); // بروزرسانی cache
-        
-        return html(`<!doctype html>
+        if (code) {
+          const entry = await getDnsEntry(env.DB, code);
+          await deleteDnsEntry(env.DB, code);
+          invalidateDnsCache(); // بروزرسانی cache
+
+          return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="1.5;url=/">
@@ -5365,9 +5625,9 @@ export default {
   <script>setTimeout(()=>location.href='/',1500)</script>
 </body>
 </html>`);
-      }
+        }
 
-      return html(`<!doctype html>
+        return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="2;url=/">
@@ -5378,97 +5638,97 @@ export default {
   <script>setTimeout(()=>location.href='/',2000)</script>
 </body>
 </html>`);
-    }
+      }
 
-    // API: افزودن تک IP (برای نمایش پیشرفت زنده)
-    if (url.pathname === '/api/admin/bulk-add-single' && req.method === 'POST') {
-      try {
-        const body = await req.json();
-        const ip = (body.ip || '').trim();
-        
-        // اعتبارسنجی ورودی
-        if (!ip) {
-          return json({ success: false, error: 'IP خالی است' });
-        }
-        
-        if (!isValidIPv4(ip)) {
-          return json({ success: false, error: 'فرمت IP نامعتبر است' });
-        }
-        
-        if (!isPublicIPv4(ip)) {
-          return json({ success: false, error: 'IP باید عمومی باشد (نه خصوصی)' });
-        }
-        
-        // تشخیص کشور از IP
-        const country = await detectCountryFromIP(ip, env.DB);
-        if (!country || !country.code) {
-          return json({ success: false, error: 'تشخیص کشور ناموفق - API در دسترس نیست' });
-        }
-        
-        const code = country.code.toUpperCase();
-        const existing = await getDnsEntry(env.DB, code);
-        
-        if (existing) {
-          // حذف آدرس‌های تکراری از لیست موجود
-          existing.addresses = [...new Set(existing.addresses)];
-          
-          if (!existing.addresses.includes(ip)) {
-            existing.addresses.push(ip);
-            existing.stock = existing.addresses.length;
-            await putDnsEntry(env.DB, existing);
-            invalidateDnsCache();
-            return json({ 
-              success: true, 
-              country: code, 
-              countryName: existing.country,
-              action: 'updated',
-              totalIps: existing.stock
-            });
+      // API: افزودن تک IP (برای نمایش پیشرفت زنده)
+      if (url.pathname === '/api/admin/bulk-add-single' && req.method === 'POST') {
+        try {
+          const body = await req.json();
+          const ip = (body.ip || '').trim();
+
+          // اعتبارسنجی ورودی
+          if (!ip) {
+            return json({ success: false, error: 'IP خالی است' });
+          }
+
+          if (!isValidIPv4(ip)) {
+            return json({ success: false, error: 'فرمت IP نامعتبر است' });
+          }
+
+          if (!isPublicIPv4(ip)) {
+            return json({ success: false, error: 'IP باید عمومی باشد (نه خصوصی)' });
+          }
+
+          // تشخیص کشور از IP
+          const country = await detectCountryFromIP(ip, env.DB);
+          if (!country || !country.code) {
+            return json({ success: false, error: 'تشخیص کشور ناموفق - API در دسترس نیست' });
+          }
+
+          const code = country.code.toUpperCase();
+          const existing = await getDnsEntry(env.DB, code);
+
+          if (existing) {
+            // حذف آدرس‌های تکراری از لیست موجود
+            existing.addresses = [...new Set(existing.addresses)];
+
+            if (!existing.addresses.includes(ip)) {
+              existing.addresses.push(ip);
+              existing.stock = existing.addresses.length;
+              await putDnsEntry(env.DB, existing);
+              invalidateDnsCache();
+              return json({
+                success: true,
+                country: code,
+                countryName: existing.country,
+                action: 'updated',
+                totalIps: existing.stock
+              });
+            } else {
+              // آدرس تکراری است
+              return json({
+                success: true,
+                country: code,
+                countryName: existing.country,
+                action: 'duplicate',
+                totalIps: existing.stock
+              });
+            }
           } else {
-            // آدرس تکراری است
-            return json({ 
-              success: true, 
-              country: code, 
-              countryName: existing.country,
-              action: 'duplicate',
-              totalIps: existing.stock
+            // ایجاد کشور جدید
+            const newEntry = {
+              code: code,
+              country: country.name,
+              addresses: [ip],
+              stock: 1
+            };
+            await putDnsEntry(env.DB, newEntry);
+            invalidateDnsCache();
+            return json({
+              success: true,
+              country: code,
+              countryName: country.name,
+              action: 'created',
+              totalIps: 1
             });
           }
-        } else {
-          // ایجاد کشور جدید
-          const newEntry = {
-            code: code,
-            country: country.name,
-            addresses: [ip],
-            stock: 1
-          };
-          await putDnsEntry(env.DB, newEntry);
-          invalidateDnsCache();
-          return json({ 
-            success: true, 
-            country: code, 
-            countryName: country.name,
-            action: 'created',
-            totalIps: 1
+        } catch (e) {
+          console.error('خطا در افزودن IP:', e);
+          return json({
+            success: false,
+            error: e.message || 'خطای نامشخص در سرور'
           });
         }
-      } catch (e) {
-        console.error('خطا در افزودن IP:', e);
-        return json({ 
-          success: false, 
-          error: e.message || 'خطای نامشخص در سرور' 
-        });
       }
-    }
 
-    // API: افزودن گروهی با تشخیص خودکار کشور (fallback - برای JavaScript غیرفعال)
-    if (url.pathname === '/api/admin/bulk-add' && req.method === 'POST') {
-      try {
-        const form = await req.formData();
-        const addressesRaw = form.get('addresses');
-        
-        if (!addressesRaw || !addressesRaw.trim()) {
-          return html(`<!doctype html>
+      // API: افزودن گروهی با تشخیص خودکار کشور (fallback - برای JavaScript غیرفعال)
+      if (url.pathname === '/api/admin/bulk-add' && req.method === 'POST') {
+        try {
+          const form = await req.formData();
+          const addressesRaw = form.get('addresses');
+
+          if (!addressesRaw || !addressesRaw.trim()) {
+            return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="3;url=/">
@@ -5480,29 +5740,29 @@ export default {
   <script>setTimeout(()=>location.href='/',3000)</script>
 </body>
 </html>`);
-        }
-
-        // پارس کردن و اعتبارسنجی آدرس‌ها
-        const allIps = addressesRaw.split(/[\r\n,;\s]+/)
-          .map(a => a.trim())
-          .filter(Boolean);
-        
-        const validIps = [];
-        const invalidIps = [];
-        
-        for (const ip of allIps) {
-          if (isValidIPv4(ip) && isPublicIPv4(ip)) {
-            validIps.push(ip);
-          } else if (ip) {
-            invalidIps.push(ip);
           }
-        }
-        
-        // حذف تکراری‌ها
-        const uniqueIps = [...new Set(validIps)];
 
-        if (uniqueIps.length === 0) {
-          return html(`<!doctype html>
+          // پارس کردن و اعتبارسنجی آدرس‌ها
+          const allIps = addressesRaw.split(/[\r\n,;\s]+/)
+            .map(a => a.trim())
+            .filter(Boolean);
+
+          const validIps = [];
+          const invalidIps = [];
+
+          for (const ip of allIps) {
+            if (isValidIPv4(ip) && isPublicIPv4(ip)) {
+              validIps.push(ip);
+            } else if (ip) {
+              invalidIps.push(ip);
+            }
+          }
+
+          // حذف تکراری‌ها
+          const uniqueIps = [...new Set(validIps)];
+
+          if (uniqueIps.length === 0) {
+            return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="3;url=/">
@@ -5515,73 +5775,73 @@ export default {
   <script>setTimeout(()=>location.href='/',3000)</script>
 </body>
 </html>`);
-        }
-
-        const results = { 
-          success: 0, 
-          failed: 0, 
-          duplicate: 0,
-          byCountry: {},
-          errors: []
-        };
-
-        // پردازش هر IP
-        for (const ip of uniqueIps) {
-          try {
-            const country = await detectCountryFromIP(ip, env.DB);
-            
-            if (!country || !country.code) {
-              results.failed++;
-              results.errors.push({ ip, reason: 'تشخیص کشور ناموفق' });
-              continue;
-            }
-
-            const code = country.code.toUpperCase();
-            const existing = await getDnsEntry(env.DB, code);
-
-            if (existing) {
-              // حذف تکراری‌ها و اضافه کردن
-              existing.addresses = [...new Set(existing.addresses)];
-              
-              if (!existing.addresses.includes(ip)) {
-                existing.addresses.push(ip);
-                existing.stock = existing.addresses.length;
-                await putDnsEntry(env.DB, existing);
-                results.success++;
-                results.byCountry[code] = (results.byCountry[code] || 0) + 1;
-              } else {
-                results.duplicate++;
-              }
-            } else {
-              // ایجاد کشور جدید
-              const newEntry = {
-                code: code,
-                country: country.name,
-                addresses: [ip],
-                stock: 1
-              };
-              await putDnsEntry(env.DB, newEntry);
-              results.success++;
-              results.byCountry[code] = 1;
-            }
-          } catch (e) {
-            results.failed++;
-            results.errors.push({ ip, reason: e.message });
           }
-        }
 
-        // بروزرسانی cache
-        invalidateDnsCache();
-        
-        // آماده‌سازی خلاصه
-        const summary = Object.entries(results.byCountry)
-          .sort((a, b) => b[1] - a[1])
-          .map(([code, count]) => `${code}: ${count}`)
-          .join(', ');
-        
-        const totalProcessed = results.success + results.failed + results.duplicate;
-        
-        return html(`<!doctype html>
+          const results = {
+            success: 0,
+            failed: 0,
+            duplicate: 0,
+            byCountry: {},
+            errors: []
+          };
+
+          // پردازش هر IP
+          for (const ip of uniqueIps) {
+            try {
+              const country = await detectCountryFromIP(ip, env.DB);
+
+              if (!country || !country.code) {
+                results.failed++;
+                results.errors.push({ ip, reason: 'تشخیص کشور ناموفق' });
+                continue;
+              }
+
+              const code = country.code.toUpperCase();
+              const existing = await getDnsEntry(env.DB, code);
+
+              if (existing) {
+                // حذف تکراری‌ها و اضافه کردن
+                existing.addresses = [...new Set(existing.addresses)];
+
+                if (!existing.addresses.includes(ip)) {
+                  existing.addresses.push(ip);
+                  existing.stock = existing.addresses.length;
+                  await putDnsEntry(env.DB, existing);
+                  results.success++;
+                  results.byCountry[code] = (results.byCountry[code] || 0) + 1;
+                } else {
+                  results.duplicate++;
+                }
+              } else {
+                // ایجاد کشور جدید
+                const newEntry = {
+                  code: code,
+                  country: country.name,
+                  addresses: [ip],
+                  stock: 1
+                };
+                await putDnsEntry(env.DB, newEntry);
+                results.success++;
+                results.byCountry[code] = 1;
+              }
+            } catch (e) {
+              results.failed++;
+              results.errors.push({ ip, reason: e.message });
+            }
+          }
+
+          // بروزرسانی cache
+          invalidateDnsCache();
+
+          // آماده‌سازی خلاصه
+          const summary = Object.entries(results.byCountry)
+            .sort((a, b) => b[1] - a[1])
+            .map(([code, count]) => `${code}: ${count}`)
+            .join(', ');
+
+          const totalProcessed = results.success + results.failed + results.duplicate;
+
+          return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="utf-8">
@@ -5633,9 +5893,9 @@ export default {
   <script>setTimeout(()=>location.href='/',4000)</script>
 </body>
 </html>`);
-      } catch (e) {
-        console.error('خطا در افزودن گروهی:', e);
-        return html(`<!doctype html>
+        } catch (e) {
+          console.error('خطا در افزودن گروهی:', e);
+          return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
 <title>خطا</title>
@@ -5645,56 +5905,56 @@ export default {
   <p><a href="/">بازگشت به صفحه اصلی</a></p>
 </body>
 </html>`);
-      }
-    }
-
-    // صفحه IPv6
-    if (url.pathname === '/ipv6' && req.method === 'GET') {
-      const entries = await listIpv6Entries(env.DB);
-      const userCount = await countUsers(env.DB);
-      return html(renderIpv6Page(entries, userCount));
-    }
-
-    // API: افزودن IPv6 جدید
-    if (url.pathname === '/api/admin/add-ipv6' && req.method === 'POST') {
-      const form = await req.formData();
-      const addresses = (form.get('addresses') || '')
-        .split(/\r?\n/)
-        .map(s => s.trim())
-        .filter(Boolean);
-
-      const code = (form.get('code') || '').toUpperCase().trim();
-      let countryName = (form.get('country') || '').trim();
-      
-      if (!countryName && code) {
-        countryName = getCountryNameFromCode(code);
+        }
       }
 
-      const entry = {
-        country: countryName,
-        code: code,
-        addresses: addresses,
-        stock: addresses.length
-      };
+      // صفحه IPv6
+      if (url.pathname === '/ipv6' && req.method === 'GET') {
+        const entries = await listIpv6Entries(env.DB);
+        const userCount = await countUsers(env.DB);
+        return html(renderIpv6Page(entries, userCount));
+      }
 
-      if (!entry.country || !entry.code || entry.code.length !== 2) {
-        return html(`<script>
+      // API: افزودن IPv6 جدید
+      if (url.pathname === '/api/admin/add-ipv6' && req.method === 'POST') {
+        const form = await req.formData();
+        const addresses = (form.get('addresses') || '')
+          .split(/\r?\n/)
+          .map(s => s.trim())
+          .filter(Boolean);
+
+        const code = (form.get('code') || '').toUpperCase().trim();
+        let countryName = (form.get('country') || '').trim();
+
+        if (!countryName && code) {
+          countryName = getCountryNameFromCode(code);
+        }
+
+        const entry = {
+          country: countryName,
+          code: code,
+          addresses: addresses,
+          stock: addresses.length
+        };
+
+        if (!entry.country || !entry.code || entry.code.length !== 2) {
+          return html(`<script>
           alert('❌ اطلاعات نامعتبر است');
           setTimeout(() => history.back(), 1000);
         </script>`);
-      }
+        }
 
-      const existing = await getIpv6Entry(env.DB, entry.code);
-      if (existing) {
-        return html(`<script>
+        const existing = await getIpv6Entry(env.DB, entry.code);
+        if (existing) {
+          return html(`<script>
           alert('⚠️ این کد کشور قبلاً ثبت شده است');
           setTimeout(() => history.back(), 1000);
         </script>`);
-      }
+        }
 
-      await putIpv6Entry(env.DB, entry);
-      
-      return html(`<!doctype html>
+        await putIpv6Entry(env.DB, entry);
+
+        return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="2;url=/ipv6">
@@ -5705,49 +5965,49 @@ export default {
   <script>setTimeout(()=>location.href='/ipv6',2000)</script>
 </body>
 </html>`);
-    }
-
-    // API: افزودن گروهی IPv6
-    if (url.pathname === '/api/admin/bulk-add-ipv6' && req.method === 'POST') {
-      const form = await req.formData();
-      const addresses = (form.get('addresses') || '')
-        .split(/\r?\n/)
-        .map(s => s.trim())
-        .filter(s => s && isValidIPv6(s));
-
-      const code = (form.get('code') || '').toUpperCase().trim();
-      let countryName = (form.get('country') || '').trim();
-      
-      if (!countryName && code) {
-        countryName = getCountryNameFromCode(code);
       }
 
-      if (!code || code.length !== 2 || addresses.length === 0) {
-        return html(`<script>
+      // API: افزودن گروهی IPv6
+      if (url.pathname === '/api/admin/bulk-add-ipv6' && req.method === 'POST') {
+        const form = await req.formData();
+        const addresses = (form.get('addresses') || '')
+          .split(/\r?\n/)
+          .map(s => s.trim())
+          .filter(s => s && isValidIPv6(s));
+
+        const code = (form.get('code') || '').toUpperCase().trim();
+        let countryName = (form.get('country') || '').trim();
+
+        if (!countryName && code) {
+          countryName = getCountryNameFromCode(code);
+        }
+
+        if (!code || code.length !== 2 || addresses.length === 0) {
+          return html(`<script>
           alert('❌ اطلاعات نامعتبر است');
           setTimeout(() => history.back(), 1000);
         </script>`);
-      }
+        }
 
-      const existing = await getIpv6Entry(env.DB, code);
-      
-      if (existing) {
-        // اضافه کردن به کشور موجود
-        existing.addresses = [...new Set([...existing.addresses, ...addresses])];
-        existing.stock = existing.addresses.length;
-        await putIpv6Entry(env.DB, existing);
-      } else {
-        // ایجاد کشور جدید
-        const newEntry = {
-          code: code,
-          country: countryName,
-          addresses: [...new Set(addresses)],
-          stock: addresses.length
-        };
-        await putIpv6Entry(env.DB, newEntry);
-      }
+        const existing = await getIpv6Entry(env.DB, code);
 
-      return html(`<!doctype html>
+        if (existing) {
+          // اضافه کردن به کشور موجود
+          existing.addresses = [...new Set([...existing.addresses, ...addresses])];
+          existing.stock = existing.addresses.length;
+          await putIpv6Entry(env.DB, existing);
+        } else {
+          // ایجاد کشور جدید
+          const newEntry = {
+            code: code,
+            country: countryName,
+            addresses: [...new Set(addresses)],
+            stock: addresses.length
+          };
+          await putIpv6Entry(env.DB, newEntry);
+        }
+
+        return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="2;url=/ipv6">
@@ -5758,18 +6018,18 @@ export default {
   <script>setTimeout(()=>location.href='/ipv6',2000)</script>
 </body>
 </html>`);
-    }
+      }
 
-    // API: حذف IPv6
-    if (url.pathname === '/api/admin/delete-ipv6' && req.method === 'POST') {
-      const form = await req.formData();
-      const code = form.get('code');
+      // API: حذف IPv6
+      if (url.pathname === '/api/admin/delete-ipv6' && req.method === 'POST') {
+        const form = await req.formData();
+        const code = form.get('code');
 
-      if (code) {
-        const entry = await getIpv6Entry(env.DB, code);
-        await deleteIpv6Entry(env.DB, code);
-        
-        return html(`<!doctype html>
+        if (code) {
+          const entry = await getIpv6Entry(env.DB, code);
+          await deleteIpv6Entry(env.DB, code);
+
+          return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="1.5;url=/ipv6">
@@ -5780,9 +6040,9 @@ export default {
   <script>setTimeout(()=>location.href='/ipv6',1500)</script>
 </body>
 </html>`);
-      }
+        }
 
-      return html(`<!doctype html>
+        return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="2;url=/ipv6">
@@ -5793,23 +6053,23 @@ export default {
   <script>setTimeout(()=>location.href='/ipv6',2000)</script>
 </body>
 </html>`);
-    }
-
-    // API: بروزرسانی نام کشور IPv6
-    if (url.pathname === '/api/admin/update-ipv6-name' && req.method === 'POST') {
-      const form = await req.formData();
-      const code = (form.get('code') || '').toUpperCase().trim();
-      const newName = (form.get('country') || '').trim();
-
-      if (code && newName) {
-        const entry = await getIpv6Entry(env.DB, code);
-        if (entry) {
-          entry.country = newName;
-          await putIpv6Entry(env.DB, entry);
-        }
       }
 
-      return html(`<!doctype html>
+      // API: بروزرسانی نام کشور IPv6
+      if (url.pathname === '/api/admin/update-ipv6-name' && req.method === 'POST') {
+        const form = await req.formData();
+        const code = (form.get('code') || '').toUpperCase().trim();
+        const newName = (form.get('country') || '').trim();
+
+        if (code && newName) {
+          const entry = await getIpv6Entry(env.DB, code);
+          if (entry) {
+            entry.country = newName;
+            await putIpv6Entry(env.DB, entry);
+          }
+        }
+
+        return html(`<!doctype html>
 <html lang="fa" dir="rtl">
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="1;url=/ipv6">
@@ -5819,158 +6079,158 @@ export default {
   <script>setTimeout(()=>location.href='/ipv6',1000)</script>
 </body>
 </html>`);
-    }
-
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // 📨 Telegram Webhook
-    // ─────────────────────────────────────────────────────────────────────────────
-
-    // Webhook تلگرام
-    if (url.pathname === '/webhook' && req.method === 'POST') {
-      try {
-        const update = await req.json();
-        await handleUpdate(update, env);
-        return json({ ok: true });
-      } catch (e) {
-        console.error('خطا در webhook:', e);
-        return json({ ok: false, error: e.message }, 500);
       }
-    }
 
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // ⚙️ Webhook Management
-    // ─────────────────────────────────────────────────────────────────────────────
+      // ─────────────────────────────────────────────────────────────────────────────
+      // 📨 Telegram Webhook
+      // ─────────────────────────────────────────────────────────────────────────────
 
-    // تنظیم webhook
-    if (url.pathname === '/api/set-webhook' && req.method === 'GET') {
-      if (!env.BOT_TOKEN) {
-        return json({ 
-          ok: false, 
-          error: 'BOT_TOKEN تنظیم نشده است',
-          help: 'لطفاً در Settings > Functions > Environment variables متغیر BOT_TOKEN را اضافه کنید'
-        }, 500);
-      }
-      const webhookUrl = `${url.origin}/webhook`;
-      const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/setWebhook`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: webhookUrl })
-      });
-      const result = await res.json();
-      return json(result);
-    }
-
-    // حذف webhook
-    if (url.pathname === '/api/delete-webhook' && req.method === 'GET') {
-      const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/deleteWebhook`, {
-        method: 'POST'
-      });
-      const result = await res.json();
-      return json(result);
-    }
-
-    // وضعیت webhook
-    if (url.pathname === '/api/webhook-info' && req.method === 'GET') {
-      const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/getWebhookInfo`);
-      const result = await res.json();
-      return json(result);
-    }
-
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // 🛠️ Admin Utilities
-    // ─────────────────────────────────────────────────────────────────────────────
-
-    // تبدیل تمام اسم کشورها به فارسی
-    if (url.pathname === '/api/admin/fix-country-names' && req.method === 'GET') {
-      try {
-        const entries = await listDnsEntries(env.DB);
-        let updated = 0;
-        let skipped = 0;
-        
-        for (const entry of entries) {
-          const persianName = getCountryNameFromCode(entry.code);
-          
-          // اگر اسم فعلی با اسم فارسی متفاوت است، بروزرسانی کن
-          if (entry.country !== persianName) {
-            entry.country = persianName;
-            await putDnsEntry(env.DB, entry);
-            updated++;
-          } else {
-            skipped++;
-          }
+      // Webhook تلگرام
+      if (url.pathname === '/webhook' && req.method === 'POST') {
+        try {
+          const update = await req.json();
+          await handleUpdate(update, env);
+          return json({ ok: true });
+        } catch (e) {
+          console.error('خطا در webhook:', e);
+          return json({ ok: false, error: e.message }, 500);
         }
-        
-        invalidateDnsCache();
-        
-        return json({
-          success: true,
-          message: `✅ ${updated} کشور بروزرسانی شد، ${skipped} کشور نیازی به تغییر نداشت`,
-          updated,
-          skipped,
-          total: entries.length
-        });
-      } catch (e) {
-        return json({ success: false, error: e.message }, 500);
       }
-    }
 
-    // حذف آدرس‌های تکراری از تمام کشورها
-    if (url.pathname === '/api/admin/remove-duplicates' && req.method === 'GET') {
-      try {
-        const entries = await listDnsEntries(env.DB);
-        let totalRemoved = 0;
-        let countriesUpdated = 0;
-        
-        for (const entry of entries) {
-          if (Array.isArray(entry.addresses)) {
-            const originalCount = entry.addresses.length;
-            // حذف تکراری‌ها با استفاده از Set
-            entry.addresses = [...new Set(entry.addresses)];
-            const newCount = entry.addresses.length;
-            const removed = originalCount - newCount;
-            
-            if (removed > 0) {
-              entry.stock = entry.addresses.length;
+
+      // ─────────────────────────────────────────────────────────────────────────────
+      // ⚙️ Webhook Management
+      // ─────────────────────────────────────────────────────────────────────────────
+
+      // تنظیم webhook
+      if (url.pathname === '/api/set-webhook' && req.method === 'GET') {
+        if (!env.BOT_TOKEN) {
+          return json({
+            ok: false,
+            error: 'BOT_TOKEN تنظیم نشده است',
+            help: 'لطفاً در Settings > Functions > Environment variables متغیر BOT_TOKEN را اضافه کنید'
+          }, 500);
+        }
+        const webhookUrl = `${url.origin}/webhook`;
+        const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/setWebhook`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: webhookUrl })
+        });
+        const result = await res.json();
+        return json(result);
+      }
+
+      // حذف webhook
+      if (url.pathname === '/api/delete-webhook' && req.method === 'GET') {
+        const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/deleteWebhook`, {
+          method: 'POST'
+        });
+        const result = await res.json();
+        return json(result);
+      }
+
+      // وضعیت webhook
+      if (url.pathname === '/api/webhook-info' && req.method === 'GET') {
+        const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/getWebhookInfo`);
+        const result = await res.json();
+        return json(result);
+      }
+
+
+      // ─────────────────────────────────────────────────────────────────────────────
+      // 🛠️ Admin Utilities
+      // ─────────────────────────────────────────────────────────────────────────────
+
+      // تبدیل تمام اسم کشورها به فارسی
+      if (url.pathname === '/api/admin/fix-country-names' && req.method === 'GET') {
+        try {
+          const entries = await listDnsEntries(env.DB);
+          let updated = 0;
+          let skipped = 0;
+
+          for (const entry of entries) {
+            const persianName = getCountryNameFromCode(entry.code);
+
+            // اگر اسم فعلی با اسم فارسی متفاوت است، بروزرسانی کن
+            if (entry.country !== persianName) {
+              entry.country = persianName;
               await putDnsEntry(env.DB, entry);
-              totalRemoved += removed;
-              countriesUpdated++;
+              updated++;
+            } else {
+              skipped++;
             }
           }
+
+          invalidateDnsCache();
+
+          return json({
+            success: true,
+            message: `✅ ${updated} کشور بروزرسانی شد، ${skipped} کشور نیازی به تغییر نداشت`,
+            updated,
+            skipped,
+            total: entries.length
+          });
+        } catch (e) {
+          return json({ success: false, error: e.message }, 500);
         }
-        
-        invalidateDnsCache();
-        
-        return json({
-          success: true,
-          message: `✅ ${totalRemoved} آدرس تکراری از ${countriesUpdated} کشور حذف شد`,
-          totalRemoved,
-          countriesUpdated,
-          totalCountries: entries.length
-        });
-      } catch (e) {
-        return json({ success: false, error: e.message }, 500);
       }
-    }
+
+      // حذف آدرس‌های تکراری از تمام کشورها
+      if (url.pathname === '/api/admin/remove-duplicates' && req.method === 'GET') {
+        try {
+          const entries = await listDnsEntries(env.DB);
+          let totalRemoved = 0;
+          let countriesUpdated = 0;
+
+          for (const entry of entries) {
+            if (Array.isArray(entry.addresses)) {
+              const originalCount = entry.addresses.length;
+              // حذف تکراری‌ها با استفاده از Set
+              entry.addresses = [...new Set(entry.addresses)];
+              const newCount = entry.addresses.length;
+              const removed = originalCount - newCount;
+
+              if (removed > 0) {
+                entry.stock = entry.addresses.length;
+                await putDnsEntry(env.DB, entry);
+                totalRemoved += removed;
+                countriesUpdated++;
+              }
+            }
+          }
+
+          invalidateDnsCache();
+
+          return json({
+            success: true,
+            message: `✅ ${totalRemoved} آدرس تکراری از ${countriesUpdated} کشور حذف شد`,
+            totalRemoved,
+            countriesUpdated,
+            totalCountries: entries.length
+          });
+        } catch (e) {
+          return json({ success: false, error: e.message }, 500);
+        }
+      }
 
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // ❌ 404 Handler
-    // ─────────────────────────────────────────────────────────────────────────────
+      // ─────────────────────────────────────────────────────────────────────────────
+      // ❌ 404 Handler
+      // ─────────────────────────────────────────────────────────────────────────────
 
-    return html('<h1>404 - صفحه یافت نشد</h1>');
-    
+      return html('<h1>404 - صفحه یافت نشد</h1>');
+
     } catch (error) {
       // مدیریت خطاهای غیرمنتظره برای جلوگیری از خطای 1101
       console.error('خطای Worker:', error);
       console.error('Stack:', error.stack);
-      
+
       // بررسی نوع درخواست برای ارسال پاسخ مناسب
       const acceptHeader = req.headers.get('accept') || '';
       const isJsonRequest = acceptHeader.includes('application/json');
-      
+
       if (isJsonRequest) {
         // پاسخ JSON برای API requests
         return new Response(
@@ -5982,7 +6242,7 @@ export default {
           }, null, 2),
           {
             status: 500,
-            headers: { 
+            headers: {
               'Content-Type': 'application/json; charset=utf-8',
               'Access-Control-Allow-Origin': '*'
             }
