@@ -1425,11 +1425,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 🔧 Web Panel JavaScript Functions
-// ─────────────────────────────────────────────────────────────────────────────
-
 function showTab(tabName) {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -3526,8 +3521,8 @@ function buildMainKeyboard(userId) {
   ]);
   // سطر دوم: حساب کاربری و ارسال بازخورد
   rows.push([
-    { text: '👤 حساب کاربری', callback_data: 'account' },
-    { text: '💬 ارسال بازخورد', callback_data: 'send_feedback' }
+    { text: '💬 ارسال بازخورد', callback_data: 'send_feedback' },
+    { text: '👤 حساب کاربری', callback_data: 'account' }
   ]);
   // سطر سوم: ادمین (در صورت نیاز)
   if (Number(userId) === Number(ADMIN_ID)) {
