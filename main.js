@@ -237,12 +237,21 @@ async function getWgState(kv, userId) {
 }
 async function clearWgState(kv, userId) { await kv.delete(`wg_state:${userId}`); }
 
-function buildWireguardCountryKb(entries, page = 0) {
+function buildWireguardCountryKb(entries, page = 0, sortOrder = 'default') {
   const ITEMS_PER_PAGE = 12;
-  const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
+  
+  // ترتیب‌دهی بر اساس موجودی
+  let sortedEntries = [...entries];
+  if (sortOrder === 'low_to_high') {
+    sortedEntries.sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0));
+  } else if (sortOrder === 'high_to_low') {
+    sortedEntries.sort((a, b) => (b.stock ?? 0) - (a.stock ?? 0));
+  }
+  
+  const totalPages = Math.ceil(sortedEntries.length / ITEMS_PER_PAGE);
   const startIndex = page * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
-  const currentEntries = entries.slice(startIndex, endIndex);
+  const currentEntries = sortedEntries.slice(startIndex, endIndex);
   
   const rows = [];
   
@@ -278,6 +287,14 @@ function buildWireguardCountryKb(entries, page = 0) {
     ]);
   });
 
+  // اضافه کردن دکمه فیلتر
+  const filterEmoji = sortOrder === 'low_to_high' ? '📈' : sortOrder === 'high_to_low' ? '📉' : '🔀';
+  const nextSortOrder = sortOrder === 'default' ? 'low_to_high' : sortOrder === 'low_to_high' ? 'high_to_low' : 'default';
+  rows.push([{
+    text: `${filterEmoji} فیلتر`,
+    callback_data: `wg_sort:${nextSortOrder}:0`
+  }]);
+
   // اضافه کردن دکمه‌های صفحه‌بندی
   if (totalPages > 1) {
     const paginationRow = [];
@@ -286,7 +303,7 @@ function buildWireguardCountryKb(entries, page = 0) {
     if (page > 0) {
       paginationRow.push({
         text: '⬅️ قبلی',
-        callback_data: `wg_page:${page - 1}`
+        callback_data: `wg_page:${page - 1}:${sortOrder}`
       });
     }
 
@@ -300,7 +317,7 @@ function buildWireguardCountryKb(entries, page = 0) {
     if (page < totalPages - 1) {
       paginationRow.push({
         text: 'بعدی ➡️',
-        callback_data: `wg_page:${page + 1}`
+        callback_data: `wg_page:${page + 1}:${sortOrder}`
       });
     }
 
@@ -791,25 +808,69 @@ function renderMainPage(entries, userCount) {
   <section class="section">
     <div class="section-header">
       <h2>🚀 افزودن گروهی آدرس‌ها (تشخیص خودکار کشور)</h2>
+      <span class="badge" id="address-count" style="display:none;">0 آدرس</span>
     </div>
-    <form method="POST" action="/api/admin/bulk-add" class="dns-form">
+    <form method="POST" action="/api/admin/bulk-add" class="dns-form" id="bulk-form">
       <div class="form-group full-width">
-        <label>📡 آدرس‌های IP (هر خط یک آدرس)</label>
-        <textarea name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;185.55.226.26" rows="8" required></textarea>
-        <small>هر آدرس IP را در یک خط جداگانه وارد کنید. کشور هر آدرس به‌صورت خودکار تشخیص داده می‌شود.</small>
+        <div class="label-row">
+          <label for="addresses-input">📡 آدرس‌های IP (هر خط یک آدرس)</label>
+          <button type="button" class="btn-helper" onclick="pasteFromClipboard()" title="چسباندن از کلیپ‌بورد">📋 چسباندن</button>
+        </div>
+        <textarea id="addresses-input" name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;185.55.226.26&#10;9.9.9.9" rows="10" required></textarea>
+        <div class="textarea-info">
+          <span class="char-count">0 کاراکتر</span>
+          <span class="line-count">0 خط</span>
+        </div>
+        <small>💡 هر آدرس IP را در یک خط جداگانه وارد کنید. کشور هر آدرس به‌صورت خودکار تشخیص داده می‌شود. آدرس‌های تکراری به‌طور خودکار حذف می‌شوند.</small>
       </div>
+
+      <div class="form-options">
+        <label class="checkbox-label">
+          <input type="checkbox" id="auto-validate" checked>
+          <span>✅ تایید خودکار آدرس‌ها</span>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="remove-duplicates" checked>
+          <span>🧹 حذف آدرس‌های تکراری</span>
+        </label>
+      </div>
+
+      <div id="validation-info" class="validation-info" style="display:none;">
+        <div class="info-row">
+          <span class="info-label">✅ معتبر:</span>
+          <span class="valid-count">0</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">❌ نامعتبر:</span>
+          <span class="invalid-count">0</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">🔄 تکراری:</span>
+          <span class="duplicate-count">0</span>
+        </div>
+      </div>
+
       <div id="bulk-progress" class="bulk-progress" style="display:none;">
-        <div class="progress-bar"><div class="progress-fill"></div></div>
+        <div class="progress-container">
+          <div class="progress-bar"><div class="progress-fill"></div></div>
+          <span class="progress-percent">0%</span>
+        </div>
+        <p class="progress-text">⏳ در حال پردازش...</p>
         <p class="current-ip" style="display:none;"></p>
-        <p class="progress-text">در حال پردازش...</p>
+        <p class="speed-info" style="display:none;"></p>
         <div class="error-list" style="display:none;">
           <details>
             <summary class="error-summary">🔴 مشاهده خطاها</summary>
             <div class="error-items"></div>
           </details>
         </div>
+        <div class="success-summary" style="display:none;"></div>
       </div>
-      <button type="submit" class="btn-submit" id="bulk-submit">🔍 تشخیص و افزودن</button>
+
+      <div class="button-group">
+        <button type="submit" class="btn-submit" id="bulk-submit">🔍 تشخیص و افزودن</button>
+        <button type="button" class="btn-secondary" onclick="clearAddresses()" id="clear-btn">🗑️ پاک کردن</button>
+      </div>
     </form>
   </section>
 
@@ -981,6 +1042,84 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Helper functions for bulk add form
+  window.pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const textarea = document.getElementById('addresses-input');
+      if (textarea) {
+        textarea.value = text;
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        Toast.success('✅ متن از کلیپ‌بورد چسباند شد');
+      }
+    } catch (e) {
+      Toast.error('❌ خطا در خواندن کلیپ‌بورد');
+    }
+  };
+
+  window.clearAddresses = () => {
+    const textarea = document.getElementById('addresses-input');
+    if (textarea && textarea.value.trim()) {
+      if (confirm('آیا مطمئن هستید؟')) {
+        textarea.value = '';
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+  };
+
+  // Live validation and counter for textarea
+  const textarea = document.getElementById('addresses-input');
+  if (textarea) {
+    const updateValidation = () => {
+      const text = textarea.value;
+      const lines = text.split('\\n').filter(l => l.trim());
+      const charCount = text.length;
+      
+      document.querySelector('.char-count').textContent = charCount + ' کاراکتر';
+      document.querySelector('.line-count').textContent = lines.length + ' خط';
+
+      // Live validation if checkbox is checked
+      if (document.getElementById('auto-validate')?.checked) {
+        const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?\\d?\\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\\d?\\d)){3}$/;
+        const allIps = text.split(/[^0-9.]+/).filter(a => a.trim());
+        const validIps = new Set();
+        const invalidIps = new Set();
+        const duplicates = new Set();
+
+        allIps.forEach(ip => {
+          if (ipRegex.test(ip)) {
+            if (validIps.has(ip)) {
+              duplicates.add(ip);
+            } else {
+              validIps.add(ip);
+            }
+          } else if (ip) {
+            invalidIps.add(ip);
+          }
+        });
+
+        const validCount = validIps.size;
+        const invalidCount = invalidIps.size;
+        const duplicateCount = duplicates.size;
+
+        if (validCount > 0 || invalidCount > 0 || duplicateCount > 0) {
+          document.getElementById('validation-info').style.display = 'grid';
+          document.querySelector('.valid-count').textContent = validCount;
+          document.querySelector('.invalid-count').textContent = invalidCount;
+          document.querySelector('.duplicate-count').textContent = duplicateCount;
+          document.getElementById('address-count').style.display = 'inline-block';
+          document.getElementById('address-count').textContent = validCount + ' آدرس معتبر';
+        } else {
+          document.getElementById('validation-info').style.display = 'none';
+          document.getElementById('address-count').style.display = 'none';
+        }
+      }
+    };
+
+    textarea.addEventListener('input', updateValidation);
+    document.getElementById('auto-validate')?.addEventListener('change', updateValidation);
+  }
+
   // Bulk add form with live progress
   const bulkForm = document.querySelector('form[action="/api/admin/bulk-add"]');
   if (bulkForm) {
@@ -1047,13 +1186,14 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(() => {
           const percent = Math.round((processed / addresses.length) * 100);
           progressFill.style.width = percent + '%';
+          progress.querySelector('.progress-percent').textContent = percent + '%';
           
           if (currentIp) {
             currentIpText.textContent = '🔄 در حال پردازش: ' + currentIp;
             currentIpText.style.display = 'block';
           }
           
-          progressText.textContent = '📊 ' + processed + '/' + addresses.length + ' (' + percent + '%) | ✅ ' + success + ' | ❌ ' + failed;
+          progressText.textContent = '📊 ' + processed + '/' + addresses.length + ' | ✅ ' + success + ' موفق | ❌ ' + failed + ' ناموفق';
         });
       };
       
@@ -1130,7 +1270,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const eta = remaining > 0 ? Math.ceil(remaining / speed) : 0;
         
         if (eta > 0 && !cancelRequested) {
-          currentIpText.textContent = '⚡ سرعت: ' + speed + ' IP/s | ⏱️ زمان تخمینی: ' + eta + 's';
+          const speedInfo = progress.querySelector('.speed-info');
+          speedInfo.textContent = '⚡ سرعت: ' + speed + ' IP/s | ⏱️ زمان تخمینی: ' + eta + 's';
+          speedInfo.style.display = 'block';
         }
         
         // تاخیر کوچک بین batch‌ها برای جلوگیری از rate limit (100ms)
@@ -1150,8 +1292,19 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const duplicateText = duplicates > 0 ? ' | 🔄 ' + duplicates + ' تکراری' : '';
         progressText.textContent = '✅ تکمیل شد! ' + processed + ' آدرس | ✅ ' + success + ' جدید' + duplicateText + ' | ❌ ' + failed + ' ناموفق';
+        progress.querySelector('.speed-info').style.display = 'none';
         btn.textContent = '✅ تکمیل شد';
         btn.onclick = null;
+        
+        // نمایش خلاصه موفقیت
+        const successSummary = progress.querySelector('.success-summary');
+        let summaryHtml = '<strong>✅ نتایج پردازش:</strong><br>';
+        summaryHtml += '🎯 ' + success + ' آدرس جدید اضافه شد<br>';
+        if (duplicates > 0) summaryHtml += '🔄 ' + duplicates + ' آدرس تکراری<br>';
+        if (failed > 0) summaryHtml += '❌ ' + failed + ' آدرس ناموفق<br>';
+        if (summary) summaryHtml += '<br><strong>📊 توزیع کشورها:</strong><br>' + summary;
+        successSummary.innerHTML = summaryHtml;
+        successSummary.style.display = 'block';
         
         if (summary) {
           const duplicateMsg = duplicates > 0 ? '\\n🔄 ' + duplicates + ' آدرس تکراری نادیده گرفته شد' : '';
@@ -2015,6 +2168,193 @@ select:focus {
   border-left: 3px solid #667eea;
 }
 
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.btn-helper {
+  background: linear-gradient(135deg, #4facfe, #00f2fe);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(79, 172, 254, 0.3);
+}
+
+.btn-helper:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.4);
+}
+
+.textarea-info {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+.form-options {
+  display: flex;
+  gap: 20px;
+  padding: 15px;
+  background: linear-gradient(135deg, #f0f9ff, #f0fdf4);
+  border-radius: 12px;
+  border: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #334155;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #667eea;
+}
+
+.validation-info {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 15px;
+  background: linear-gradient(135deg, #f8f9ff, #fff5f8);
+  border-radius: 12px;
+  border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+.info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+.info-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.info-row span:last-child {
+  font-size: 20px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2, #4facfe);
+  width: 0%;
+  transition: width 0.3s ease;
+  border-radius: 10px;
+}
+
+.progress-percent {
+  font-size: 13px;
+  font-weight: 600;
+  color: #667eea;
+  min-width: 40px;
+  text-align: right;
+}
+
+.speed-info {
+  font-size: 12px;
+  color: #64748b;
+  margin: 8px 0 0 0;
+}
+
+.success-summary {
+  margin-top: 15px;
+  padding: 15px;
+  background: linear-gradient(135deg, #dcfce7, #f0fdf4);
+  border-left: 4px solid #10b981;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #166534;
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  padding: 14px 32px;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+}
+
+.btn-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
+}
+
+.error-item {
+  padding: 10px;
+  background: #fee2e2;
+  border-left: 3px solid #dc2626;
+  border-radius: 6px;
+  margin: 6px 0;
+  font-size: 13px;
+  color: #7f1d1d;
+}
+
+.error-item code {
+  background: #fecaca;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+}
+
 @media (max-width: 768px) {
   .dns-grid {
     grid-template-columns: 1fr;
@@ -2045,6 +2385,28 @@ select:focus {
   .tab-btn.active {
     border-right-color: #667eea;
     border-bottom-color: transparent;
+  }
+
+  .label-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .form-options {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .validation-info {
+    grid-template-columns: 1fr;
+  }
+
+  .button-group {
+    flex-direction: column;
+  }
+
+  .btn-submit, .btn-secondary {
+    width: 100%;
   }
 }
 
@@ -2146,6 +2508,60 @@ body.dark .bulk-progress {
 
 body.dark .progress-bar {
   background: #334155;
+}
+
+body.dark .form-options {
+  background: rgba(30, 41, 59, 0.5);
+  border-color: rgba(102, 126, 234, 0.2);
+}
+
+body.dark .validation-info {
+  background: rgba(30, 41, 59, 0.5);
+  border-color: rgba(102, 126, 234, 0.2);
+}
+
+body.dark .textarea-info {
+  background: rgba(15, 23, 42, 0.8);
+  color: #94a3b8;
+}
+
+body.dark .checkbox-label {
+  color: #e2e8f0;
+}
+
+body.dark .btn-helper {
+  background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
+}
+
+body.dark .btn-helper:hover {
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.4);
+}
+
+body.dark .btn-secondary {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  box-shadow: 0 4px 15px rgba(217, 119, 6, 0.3);
+}
+
+body.dark .btn-secondary:hover {
+  box-shadow: 0 8px 25px rgba(217, 119, 6, 0.4);
+}
+
+body.dark .success-summary {
+  background: rgba(5, 150, 105, 0.2);
+  border-left-color: #10b981;
+  color: #86efac;
+}
+
+body.dark .error-item {
+  background: rgba(220, 38, 38, 0.2);
+  border-left-color: #ef4444;
+  color: #fca5a5;
+}
+
+body.dark .error-item code {
+  background: rgba(220, 38, 38, 0.3);
+  color: #fecaca;
 }
 
 .bulk-progress {
@@ -3605,21 +4021,35 @@ export async function handleUpdate(update, env) {
       }
 
       // وایرگارد: شروع => انتخاب کشور
-      else if (data === 'wireguard' || data.startsWith('wg_page:')) {
+      else if (data === 'wireguard' || data.startsWith('wg_page:') || data.startsWith('wg_sort:')) {
         await clearWgState(env.DB, from.id);
         const entries = await getCachedDnsList(env.DB);
         
-        // تعیین شماره صفحه
-        const page = data.startsWith('wg_page:') ? parseInt(data.split(':')[1]) || 0 : 0;
-        const kb = buildWireguardCountryKb(entries, page);
+        // تعیین شماره صفحه و ترتیب
+        let page = 0;
+        let sortOrder = 'default';
+        
+        if (data.startsWith('wg_page:')) {
+          const parts = data.split(':');
+          page = parseInt(parts[1]) || 0;
+          sortOrder = parts[2] || 'default';
+        } else if (data.startsWith('wg_sort:')) {
+          const parts = data.split(':');
+          sortOrder = parts[1] || 'default';
+          page = parseInt(parts[2]) || 0;
+        }
+        
+        const kb = buildWireguardCountryKb(entries, page, sortOrder);
         const totalStock = entries.reduce((sum, e) => sum + (e.stock || 0), 0);
         const totalPages = Math.ceil(entries.length / 12);
         const currentPage = page + 1;
         
+        const sortText = sortOrder === 'low_to_high' ? '📈 (کم به زیاد)' : sortOrder === 'high_to_low' ? '📉 (زیاد به کم)' : '🔀 (پیش‌فرض)';
+        
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
-          text: `🛰️ *وایرگارد*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n📄 صفحه: *${currentPage}/${totalPages}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (1-10)\n🔴 ناموجود`,
+          text: `🛰️ *وایرگارد*\n━━━━━━━━━━━━━━━━━━━━\n\n📊 تعداد کشورها: *${entries.length}*\n📦 موجودی کل: *${totalStock}*\n📄 صفحه: *${currentPage}/${totalPages}*\n🔀 ترتیب: *${sortText}*\n\n💡 کشور موردنظر را انتخاب کنید:\n\n🟢 موجودی زیاد (10+)\n🟡 موجودی متوسط (1-10)\n🔴 ناموجود`,
           parse_mode: 'Markdown',
           reply_markup: kb
         });
