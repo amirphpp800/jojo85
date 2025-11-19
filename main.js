@@ -568,104 +568,57 @@ function getRandomDns(entry) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // تشخیص کشور از IP با استفاده از API و cache در KV
-let lastApiCallTime = 0;
-const MIN_API_DELAY = 1400; // حداقل 1.4 ثانیه بین هر درخواست (تضمین عدم رسیدن به rate limit)
-
 async function detectCountryFromIP(ip, kv) {
   // بررسی cache در KV (دائمی)
   const cacheKey = `ip_cache:${ip}`;
   const cached = await kv.get(cacheKey);
   if (cached) {
     try {
-      const parsed = JSON.parse(cached);
-      if (parsed !== null) {
-        return parsed;
-      }
+      return JSON.parse(cached);
     } catch { }
   }
 
-  // اجرای تاخیر برای مدیریت rate limit (45 req/min)
-  const now = Date.now();
-  const timeSinceLastCall = now - lastApiCallTime;
-  if (timeSinceLastCall < MIN_API_DELAY) {
-    await new Promise(resolve => setTimeout(resolve, MIN_API_DELAY - timeSinceLastCall));
-  }
-  lastApiCallTime = Date.now();
+  try {
+    // timeout 4 ثانیه برای سرعت بیشتر
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-  // لیست API های پشتیبان
-  const apis = [
-    {
-      name: 'ip-api',
-      url: `http://ip-api.com/json/${ip}?fields=status,countryCode,country`,
-      parse: (data) => data && data.status === 'success' && data.countryCode ? {
+    // استفاده از ip-api.com که سریع‌تر و قابل اعتمادتر است
+    // توجه: این API محدودیت 45 درخواست در دقیقه دارد
+    const res = await fetch(`https://ip-api.com/json/${ip}?fields=status,countryCode,country`, {
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    if (data && data.status === 'success' && data.countryCode) {
+      const result = {
         code: data.countryCode.toUpperCase(),
         name: getCountryNameFromCode(data.countryCode.toUpperCase())
-      } : null
-    },
-    {
-      name: 'ipapi',
-      url: `https://ipapi.co/${ip}/json/`,
-      parse: (data) => data && data.country_code ? {
-        code: data.country_code.toUpperCase(),
-        name: getCountryNameFromCode(data.country_code.toUpperCase())
-      } : null
-    },
-    {
-      name: 'ip2c',
-      url: `https://ip2c.org/${ip}`,
-      parse: (text) => {
-        if (typeof text === 'string' && text.startsWith('1;')) {
-          const parts = text.split(';');
-          if (parts.length >= 3) {
-            return {
-              code: parts[1].toUpperCase(),
-              name: getCountryNameFromCode(parts[1].toUpperCase())
-            };
-          }
-        }
-        return null;
-      },
-      isText: true
+      };
+      // ذخیره در KV با TTL 30 روز
+      await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: 2592000 });
+      return result;
     }
-  ];
 
-  // تلاش با هر API به ترتیب
-  for (const api of apis) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-
-      const res = await fetch(api.url, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0'
-        }
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!res.ok) {
-        continue; // امتحان API بعدی
-      }
-
-      const data = api.isText ? await res.text() : await res.json();
-      const result = api.parse(data);
-
-      if (result && result.code) {
-        // ذخیره موفق در cache با TTL 30 روز
-        await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: 2592000 });
-        return result;
-      }
-    } catch (e) {
-      // ادامه به API بعدی
-      console.log(`خطا در ${api.name} برای ${ip}:`, e.message);
-      continue;
+    // ذخیره null در cache با TTL کوتاه‌تر (1 روز)
+    await kv.put(cacheKey, JSON.stringify(null), { expirationTtl: 86400 });
+    return null;
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      console.error('Timeout در تشخیص کشور:', ip);
+    } else {
+      console.error('خطا در تشخیص کشور:', e);
     }
+    // در صورت خطا، cache نمی‌کنیم تا بعداً دوباره تلاش شود
+    return null;
   }
-
-  // اگر هیچ API کار نکرد، ذخیره null با TTL کوتاه (1 ساعت)
-  await kv.put(cacheKey, JSON.stringify(null), { expirationTtl: 3600 });
-  return null;
 }
 
 // تبدیل نام کشور به فارسی (اگر انگلیسی باشد از کد آن استفاده می‌کند)
@@ -947,8 +900,7 @@ function renderMainPage(entries, userCount) {
           <span class="char-count">0 کاراکتر</span>
           <span class="line-count">0 خط</span>
         </div>
-        <small>💡 هر آدرس IP را در یک خط جداگانه وارد کنید. کشور هر آدرس به‌صورت خودکار تشخیص داده می‌شود. آدرس‌های تکراری به‌طور خودکار حذف می‌شوند.
-        <br><strong>⚠️ توجه:</strong> به دلیل محدودیت API تشخیص کشور، پردازش کند است (حدود 2-3 ثانیه برای هر IP). لطفاً صبور باشید.</small>
+        <small>💡 هر آدرس IP را در یک خط جداگانه وارد کنید. کشور هر آدرس به‌صورت خودکار تشخیص داده می‌شود. آدرس‌های تکراری به‌طور خودکار حذف می‌شوند.</small>
       </div>
 
       <div class="form-options">
@@ -1303,9 +1255,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const byCountry = {};
       const errors = [];
       
-      // تنظیم batch size پایین برای احترام به rate limit API (حداکثر 45 req/min)
-      // با تاخیر 1.4 ثانیه، هر دقیقه حدود 42 درخواست ارسال می‌شود
-      const BATCH_SIZE = 3; // پردازش 3 IP به صورت موازی
+      // تنظیم دینامیک batch size بر اساس تعداد آدرس‌ها (افزایش برای سرعت بیشتر)
+      const BATCH_SIZE = addresses.length > 100 ? 15 : addresses.length > 50 ? 10 : 7;
       
       // تابع بروزرسانی UI با requestAnimationFrame برای عملکرد بهتر
       const updateUI = (currentIp = null) => {
@@ -1325,7 +1276,6 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // شروع پردازش
       const startTime = Date.now();
-      progressText.textContent = '⏳ شروع پردازش... لطفاً صبور باشید، این فرآیند ممکن است چند دقیقه طول بکشد.';
       
       for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
         if (cancelRequested) {
@@ -1340,11 +1290,11 @@ document.addEventListener('DOMContentLoaded', () => {
           updateUI(ip);
           
           let attempt = 0;
-          while (attempt < 2) { // کاهش تعداد تلاش‌ها از 3 به 2
+          while (attempt < 3) {
             attempt++;
             try {
               const controller = new AbortController();
-              const t = setTimeout(() => controller.abort(), 12000); // افزایش timeout به 12 ثانیه
+              const t = setTimeout(() => controller.abort(), 5000);
               const res = await fetch('/api/admin/bulk-add-single', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1352,25 +1302,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 signal: controller.signal
               });
               clearTimeout(t);
-              
-              if (!res.ok) {
-                throw new Error('HTTP ' + res.status);
-              }
-              
               const result = await res.json();
               if (result && result.success !== undefined) {
                 return { ip, result };
               }
               return { ip, result: { success: false, error: 'پاسخ نامعتبر از سرور' } };
             } catch (e) {
-              if (attempt >= 2) {
-                return { ip, result: { success: false, error: e.name === 'AbortError' ? 'timeout - سرور پاسخ نداد' : e.message } };
+              if (attempt >= 3) {
+                return { ip, result: { success: false, error: e.name === 'AbortError' ? 'timeout' : e.message } };
               }
-              // تاخیر بیشتر بین تلاش‌ها
-              await new Promise(r => setTimeout(r, 1000 * attempt));
+              await new Promise(r => setTimeout(r, 300 * attempt));
             }
           }
-          return { ip, result: { success: false, error: 'خطای نامشخص بعد از 2 تلاش' } };
+          return { ip, result: { success: false, error: 'خطای نامشخص' } };
         });
         
         // پردازش نتایج
@@ -1408,9 +1352,9 @@ document.addEventListener('DOMContentLoaded', () => {
           speedInfo.style.display = 'block';
         }
         
-        // تاخیر بین batch‌ها (500ms) برای اطمینان از عدم فشار بیش از حد به سرور
+        // تاخیر کوچک بین batch‌ها برای جلوگیری از rate limit (100ms)
         if (i + BATCH_SIZE < addresses.length && !cancelRequested) {
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 100));
         }
       }
       
@@ -3984,7 +3928,6 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
 // مدیریت آپدیت‌های تلگرام
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔄 Main Update Handler (Telegram Webhook)
-// ─────────────────────────────────────────────────────────────────────────────
 export async function handleUpdate(update, env) {
   try {
     // پیام‌های عادی
@@ -3995,6 +3938,14 @@ export async function handleUpdate(update, env) {
       const from = msg.from || {};
 
       await saveUser(env.DB, from);
+
+      // پاسخ ندادن در گروه/سوپرگروه/کانال - فقط پیوی
+      try {
+        const chatType = msg.chat && msg.chat.type;
+        if (chatType && chatType !== 'private') {
+          return; // هیچ پاسخی در گروه‌ها نده
+        }
+      } catch {}
 
       if (Number(from.id) === Number(ADMIN_ID)) {
         const state = await env.DB.get(`admin_state:${ADMIN_ID}`);
@@ -4009,6 +3960,7 @@ export async function handleUpdate(update, env) {
 
           let sent = 0;
           let failed = 0;
+          let consecutiveFailures = 0;
 
           // ارسال پیام شروع
           const progressMsg = await telegramApi(env, '/sendMessage', {
@@ -4026,13 +3978,24 @@ export async function handleUpdate(update, env) {
               const userId = Number(k.name.split(':')[1]);
               if (!userId || userId === ADMIN_ID) continue;
               try {
-                await telegramApi(env, '/sendPhoto', {
+                const resp = await telegramApi(env, '/sendPhoto', {
                   chat_id: userId,
                   photo: photo.file_id,
                   caption: caption,
                   parse_mode: caption ? 'Markdown' : undefined
                 });
-                sent++;
+                if (resp && resp.ok === true) {
+                  sent++;
+                  consecutiveFailures = 0;
+                } else {
+                  failed++;
+                  consecutiveFailures++;
+                  // Backoff for 429 Too Many Requests
+                  const retryAfter = resp?.parameters?.retry_after;
+                  if (retryAfter && Number(retryAfter) > 0) {
+                    await new Promise(r => setTimeout(r, (Number(retryAfter) + 1) * 1000));
+                  }
+                }
 
                 // بروزرسانی پیشرفت هر 5 ارسال
                 if (progressMsgId && (sent + failed) % 5 === 0) {
@@ -4043,10 +4006,19 @@ export async function handleUpdate(update, env) {
                   });
                 }
 
-                await new Promise(r => setTimeout(r, 50));
+                // Throttle + mild backoff after consecutive failures
+                if (consecutiveFailures >= 5) {
+                  await new Promise(r => setTimeout(r, 1000));
+                  consecutiveFailures = 0;
+                } else {
+                  await new Promise(r => setTimeout(r, 50));
+                }
               } catch (e) {
                 failed++;
+                consecutiveFailures++;
                 console.error('خطا در ارسال به کاربر:', userId, e);
+                // Short backoff on network or unknown errors
+                await new Promise(r => setTimeout(r, 200));
               }
             }
             await env.DB.delete(`admin_state:${ADMIN_ID}`);
@@ -4070,13 +4042,23 @@ export async function handleUpdate(update, env) {
               const userId = Number(k.name.split(':')[1]);
               if (!userId || userId === ADMIN_ID) continue;
               try {
-                await telegramApi(env, '/sendVideo', {
+                const resp = await telegramApi(env, '/sendVideo', {
                   chat_id: userId,
                   video: msg.video.file_id,
                   caption: caption,
                   parse_mode: caption ? 'Markdown' : undefined
                 });
-                sent++;
+                if (resp && resp.ok === true) {
+                  sent++;
+                  consecutiveFailures = 0;
+                } else {
+                  failed++;
+                  consecutiveFailures++;
+                  const retryAfter = resp?.parameters?.retry_after;
+                  if (retryAfter && Number(retryAfter) > 0) {
+                    await new Promise(r => setTimeout(r, (Number(retryAfter) + 1) * 1000));
+                  }
+                }
 
                 if (progressMsgId && (sent + failed) % 5 === 0) {
                   await telegramApi(env, '/editMessageText', {
@@ -4086,10 +4068,17 @@ export async function handleUpdate(update, env) {
                   });
                 }
 
-                await new Promise(r => setTimeout(r, 50));
+                if (consecutiveFailures >= 5) {
+                  await new Promise(r => setTimeout(r, 1000));
+                  consecutiveFailures = 0;
+                } else {
+                  await new Promise(r => setTimeout(r, 50));
+                }
               } catch (e) {
                 failed++;
+                consecutiveFailures++;
                 console.error('خطا در ارسال به کاربر:', userId, e);
+                await new Promise(r => setTimeout(r, 200));
               }
             }
             await env.DB.delete(`admin_state:${ADMIN_ID}`);
@@ -4112,13 +4101,23 @@ export async function handleUpdate(update, env) {
               const userId = Number(k.name.split(':')[1]);
               if (!userId || userId === ADMIN_ID) continue;
               try {
-                await telegramApi(env, '/sendDocument', {
+                const resp = await telegramApi(env, '/sendDocument', {
                   chat_id: userId,
                   document: msg.document.file_id,
                   caption: caption,
                   parse_mode: caption ? 'Markdown' : undefined
                 });
-                sent++;
+                if (resp && resp.ok === true) {
+                  sent++;
+                  consecutiveFailures = 0;
+                } else {
+                  failed++;
+                  consecutiveFailures++;
+                  const retryAfter = resp?.parameters?.retry_after;
+                  if (retryAfter && Number(retryAfter) > 0) {
+                    await new Promise(r => setTimeout(r, (Number(retryAfter) + 1) * 1000));
+                  }
+                }
 
                 if (progressMsgId && (sent + failed) % 5 === 0) {
                   await telegramApi(env, '/editMessageText', {
@@ -4128,10 +4127,17 @@ export async function handleUpdate(update, env) {
                   });
                 }
 
-                await new Promise(r => setTimeout(r, 50));
+                if (consecutiveFailures >= 5) {
+                  await new Promise(r => setTimeout(r, 1000));
+                  consecutiveFailures = 0;
+                } else {
+                  await new Promise(r => setTimeout(r, 50));
+                }
               } catch (e) {
                 failed++;
+                consecutiveFailures++;
                 console.error('خطا در ارسال به کاربر:', userId, e);
+                await new Promise(r => setTimeout(r, 200));
               }
             }
             await env.DB.delete(`admin_state:${ADMIN_ID}`);
@@ -4152,8 +4158,18 @@ export async function handleUpdate(update, env) {
               const userId = Number(k.name.split(':')[1]);
               if (!userId || userId === ADMIN_ID) continue;
               try {
-                await telegramApi(env, '/sendMessage', { chat_id: userId, text, parse_mode: 'Markdown' });
-                sent++;
+                const resp = await telegramApi(env, '/sendMessage', { chat_id: userId, text, parse_mode: 'Markdown' });
+                if (resp && resp.ok === true) {
+                  sent++;
+                  consecutiveFailures = 0;
+                } else {
+                  failed++;
+                  consecutiveFailures++;
+                  const retryAfter = resp?.parameters?.retry_after;
+                  if (retryAfter && Number(retryAfter) > 0) {
+                    await new Promise(r => setTimeout(r, (Number(retryAfter) + 1) * 1000));
+                  }
+                }
 
                 if (progressMsgId && (sent + failed) % 5 === 0) {
                   await telegramApi(env, '/editMessageText', {
@@ -4163,10 +4179,17 @@ export async function handleUpdate(update, env) {
                   });
                 }
 
-                await new Promise(r => setTimeout(r, 50));
+                if (consecutiveFailures >= 5) {
+                  await new Promise(r => setTimeout(r, 1000));
+                  consecutiveFailures = 0;
+                } else {
+                  await new Promise(r => setTimeout(r, 50));
+                }
               } catch (e) {
                 failed++;
+                consecutiveFailures++;
                 console.error('خطا در ارسال به کاربر:', userId, e);
+                await new Promise(r => setTimeout(r, 200));
               }
             }
             await env.DB.delete(`admin_state:${ADMIN_ID}`);
@@ -4332,6 +4355,13 @@ export async function handleUpdate(update, env) {
       const cb = update.callback_query;
       const data = cb.data || '';
       const chat = cb.message.chat.id;
+      // جلوگیری از پاسخ در گروه‌ها برای کال‌بک‌ها
+      try {
+        const chatType = cb.message && cb.message.chat && cb.message.chat.type;
+        if (chatType && chatType !== 'private') {
+          return; // هیچ پاسخی به کال‌بک در گروه‌ها نده
+        }
+      } catch {}
       const messageId = cb.message.message_id;
       const from = cb.from || {};
 
