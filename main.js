@@ -607,7 +607,32 @@ async function detectCountryFromIP(ip, kv) {
       return result;
     }
 
-    // ذخیره null در cache با TTL کوتاه‌تر (1 روز)
+    // اگر پاسخ معتبر نبود، تلاش با سرویس پشتیبان iplocation.net
+    // مستند: https://api.iplocation.net/?ip=XX.XX.XX.XX
+    try {
+      const controller2 = new AbortController();
+      const t2 = setTimeout(() => controller2.abort(), 4000);
+      const res2 = await fetch(`https://api.iplocation.net/?ip=${encodeURIComponent(ip)}`, { signal: controller2.signal });
+      clearTimeout(t2);
+
+      if (res2.ok) {
+        const data2 = await res2.json();
+        // فیلدهای ممکن: country_code2 یا country_code، و country_name
+        const codeRaw = (data2.country_code2 || data2.country_code || '').toString().toUpperCase();
+        if (codeRaw && codeRaw.length === 2) {
+          const result2 = {
+            code: codeRaw,
+            name: getCountryNameFromCode(codeRaw)
+          };
+          await kv.put(cacheKey, JSON.stringify(result2), { expirationTtl: 2592000 });
+          return result2;
+        }
+      }
+    } catch (e2) {
+      // نادیده گرفتن و رفتن به مرحله نهایی (عدم کش موقت تا اینجا)
+    }
+
+    // اگر هیچ‌کدام موفق نشد، null را با TTL کوتاه کش کن
     await kv.put(cacheKey, JSON.stringify(null), { expirationTtl: 86400 });
     return null;
   } catch (e) {
