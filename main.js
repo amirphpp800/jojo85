@@ -4001,6 +4001,22 @@ export async function handleUpdate(update, env) {
           });
           const progressMsgId = progressMsg?.result?.message_id;
 
+          // Helper: safely update progress (every 3 sends or at final)
+          const updateProgress = async (label) => {
+            const done = sent + failed;
+            if (!progressMsgId) return;
+            if (done % 3 !== 0 && done !== totalUsers) return;
+            try {
+              await telegramApi(env, '/editMessageText', {
+                chat_id: chat,
+                message_id: progressMsgId,
+                text: `⏳ در حال ارسال ${label}...\n\n📊 پیشرفت: ${done}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
+              }, 3000);
+            } catch (e) {
+              // ignore edit errors to keep loop running
+            }
+          };
+
           // بررسی عکس
           if (msg.photo && msg.photo.length > 0) {
             const photo = msg.photo[msg.photo.length - 1]; // بزرگترین سایز
@@ -4015,7 +4031,7 @@ export async function handleUpdate(update, env) {
                   photo: photo.file_id,
                   caption: caption,
                   parse_mode: caption ? 'Markdown' : undefined
-                });
+                }, 5000);
                 if (resp && resp.ok === true) {
                   sent++;
                   consecutiveFailures = 0;
@@ -4030,14 +4046,7 @@ export async function handleUpdate(update, env) {
                   }
                 }
 
-                // بروزرسانی پیشرفت پس از هر ارسال
-                if (progressMsgId) {
-                  await telegramApi(env, '/editMessageText', {
-                    chat_id: chat,
-                    message_id: progressMsgId,
-                    text: `⏳ در حال ارسال عکس...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
-                  });
-                }
+                await updateProgress('عکس');
 
                 // Throttle + mild backoff after consecutive failures
                 if (consecutiveFailures >= 5) {
@@ -4080,7 +4089,7 @@ export async function handleUpdate(update, env) {
                   video: msg.video.file_id,
                   caption: caption,
                   parse_mode: caption ? 'Markdown' : undefined
-                });
+                }, 5000);
                 if (resp && resp.ok === true) {
                   sent++;
                   consecutiveFailures = 0;
@@ -4094,13 +4103,7 @@ export async function handleUpdate(update, env) {
                   }
                 }
 
-                if (progressMsgId) {
-                  await telegramApi(env, '/editMessageText', {
-                    chat_id: chat,
-                    message_id: progressMsgId,
-                    text: `⏳ در حال ارسال ویدیو...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
-                  });
-                }
+                await updateProgress('ویدیو');
 
                 if (consecutiveFailures >= 5) {
                   await new Promise(r => setTimeout(r, 1000));
@@ -4140,7 +4143,7 @@ export async function handleUpdate(update, env) {
                   document: msg.document.file_id,
                   caption: caption,
                   parse_mode: caption ? 'Markdown' : undefined
-                });
+                }, 5000);
                 if (resp && resp.ok === true) {
                   sent++;
                   consecutiveFailures = 0;
@@ -4149,23 +4152,18 @@ export async function handleUpdate(update, env) {
                   consecutiveFailures++;
                   const retryAfter = resp?.parameters?.retry_after;
                   if (retryAfter && Number(retryAfter) > 0) {
-                    await new Promise(r => setTimeout(r, (Number(retryAfter) + 1) * 1000));
+                    const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
+                    await new Promise(r => setTimeout(r, waitMs));
                   }
                 }
 
-                if (progressMsgId) {
-                  await telegramApi(env, '/editMessageText', {
-                    chat_id: chat,
-                    message_id: progressMsgId,
-                    text: `⏳ در حال ارسال فایل...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
-                  });
-                }
+                await updateProgress('فایل');
 
                 if (consecutiveFailures >= 5) {
                   await new Promise(r => setTimeout(r, 1000));
                   consecutiveFailures = 0;
                 } else {
-                  await new Promise(r => setTimeout(r, 50));
+                  await new Promise(r => setTimeout(r, BASE_DELAY_MS));
                 }
               } catch (e) {
                 failed++;
@@ -4192,7 +4190,7 @@ export async function handleUpdate(update, env) {
               const userId = Number(k.name.split(':')[1]);
               if (!userId || userId === ADMIN_ID) continue;
               try {
-                const resp = await telegramApi(env, '/sendMessage', { chat_id: userId, text, parse_mode: 'Markdown' });
+                const resp = await telegramApi(env, '/sendMessage', { chat_id: userId, text, parse_mode: 'Markdown' }, 5000);
                 if (resp && resp.ok === true) {
                   sent++;
                   consecutiveFailures = 0;
@@ -4201,23 +4199,18 @@ export async function handleUpdate(update, env) {
                   consecutiveFailures++;
                   const retryAfter = resp?.parameters?.retry_after;
                   if (retryAfter && Number(retryAfter) > 0) {
-                    await new Promise(r => setTimeout(r, (Number(retryAfter) + 1) * 1000));
+                    const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
+                    await new Promise(r => setTimeout(r, waitMs));
                   }
                 }
 
-                if (progressMsgId) {
-                  await telegramApi(env, '/editMessageText', {
-                    chat_id: chat,
-                    message_id: progressMsgId,
-                    text: `⏳ در حال ارسال پیام...\n\n📊 پیشرفت: ${sent + failed}/${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`
-                  });
-                }
+                await updateProgress('پیام');
 
                 if (consecutiveFailures >= 5) {
                   await new Promise(r => setTimeout(r, 1000));
                   consecutiveFailures = 0;
                 } else {
-                  await new Promise(r => setTimeout(r, 50));
+                  await new Promise(r => setTimeout(r, BASE_DELAY_MS));
                 }
               } catch (e) {
                 failed++;
