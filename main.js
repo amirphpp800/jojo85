@@ -3495,17 +3495,22 @@ function escapeHtml(s) {
 // 📡 Telegram API Communication
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function telegramApi(env, method, body = {}) {
+async function telegramApi(env, method, body = {}, timeoutMs = 8000) {
   try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs));
     const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}${method}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     });
-    return await res.json();
+    clearTimeout(t);
+    const json = await res.json().catch(() => ({}));
+    return json;
   } catch (e) {
     console.error('خطا در Telegram API:', e);
-    return {};
+    return { ok: false, error: e?.message || 'request_failed' };
   }
 }
 
@@ -3986,6 +3991,8 @@ export async function handleUpdate(update, env) {
           let sent = 0;
           let failed = 0;
           let consecutiveFailures = 0;
+          const BASE_DELAY_MS = 150;
+          const MAX_RETRY_AFTER_MS = 3000;
 
           // ارسال پیام شروع
           const progressMsg = await telegramApi(env, '/sendMessage', {
@@ -4018,12 +4025,13 @@ export async function handleUpdate(update, env) {
                   // Backoff for 429 Too Many Requests
                   const retryAfter = resp?.parameters?.retry_after;
                   if (retryAfter && Number(retryAfter) > 0) {
-                    await new Promise(r => setTimeout(r, (Number(retryAfter) + 1) * 1000));
+                    const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
+                    await new Promise(r => setTimeout(r, waitMs));
                   }
                 }
 
-                // بروزرسانی پیشرفت هر 5 ارسال
-                if (progressMsgId && (sent + failed) % 5 === 0) {
+                // بروزرسانی پیشرفت پس از هر ارسال
+                if (progressMsgId) {
                   await telegramApi(env, '/editMessageText', {
                     chat_id: chat,
                     message_id: progressMsgId,
@@ -4036,7 +4044,7 @@ export async function handleUpdate(update, env) {
                   await new Promise(r => setTimeout(r, 1000));
                   consecutiveFailures = 0;
                 } else {
-                  await new Promise(r => setTimeout(r, 50));
+                  await new Promise(r => setTimeout(r, BASE_DELAY_MS));
                 }
               } catch (e) {
                 failed++;
@@ -4081,11 +4089,12 @@ export async function handleUpdate(update, env) {
                   consecutiveFailures++;
                   const retryAfter = resp?.parameters?.retry_after;
                   if (retryAfter && Number(retryAfter) > 0) {
-                    await new Promise(r => setTimeout(r, (Number(retryAfter) + 1) * 1000));
+                    const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
+                    await new Promise(r => setTimeout(r, waitMs));
                   }
                 }
 
-                if (progressMsgId && (sent + failed) % 5 === 0) {
+                if (progressMsgId) {
                   await telegramApi(env, '/editMessageText', {
                     chat_id: chat,
                     message_id: progressMsgId,
@@ -4097,7 +4106,7 @@ export async function handleUpdate(update, env) {
                   await new Promise(r => setTimeout(r, 1000));
                   consecutiveFailures = 0;
                 } else {
-                  await new Promise(r => setTimeout(r, 50));
+                  await new Promise(r => setTimeout(r, BASE_DELAY_MS));
                 }
               } catch (e) {
                 failed++;
@@ -4144,7 +4153,7 @@ export async function handleUpdate(update, env) {
                   }
                 }
 
-                if (progressMsgId && (sent + failed) % 5 === 0) {
+                if (progressMsgId) {
                   await telegramApi(env, '/editMessageText', {
                     chat_id: chat,
                     message_id: progressMsgId,
@@ -4196,7 +4205,7 @@ export async function handleUpdate(update, env) {
                   }
                 }
 
-                if (progressMsgId && (sent + failed) % 5 === 0) {
+                if (progressMsgId) {
                   await telegramApi(env, '/editMessageText', {
                     chat_id: chat,
                     message_id: progressMsgId,
