@@ -4022,45 +4022,54 @@ export async function handleUpdate(update, env) {
             const photo = msg.photo[msg.photo.length - 1]; // بزرگترین سایز
             const caption = msg.caption || '';
 
-            for (const k of res.keys) {
-              const userId = Number(k.name.split(':')[1]);
-              if (!userId || userId === ADMIN_ID) continue;
-              try {
-                const resp = await telegramApi(env, '/sendPhoto', {
-                  chat_id: userId,
-                  photo: photo.file_id,
-                  caption: caption,
-                  parse_mode: caption ? 'Markdown' : undefined
-                }, 5000);
-                if (resp && resp.ok === true) {
+            const userIds = res.keys
+              .map(k => Number(k.name.split(':')[1]))
+              .filter(uid => uid && uid !== ADMIN_ID);
+
+            const BATCH_SIZE = 5;
+            for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+              const batch = userIds.slice(i, i + BATCH_SIZE);
+              const results = await Promise.allSettled(batch.map(async (userId) => {
+                try {
+                  const resp = await telegramApi(env, '/sendPhoto', {
+                    chat_id: userId,
+                    photo: photo.file_id,
+                    caption: caption,
+                    parse_mode: caption ? 'Markdown' : undefined
+                  }, 5000);
+                  if (resp && resp.ok === true) {
+                    return true;
+                  } else {
+                    const retryAfter = resp?.parameters?.retry_after;
+                    if (retryAfter && Number(retryAfter) > 0) {
+                      const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
+                      await new Promise(r => setTimeout(r, waitMs));
+                    }
+                    return false;
+                  }
+                } catch (e) {
+                  return false;
+                }
+              }));
+
+              for (const r of results) {
+                if (r.status === 'fulfilled' && r.value === true) {
                   sent++;
-                  consecutiveFailures = 0;
                 } else {
                   failed++;
-                  consecutiveFailures++;
-                  // Backoff for 429 Too Many Requests
-                  const retryAfter = resp?.parameters?.retry_after;
-                  if (retryAfter && Number(retryAfter) > 0) {
-                    const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
-                    await new Promise(r => setTimeout(r, waitMs));
-                  }
                 }
+              }
 
-                await updateProgress('عکس');
+              // Reset failure streak if we advanced
+              consecutiveFailures = (results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value === false)).length > 0) ? (consecutiveFailures + 1) : 0;
 
-                // Throttle + mild backoff after consecutive failures
-                if (consecutiveFailures >= 5) {
-                  await new Promise(r => setTimeout(r, 1000));
-                  consecutiveFailures = 0;
-                } else {
-                  await new Promise(r => setTimeout(r, BASE_DELAY_MS));
-                }
-              } catch (e) {
-                failed++;
-                consecutiveFailures++;
-                console.error('خطا در ارسال به کاربر:', userId, e);
-                // Short backoff on network or unknown errors
-                await new Promise(r => setTimeout(r, 200));
+              await updateProgress('عکس');
+
+              if (consecutiveFailures >= 5) {
+                await new Promise(r => setTimeout(r, 1000));
+                consecutiveFailures = 0;
+              } else {
+                await new Promise(r => setTimeout(r, BASE_DELAY_MS));
               }
             }
             await env.DB.delete(`admin_state:${ADMIN_ID}`);
@@ -4080,28 +4089,46 @@ export async function handleUpdate(update, env) {
           else if (msg.video) {
             const caption = msg.caption || '';
 
-            for (const k of res.keys) {
-              const userId = Number(k.name.split(':')[1]);
-              if (!userId || userId === ADMIN_ID) continue;
-              try {
-                const resp = await telegramApi(env, '/sendVideo', {
-                  chat_id: userId,
-                  video: msg.video.file_id,
-                  caption: caption,
-                  parse_mode: caption ? 'Markdown' : undefined
-                }, 5000);
-                if (resp && resp.ok === true) {
-                  sent++;
-                  consecutiveFailures = 0;
-                } else {
-                  failed++;
-                  consecutiveFailures++;
-                  const retryAfter = resp?.parameters?.retry_after;
-                  if (retryAfter && Number(retryAfter) > 0) {
-                    const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
-                    await new Promise(r => setTimeout(r, waitMs));
+            const userIds = res.keys
+              .map(k => Number(k.name.split(':')[1]))
+              .filter(uid => uid && uid !== ADMIN_ID);
+
+            const BATCH_SIZE = 5;
+            try {
+              for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+                const batch = userIds.slice(i, i + BATCH_SIZE);
+                const results = await Promise.allSettled(batch.map(async (userId) => {
+                  try {
+                    const resp = await telegramApi(env, '/sendVideo', {
+                      chat_id: userId,
+                      video: msg.video.file_id,
+                      caption: caption,
+                      parse_mode: caption ? 'Markdown' : undefined
+                    }, 5000);
+                    if (resp && resp.ok === true) {
+                      return true;
+                    } else {
+                      const retryAfter = resp?.parameters?.retry_after;
+                      if (retryAfter && Number(retryAfter) > 0) {
+                        const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
+                        await new Promise(r => setTimeout(r, waitMs));
+                      }
+                      return false;
+                    }
+                  } catch {
+                    return false;
+                  }
+                }));
+
+                for (const r of results) {
+                  if (r.status === 'fulfilled' && r.value === true) {
+                    sent++;
+                  } else {
+                    failed++;
                   }
                 }
+
+                consecutiveFailures = (results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value === false)).length > 0) ? (consecutiveFailures + 1) : 0;
 
                 await updateProgress('ویدیو');
 
@@ -4111,22 +4138,17 @@ export async function handleUpdate(update, env) {
                 } else {
                   await new Promise(r => setTimeout(r, BASE_DELAY_MS));
                 }
-              } catch (e) {
-                failed++;
-                consecutiveFailures++;
-                console.error('خطا در ارسال به کاربر:', userId, e);
-                await new Promise(r => setTimeout(r, 200));
               }
-            }
-            await env.DB.delete(`admin_state:${ADMIN_ID}`);
-
-            if (progressMsgId) {
-              await telegramApi(env, '/editMessageText', {
-                chat_id: chat,
-                message_id: progressMsgId,
-                text: `✅ *ارسال ویدیو تکمیل شد!*\n\n📊 کل کاربران: ${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`,
-                parse_mode: 'Markdown'
-              });
+            } finally {
+              await env.DB.delete(`admin_state:${ADMIN_ID}`);
+              if (progressMsgId) {
+                await telegramApi(env, '/editMessageText', {
+                  chat_id: chat,
+                  message_id: progressMsgId,
+                  text: `✅ *ارسال ویدیو تکمیل شد!*\n\n📊 کل کاربران: ${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`,
+                  parse_mode: 'Markdown'
+                }, 3000);
+              }
             }
             return;
           }
@@ -4134,28 +4156,46 @@ export async function handleUpdate(update, env) {
           else if (msg.document) {
             const caption = msg.caption || '';
 
-            for (const k of res.keys) {
-              const userId = Number(k.name.split(':')[1]);
-              if (!userId || userId === ADMIN_ID) continue;
-              try {
-                const resp = await telegramApi(env, '/sendDocument', {
-                  chat_id: userId,
-                  document: msg.document.file_id,
-                  caption: caption,
-                  parse_mode: caption ? 'Markdown' : undefined
-                }, 5000);
-                if (resp && resp.ok === true) {
-                  sent++;
-                  consecutiveFailures = 0;
-                } else {
-                  failed++;
-                  consecutiveFailures++;
-                  const retryAfter = resp?.parameters?.retry_after;
-                  if (retryAfter && Number(retryAfter) > 0) {
-                    const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
-                    await new Promise(r => setTimeout(r, waitMs));
+            const userIds = res.keys
+              .map(k => Number(k.name.split(':')[1]))
+              .filter(uid => uid && uid !== ADMIN_ID);
+
+            const BATCH_SIZE = 5;
+            try {
+              for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+                const batch = userIds.slice(i, i + BATCH_SIZE);
+                const results = await Promise.allSettled(batch.map(async (userId) => {
+                  try {
+                    const resp = await telegramApi(env, '/sendDocument', {
+                      chat_id: userId,
+                      document: msg.document.file_id,
+                      caption: caption,
+                      parse_mode: caption ? 'Markdown' : undefined
+                    }, 5000);
+                    if (resp && resp.ok === true) {
+                      return true;
+                    } else {
+                      const retryAfter = resp?.parameters?.retry_after;
+                      if (retryAfter && Number(retryAfter) > 0) {
+                        const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
+                        await new Promise(r => setTimeout(r, waitMs));
+                      }
+                      return false;
+                    }
+                  } catch {
+                    return false;
+                  }
+                }));
+
+                for (const r of results) {
+                  if (r.status === 'fulfilled' && r.value === true) {
+                    sent++;
+                  } else {
+                    failed++;
                   }
                 }
+
+                consecutiveFailures = (results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value === false)).length > 0) ? (consecutiveFailures + 1) : 0;
 
                 await updateProgress('فایل');
 
@@ -4165,58 +4205,64 @@ export async function handleUpdate(update, env) {
                 } else {
                   await new Promise(r => setTimeout(r, BASE_DELAY_MS));
                 }
-              } catch (e) {
-                failed++;
-                consecutiveFailures++;
-                console.error('خطا در ارسال به کاربر:', userId, e);
-                await new Promise(r => setTimeout(r, 200));
               }
-            }
-            await env.DB.delete(`admin_state:${ADMIN_ID}`);
-
-            if (progressMsgId) {
-              await telegramApi(env, '/editMessageText', {
-                chat_id: chat,
-                message_id: progressMsgId,
-                text: `✅ *ارسال فایل تکمیل شد!*\n\n📊 کل کاربران: ${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`,
-                parse_mode: 'Markdown'
-              });
+            } finally {
+              await env.DB.delete(`admin_state:${ADMIN_ID}`);
+              if (progressMsgId) {
+                await telegramApi(env, '/editMessageText', {
+                  chat_id: chat,
+                  message_id: progressMsgId,
+                  text: `✅ *ارسال فایل تکمیل شد!*\n\n📊 کل کاربران: ${totalUsers}\n✅ موفق: ${sent}\n❌ ناموفق: ${failed}`,
+                  parse_mode: 'Markdown'
+                }, 3000);
+              }
             }
             return;
           }
           // ارسال متن ساده
           else if (text && !text.startsWith('/start')) {
-            for (const k of res.keys) {
-              const userId = Number(k.name.split(':')[1]);
-              if (!userId || userId === ADMIN_ID) continue;
-              try {
-                const resp = await telegramApi(env, '/sendMessage', { chat_id: userId, text, parse_mode: 'Markdown' }, 5000);
-                if (resp && resp.ok === true) {
+            const userIds = res.keys
+              .map(k => Number(k.name.split(':')[1]))
+              .filter(uid => uid && uid !== ADMIN_ID);
+
+            const BATCH_SIZE = 5;
+            for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+              const batch = userIds.slice(i, i + BATCH_SIZE);
+              const results = await Promise.allSettled(batch.map(async (userId) => {
+                try {
+                  const resp = await telegramApi(env, '/sendMessage', { chat_id: userId, text, parse_mode: 'Markdown' }, 5000);
+                  if (resp && resp.ok === true) {
+                    return true;
+                  } else {
+                    const retryAfter = resp?.parameters?.retry_after;
+                    if (retryAfter && Number(retryAfter) > 0) {
+                      const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
+                      await new Promise(r => setTimeout(r, waitMs));
+                    }
+                    return false;
+                  }
+                } catch (e) {
+                  return false;
+                }
+              }));
+
+              for (const r of results) {
+                if (r.status === 'fulfilled' && r.value === true) {
                   sent++;
-                  consecutiveFailures = 0;
                 } else {
                   failed++;
-                  consecutiveFailures++;
-                  const retryAfter = resp?.parameters?.retry_after;
-                  if (retryAfter && Number(retryAfter) > 0) {
-                    const waitMs = Math.min((Number(retryAfter) + 1) * 1000, MAX_RETRY_AFTER_MS);
-                    await new Promise(r => setTimeout(r, waitMs));
-                  }
                 }
+              }
 
-                await updateProgress('پیام');
+              consecutiveFailures = (results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value === false)).length > 0) ? (consecutiveFailures + 1) : 0;
 
-                if (consecutiveFailures >= 5) {
-                  await new Promise(r => setTimeout(r, 1000));
-                  consecutiveFailures = 0;
-                } else {
-                  await new Promise(r => setTimeout(r, BASE_DELAY_MS));
-                }
-              } catch (e) {
-                failed++;
-                consecutiveFailures++;
-                console.error('خطا در ارسال به کاربر:', userId, e);
-                await new Promise(r => setTimeout(r, 200));
+              await updateProgress('پیام');
+
+              if (consecutiveFailures >= 5) {
+                await new Promise(r => setTimeout(r, 1000));
+                consecutiveFailures = 0;
+              } else {
+                await new Promise(r => setTimeout(r, BASE_DELAY_MS));
               }
             }
             await env.DB.delete(`admin_state:${ADMIN_ID}`);
