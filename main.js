@@ -931,10 +931,20 @@ function renderMainPage(entries, userCount) {
 
   <section class="section">
     <div class="section-header">
-      <h2>🚀 افزودن گروهی آدرس‌ها (تشخیص خودکار کشور)</h2>
+      <h2>🚀 افزودن گروهی آدرس‌ها</h2>
       <span class="badge" id="address-count" style="display:none;">0 آدرس</span>
     </div>
     <form method="POST" action="/api/admin/bulk-add" class="dns-form" id="bulk-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="manual-country-select">🌍 انتخاب کشور (اختیاری)</label>
+          <select id="manual-country-select" name="manual_country">
+            <option value="">🔍 تشخیص خودکار (توصیه نمی‌شود)</option>
+            ${entries.map(e => `<option value="${e.code.toUpperCase()}">${countryCodeToFlag(e.code)} ${e.country} (${e.code.toUpperCase()})</option>`).join('')}
+          </select>
+          <small style="color: #ef4444; font-weight: 500;">⚠️ تشخیص خودکار ممکن است کند یا ناموفق باشد. انتخاب دستی کشور توصیه می‌شود.</small>
+        </div>
+      </div>
       <div class="form-group full-width">
         <div class="label-row">
           <label for="addresses-input">📡 آدرس‌های IP (هر خط یک آدرس)</label>
@@ -945,7 +955,7 @@ function renderMainPage(entries, userCount) {
           <span class="char-count">0 کاراکتر</span>
           <span class="line-count">0 خط</span>
         </div>
-        <small>💡 هر آدرس IP را در یک خط جداگانه وارد کنید. کشور هر آدرس به‌صورت خودکار تشخیص داده می‌شود. آدرس‌های تکراری به‌طور خودکار حذف می‌شوند.</small>
+        <small>💡 هر آدرس IP را در یک خط جداگانه وارد کنید. آدرس‌های تکراری به‌طور خودکار حذف می‌شوند.</small>
       </div>
 
       <div class="form-options">
@@ -994,6 +1004,32 @@ function renderMainPage(entries, userCount) {
       <div class="button-group">
         <button type="submit" class="btn-submit" id="bulk-submit">🔍 تشخیص و افزودن</button>
         <button type="button" class="btn-secondary" id="clear-addresses-btn">🗑️ پاک کردن</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="section">
+    <div class="section-header">
+      <h2>🎯 افزودن آدرس تک کشور</h2>
+      <span class="badge">برای اضافه کردن سریع</span>
+    </div>
+    <form method="POST" action="/api/admin/single-country-add" class="dns-form" id="single-country-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="single-country-select">🌍 انتخاب کشور *</label>
+          <select id="single-country-select" name="country_code" required>
+            <option value="">-- انتخاب کنید --</option>
+            ${entries.map(e => `<option value="${e.code.toUpperCase()}">${countryCodeToFlag(e.code)} ${e.country} (${e.code.toUpperCase()}) - ${e.stock} IP</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-group full-width">
+        <label for="single-country-ips">📡 آدرس‌های IP برای این کشور</label>
+        <textarea id="single-country-ips" name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;9.9.9.9" rows="6" required></textarea>
+        <small>💡 آدرس‌ها مستقیماً به کشور انتخاب شده اضافه می‌شوند - نیاز به تشخیص خودکار نیست.</small>
+      </div>
+      <div class="button-group">
+        <button type="submit" class="btn-submit" style="background: linear-gradient(135deg, #10b981, #059669);">✅ افزودن به کشور انتخاب شده</button>
       </div>
     </form>
   </section>
@@ -2258,6 +2294,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       };
 
+      // دریافت کشور دستی (اگر انتخاب شده باشد)
+      const manualCountry = document.getElementById('manual-country-select')?.value || '';
+      
       // شروع پردازش
       const startTime = Date.now();
 
@@ -2278,11 +2317,15 @@ document.addEventListener('DOMContentLoaded', () => {
             attempt++;
             try {
               const controller = new AbortController();
-              const t = setTimeout(() => controller.abort(), 5000);
+              const t = setTimeout(() => controller.abort(), 10000);
+              const requestBody = { ip };
+              if (manualCountry) {
+                requestBody.manual_country = manualCountry;
+              }
               const res = await fetch('/api/admin/bulk-add-single', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ip }),
+                body: JSON.stringify(requestBody),
                 signal: controller.signal
               });
               clearTimeout(t);
@@ -2295,7 +2338,7 @@ document.addEventListener('DOMContentLoaded', () => {
               if (attempt >= 3) {
                 return { ip, result: { success: false, error: e.name === 'AbortError' ? 'timeout' : e.message } };
               }
-              await new Promise(r => setTimeout(r, 300 * attempt));
+              await new Promise(r => setTimeout(r, 500 * attempt));
             }
           }
           return { ip, result: { success: false, error: 'خطای نامشخص' } };
@@ -5457,6 +5500,7 @@ export default {
         try {
           const body = await req.json();
           const ip = (body.ip || '').trim();
+          const manualCountryCode = (body.manual_country || '').trim().toUpperCase();
 
           // اعتبارسنجی ورودی
           if (!ip) {
@@ -5471,13 +5515,23 @@ export default {
             return json({ success: false, error: 'IP باید عمومی باشد (نه خصوصی)' });
           }
 
-          // تشخیص کشور از IP
-          const country = await detectCountryFromIP(ip, env.DB);
-          if (!country || !country.code) {
-            return json({ success: false, error: 'تشخیص کشور ناموفق - API در دسترس نیست' });
+          let code, countryName;
+
+          // استفاده از کشور دستی (اگر انتخاب شده باشد)
+          if (manualCountryCode) {
+            code = manualCountryCode;
+            const manualEntry = await getDnsEntry(env.DB, code);
+            countryName = manualEntry ? manualEntry.country : getCountryNameFromCode(code);
+          } else {
+            // تشخیص خودکار کشور از IP
+            const country = await detectCountryFromIP(ip, env.DB);
+            if (!country || !country.code) {
+              return json({ success: false, error: 'تشخیص کشور ناموفق - لطفاً کشور را به صورت دستی انتخاب کنید' });
+            }
+            code = country.code.toUpperCase();
+            countryName = country.name;
           }
 
-          const code = country.code.toUpperCase();
           const existing = await getDnsEntry(env.DB, code);
 
           if (existing) {
@@ -5510,7 +5564,7 @@ export default {
             // ایجاد کشور جدید
             const newEntry = {
               code: code,
-              country: country.name,
+              country: countryName,
               addresses: [ip],
               stock: 1
             };
@@ -5519,7 +5573,7 @@ export default {
             return json({
               success: true,
               country: code,
-              countryName: country.name,
+              countryName: countryName,
               action: 'created',
               totalIps: 1
             });
@@ -5530,6 +5584,131 @@ export default {
             success: false,
             error: e.message || 'خطای نامشخص در سرور'
           });
+        }
+      }
+
+      // API: افزودن آدرس به کشور مشخص (تک کشور)
+      if (url.pathname === '/api/admin/single-country-add' && req.method === 'POST') {
+        try {
+          const form = await req.formData();
+          const countryCode = (form.get('country_code') || '').toUpperCase().trim();
+          const addressesRaw = form.get('addresses');
+
+          if (!countryCode) {
+            return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="3;url=/">
+<title>خطا</title>
+<body style="font-family: Vazirmatn, sans-serif; padding:30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center;">
+  <h2>❌ لطفاً کشور را انتخاب کنید</h2>
+  <p style="margin-top: 20px;"><a href="/" style="color: white; text-decoration: underline;">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',3000)</script>
+</body>
+</html>`);
+          }
+
+          if (!addressesRaw || !addressesRaw.trim()) {
+            return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="3;url=/">
+<title>خطا</title>
+<body style="font-family: Vazirmatn, sans-serif; padding:30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center;">
+  <h2>❌ لطفاً آدرس‌ها را وارد کنید</h2>
+  <p style="margin-top: 20px;"><a href="/" style="color: white; text-decoration: underline;">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',3000)</script>
+</body>
+</html>`);
+          }
+
+          // پارس کردن آدرس‌ها
+          const addresses = addressesRaw
+            .split(/[\r\n,;\s]+/)
+            .map(a => a.trim())
+            .filter(a => a && isValidIPv4(a) && isPublicIPv4(a));
+
+          if (addresses.length === 0) {
+            return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="3;url=/">
+<title>خطا</title>
+<body style="font-family: Vazirmatn, sans-serif; padding:30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center;">
+  <h2>❌ هیچ آدرس IP معتبری یافت نشد</h2>
+  <p style="margin-top: 20px;"><a href="/" style="color: white; text-decoration: underline;">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',3000)</script>
+</body>
+</html>`);
+          }
+
+          // بررسی وجود کشور
+          const existing = await getDnsEntry(env.DB, countryCode);
+          const countryName = existing ? existing.country : getCountryNameFromCode(countryCode);
+
+          // حذف تکراری‌ها
+          const uniqueAddresses = [...new Set(addresses)];
+          
+          let added = 0;
+          let duplicate = 0;
+
+          if (existing) {
+            // اضافه کردن به کشور موجود
+            existing.addresses = [...new Set(existing.addresses)];
+            const beforeCount = existing.addresses.length;
+            
+            uniqueAddresses.forEach(ip => {
+              if (!existing.addresses.includes(ip)) {
+                existing.addresses.push(ip);
+                added++;
+              } else {
+                duplicate++;
+              }
+            });
+
+            existing.stock = existing.addresses.length;
+            await putDnsEntry(env.DB, existing);
+          } else {
+            // ایجاد کشور جدید
+            added = uniqueAddresses.length;
+            const newEntry = {
+              code: countryCode,
+              country: countryName,
+              addresses: uniqueAddresses,
+              stock: uniqueAddresses.length
+            };
+            await putDnsEntry(env.DB, newEntry);
+          }
+
+          invalidateDnsCache();
+
+          return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="2;url=/">
+<title>موفق</title>
+<body style="font-family: Vazirmatn, sans-serif; padding:30px; background: linear-gradient(135deg, #10b981, #059669); color: white; text-align: center;">
+  <h2>✅ ${added} آدرس جدید اضافه شد</h2>
+  <p>🔄 ${duplicate} آدرس تکراری</p>
+  <p>📍 کشور: ${countryCodeToFlag(countryCode)} ${countryName}</p>
+  <p style="margin-top: 20px;">در حال انتقال به صفحه اصلی...</p>
+  <p><a href="/" style="color: white; text-decoration: underline;">بازگشت فوری</a></p>
+  <script>setTimeout(()=>location.href='/',2000)</script>
+</body>
+</html>`);
+        } catch (e) {
+          console.error('خطا در افزودن تک کشور:', e);
+          return html(`<!doctype html>
+<html lang="fa" dir="rtl">
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="3;url=/">
+<title>خطا</title>
+<body style="font-family: Vazirmatn, sans-serif; padding:30px; background: linear-gradient(135deg, #ef4444, #dc2626); color: white; text-align: center;">
+  <h2>❌ خطا: ${e.message || 'خطای نامشخص'}</h2>
+  <p style="margin-top: 20px;"><a href="/" style="color: white; text-decoration: underline;">بازگشت به صفحه اصلی</a></p>
+  <script>setTimeout(()=>location.href='/',3000)</script>
+</body>
+</html>`);
         }
       }
 
