@@ -1,4 +1,3 @@
-
 // ═════════════════════════════════════════════════════════════════════════════
 // 🔧 CONFIGURATION & CONSTANTS
 // ═════════════════════════════════════════════════════════════════════════════
@@ -815,10 +814,24 @@ function renderMainPage(entries, userCount) {
     const count = Array.isArray(e.addresses) ? e.addresses.length : 0;
     const stockColor = (e.stock || 0) > 5 ? '#10b981' : (e.stock || 0) > 0 ? '#f59e0b' : '#ef4444';
 
+    const addressesHTML = count > 0
+      ? e.addresses.map(addr =>
+          '<div class="address-item">' +
+            '<code>' + escapeHtml(addr) + '</code>' +
+            '<button class="btn-delete-addr" data-code="' + escapeHtml(e.code) + '" data-address="' + escapeHtml(addr) + '" title="حذف این آدرس">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+                '<path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>' +
+              '</svg>' +
+            '</button>' +
+          '</div>'
+        ).join('')
+      : '<span class="empty">هیچ آدرسی ثبت نشده</span>';
+
     return `
-    <div class="dns-card">
+    <div class="dns-card" data-code="${escapeHtml(e.code)}">
       <div class="card-header">
         <div class="country-info">
+          <input type="checkbox" class="country-checkbox" value="${escapeHtml(e.code)}">
           <span class="country-flag">${flag}</span>
           <div class="country-details">
             <h3>${escapeHtml(e.country)}</h3>
@@ -826,10 +839,10 @@ function renderMainPage(entries, userCount) {
           </div>
         </div>
         <div class="card-actions">
-          <button class="btn-edit" onclick="editCountry('${escapeHtml(e.code)}', '${escapeHtml(e.country)}')" title="ویرایش نام">✏️</button>
+          <button class="btn-edit" data-code="${escapeHtml(e.code)}" data-country="${escapeHtml(e.country)}" title="ویرایش نام">✏️</button>
           <form method="POST" action="/api/admin/delete-dns" style="display:inline;">
             <input type="hidden" name="code" value="${escapeHtml(e.code)}">
-            <button type="submit" class="btn-delete" onclick="return confirm('آیا مطمئن هستید؟')" title="حذف">🗑️</button>
+            <button type="submit" class="btn-delete" title="حذف">🗑️</button>
           </form>
         </div>
       </div>
@@ -845,9 +858,9 @@ function renderMainPage(entries, userCount) {
       </div>
       <div class="card-footer">
         <details>
-          <summary>مشاهده آدرس‌ها</summary>
+          <summary>مشاهده آدرس‌ها (${count})</summary>
           <div class="addresses-list">
-            ${count > 0 ? e.addresses.map(addr => `<code>${escapeHtml(addr)}</code>`).join('') : '<span class="empty">هیچ آدرسی ثبت نشده</span>'}
+            ${addressesHTML}
           </div>
         </details>
       </div>
@@ -892,10 +905,16 @@ function renderMainPage(entries, userCount) {
         <span class="stat-text">کاربر ربات</span>
       </div>
     </div>
-    <div style="margin-top: 20px; text-align: center;">
+    <div style="margin-top: 20px; text-align: center; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
       <a href="/ipv6" class="btn-submit" style="display: inline-block; padding: 12px 24px; text-decoration: none; background: linear-gradient(135deg, #3b82f6, #8b5cf6);">
         🌐 مدیریت IPv6
       </a>
+      <button id="bulk-delete-btn" class="btn-submit" style="display: none; padding: 12px 24px; background: linear-gradient(135deg, #ef4444, #dc2626);">
+        🗑️ حذف <span id="selected-count">0</span> کشور انتخاب شده
+      </button>
+      <button id="select-all-btn" class="btn-secondary" style="padding: 12px 24px;">
+        ☑️ انتخاب همه
+      </button>
     </div>
   </header>
 
@@ -918,7 +937,7 @@ function renderMainPage(entries, userCount) {
       <div class="form-group full-width">
         <div class="label-row">
           <label for="addresses-input">📡 آدرس‌های IP (هر خط یک آدرس)</label>
-          <button type="button" class="btn-helper" onclick="pasteFromClipboard()" title="چسباندن از کلیپ‌بورد">📋 چسباندن</button>
+          <button type="button" id="paste-clipboard-btn" class="btn-helper" title="چسباندن از کلیپ‌بورد">📋 چسباندن</button>
         </div>
         <textarea id="addresses-input" name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;185.55.226.26&#10;9.9.9.9" rows="10" required></textarea>
         <div class="textarea-info">
@@ -973,7 +992,7 @@ function renderMainPage(entries, userCount) {
 
       <div class="button-group">
         <button type="submit" class="btn-submit" id="bulk-submit">🔍 تشخیص و افزودن</button>
-        <button type="button" class="btn-secondary" onclick="clearAddresses()" id="clear-btn">🗑️ پاک کردن</button>
+        <button type="button" class="btn-secondary" id="clear-addresses-btn">🗑️ پاک کردن</button>
       </div>
     </form>
   </section>
@@ -996,50 +1015,897 @@ function renderMainPage(entries, userCount) {
           🧹 حذف آدرس‌های تکراری
         </button>
         <small style="display: block; margin-top: 10px; color: #64748b;">
-          حذف تمام آدرس‌های تکراری از همه کشورها
+          حذف آدرس‌های IP تکراری از تمام کشورها
         </small>
       </div>
       <div>
-        <button onclick="downloadJSON()" class="btn-submit" style="background: linear-gradient(135deg, #10b981, #059669); width: 100%;">
-          📥 دانلود JSON تمام آدرس‌ها
+        <button onclick="updateAllStock()" class="btn-submit" style="background: linear-gradient(135deg, #10b981, #059669); width: 100%;">
+          📊 بروزرسانی موجودی همه
         </button>
         <small style="display: block; margin-top: 10px; color: #64748b;">
-          دانلود فایل JSON شامل تمام کشورها و آدرس‌ها
+          محاسبه مجدد موجودی بر اساس تعداد آدرس‌ها
         </small>
       </div>
     </div>
   </section>
-
-  <section class="section">
-    <div class="section-header">
-      <h2>➕ افزودن DNS جدید</h2>
-    </div>
-    <form method="POST" action="/api/admin/add-dns" class="dns-form">
-      <div class="form-row">
-        <div class="form-group">
-          <label>🌍 نام کشور (فارسی)</label>
-          <input name="country" placeholder="مثال: ایران" required autocomplete="off">
-        </div>
-        <div class="form-group">
-          <label>🔤 کد کشور (2 حرفی)</label>
-          <input name="code" placeholder="IR" maxlength="2" required autocomplete="off" style="text-transform:uppercase;">
-        </div>
-      </div>
-      <div class="form-group full-width">
-        <label>📡 آدرس‌های DNS (هر خط یک آدرس)</label>
-        <textarea name="addresses" placeholder="1.1.1.1&#10;8.8.8.8&#10;8.8.4.4" rows="5" required></textarea>
-        <small>هر آدرس DNS را در یک خط جداگانه وارد کنید. موجودی به صورت خودکار بر اساس تعداد آدرس‌ها محاسبه می‌شود.</small>
-      </div>
-      <button type="submit" class="btn-submit">💾 ذخیره اطلاعات</button>
-    </form>
-  </section>
 </div>
+<script>${getWebJs()}</script>
+</body>
+</html>
+  `;
+}
 
-<script>
-// Toast Notification System
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎨 CSS Styles for Web UI
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getWebCss() {
+  return `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #1f2937;
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    body.dark {
+      background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+      color: #f3f4f6;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .main-header {
+      background: white;
+      border-radius: 24px;
+      padding: 40px;
+      margin-bottom: 30px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      animation: slideDown 0.5s ease;
+    }
+
+    body.dark .main-header {
+      background: #1f2937;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .header-content h1 {
+      font-size: 2.5em;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #6b7280;
+      font-size: 1.1em;
+    }
+
+    body.dark .subtitle {
+      color: #9ca3af;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 15px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      position: relative;
+      flex: 1;
+      min-width: 250px;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 12px 45px 12px 20px;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 16px;
+      transition: all 0.3s;
+      font-family: inherit;
+    }
+
+    body.dark .search-box input {
+      background: #374151;
+      border-color: #4b5563;
+      color: #f3f4f6;
+    }
+
+    .search-box input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 20px;
+    }
+
+    .btn-toggle {
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 20px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .btn-toggle:hover {
+      transform: scale(1.05);
+    }
+
+    .header-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 20px;
+      margin-top: 30px;
+    }
+
+    .stat-box {
+      background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+      padding: 20px;
+      border-radius: 16px;
+      text-align: center;
+    }
+
+    body.dark .stat-box {
+      background: linear-gradient(135deg, #374151, #4b5563);
+    }
+
+    .stat-number {
+      display: block;
+      font-size: 2em;
+      font-weight: bold;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .stat-text {
+      display: block;
+      color: #6b7280;
+      font-size: 0.9em;
+      margin-top: 5px;
+    }
+
+    body.dark .stat-text {
+      color: #9ca3af;
+    }
+
+    .section {
+      background: white;
+      border-radius: 24px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      animation: fadeIn 0.5s ease;
+    }
+
+    body.dark .section {
+      background: #1f2937;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #f3f4f6;
+    }
+
+    body.dark .section-header {
+      border-bottom-color: #374151;
+    }
+
+    .section-header h2 {
+      font-size: 1.8em;
+      color: #1f2937;
+    }
+
+    body.dark .section-header h2 {
+      color: #f3f4f6;
+    }
+
+    .badge {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 0.9em;
+      font-weight: 600;
+    }
+
+    .dns-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+
+    .dns-card {
+      background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+      border-radius: 16px;
+      padding: 20px;
+      transition: all 0.3s;
+      animation: slideUp 0.5s ease;
+    }
+
+    body.dark .dns-card {
+      background: linear-gradient(135deg, #374151, #4b5563);
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .dns-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .country-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .country-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .country-flag {
+      font-size: 2em;
+    }
+
+    .country-details h3 {
+      font-size: 1.1em;
+      margin-bottom: 3px;
+    }
+
+    .country-code {
+      font-family: monospace;
+      background: rgba(102, 126, 234, 0.1);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.85em;
+      color: #667eea;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-edit, .btn-delete, .btn-delete-addr {
+      background: none;
+      border: none;
+      font-size: 1.3em;
+      cursor: pointer;
+      padding: 5px;
+      transition: transform 0.2s;
+    }
+
+    .btn-edit:hover, .btn-delete:hover, .btn-delete-addr:hover {
+      transform: scale(1.2);
+    }
+
+    .card-body {
+      margin-bottom: 15px;
+    }
+
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+
+    .stat-label {
+      color: #6b7280;
+      font-size: 0.95em;
+    }
+
+    body.dark .stat-label {
+      color: #9ca3af;
+    }
+
+    .stat-value {
+      font-weight: 600;
+      font-size: 1.05em;
+    }
+
+    .card-footer details {
+      cursor: pointer;
+    }
+
+    .card-footer summary {
+      padding: 10px;
+      background: rgba(102, 126, 234, 0.05);
+      border-radius: 8px;
+      font-weight: 600;
+      color: #667eea;
+      user-select: none;
+    }
+
+    .card-footer summary:hover {
+      background: rgba(102, 126, 234, 0.1);
+    }
+
+    .addresses-list {
+      padding: 15px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .address-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: white;
+      border-radius: 8px;
+      gap: 10px;
+    }
+
+    body.dark .address-item {
+      background: #1f2937;
+    }
+
+    .addresses-list code {
+      font-family: 'Courier New', monospace;
+      background: rgba(102, 126, 234, 0.1);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.9em;
+      color: #667eea;
+      flex: 1;
+    }
+
+    .empty {
+      color: #9ca3af;
+      font-style: italic;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .dns-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-group.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .form-group label {
+      font-weight: 600;
+      color: #374151;
+      font-size: 0.95em;
+    }
+
+    body.dark .form-group label {
+      color: #d1d5db;
+    }
+
+    .form-group input,
+    .form-group textarea {
+      padding: 12px 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: 16px;
+      font-family: inherit;
+      transition: all 0.3s;
+    }
+
+    body.dark .form-group input,
+    body.dark .form-group textarea {
+      background: #374151;
+      border-color: #4b5563;
+      color: #f3f4f6;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-group small {
+      color: #6b7280;
+      font-size: 0.85em;
+    }
+
+    body.dark .form-group small {
+      color: #9ca3af;
+    }
+
+    .label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .btn-helper {
+      padding: 6px 12px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85em;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .btn-helper:hover {
+      transform: translateY(-2px);
+    }
+
+    .textarea-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85em;
+      color: #6b7280;
+      margin-top: -5px;
+    }
+
+    body.dark .textarea-info {
+      color: #9ca3af;
+    }
+
+    .form-options {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .validation-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      padding: 15px;
+      background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+      border-radius: 12px;
+    }
+
+    body.dark .validation-info {
+      background: linear-gradient(135deg, #374151, #4b5563);
+    }
+
+    .info-row {
+      text-align: center;
+    }
+
+    .info-label {
+      display: block;
+      font-size: 0.9em;
+      color: #6b7280;
+      margin-bottom: 5px;
+    }
+
+    body.dark .info-label {
+      color: #9ca3af;
+    }
+
+    .valid-count, .invalid-count, .duplicate-count {
+      font-size: 1.5em;
+      font-weight: bold;
+    }
+
+    .valid-count {
+      color: #10b981;
+    }
+
+    .invalid-count {
+      color: #ef4444;
+    }
+
+    .duplicate-count {
+      color: #f59e0b;
+    }
+
+    .bulk-progress {
+      padding: 20px;
+      background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+      border-radius: 12px;
+    }
+
+    body.dark .bulk-progress {
+      background: linear-gradient(135deg, #374151, #4b5563);
+    }
+
+    .progress-container {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+
+    .progress-bar {
+      flex: 1;
+      height: 30px;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 15px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      transition: width 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+    }
+
+    .progress-percent {
+      font-weight: bold;
+      font-size: 1.1em;
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .progress-text {
+      text-align: center;
+      margin: 10px 0;
+      font-weight: 600;
+    }
+
+    .current-ip {
+      text-align: center;
+      font-family: monospace;
+      color: #667eea;
+      margin: 10px 0;
+    }
+
+    .speed-info {
+      text-align: center;
+      color: #6b7280;
+      font-size: 0.9em;
+      margin: 10px 0;
+    }
+
+    body.dark .speed-info {
+      color: #9ca3af;
+    }
+
+    .error-list {
+      margin-top: 15px;
+    }
+
+    .error-summary {
+      cursor: pointer;
+      padding: 10px;
+      background: rgba(239, 68, 68, 0.1);
+      border-radius: 8px;
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    .error-items {
+      padding: 15px 10px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .error-item {
+      padding: 8px;
+      background: white;
+      border-radius: 6px;
+      margin: 5px 0;
+      font-size: 0.9em;
+    }
+
+    body.dark .error-item {
+      background: #1f2937;
+    }
+
+    .success-summary {
+      padding: 15px;
+      background: rgba(16, 185, 129, 0.1);
+      border-radius: 8px;
+      color: #10b981;
+      margin-top: 15px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    .btn-submit, .btn-secondary {
+      padding: 14px 28px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .btn-submit {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+    }
+
+    .btn-submit:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    body.dark .btn-secondary {
+      background: #4b5563;
+      color: #f3f4f6;
+    }
+
+    .btn-secondary:hover {
+      background: #d1d5db;
+    }
+
+    body.dark .btn-secondary:hover {
+      background: #6b7280;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #9ca3af;
+      font-size: 1.1em;
+    }
+
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 400px;
+    }
+
+    .toast {
+      background: white;
+      border-radius: 12px;
+      padding: 16px 20px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      display: flex;
+      align-items: start;
+      gap: 12px;
+      animation: slideInLeft 0.3s ease;
+    }
+
+    body.dark .toast {
+      background: #1f2937;
+    }
+
+    @keyframes slideInLeft {
+      from {
+        opacity: 0;
+        transform: translateX(-100%);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .toast.removing {
+      animation: slideOutLeft 0.3s ease;
+    }
+
+    @keyframes slideOutLeft {
+      from {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateX(-100%);
+      }
+    }
+
+    .toast-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    .toast.success .toast-icon {
+      background: #10b981;
+      color: white;
+    }
+
+    .toast.error .toast-icon {
+      background: #ef4444;
+      color: white;
+    }
+
+    .toast.warning .toast-icon {
+      background: #f59e0b;
+      color: white;
+    }
+
+    .toast.info .toast-icon {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .toast-content {
+      flex: 1;
+    }
+
+    .toast-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+      font-size: 0.95em;
+    }
+
+    .toast-message {
+      color: #6b7280;
+      font-size: 0.9em;
+      line-height: 1.4;
+    }
+
+    body.dark .toast-message {
+      color: #9ca3af;
+    }
+
+    .toast-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #9ca3af;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .toast-close:hover {
+      color: #374151;
+    }
+
+    body.dark .toast-close:hover {
+      color: #f3f4f6;
+    }
+
+    @media (max-width: 768px) {
+      .dns-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      .header-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .button-group {
+        flex-direction: column;
+      }
+
+      .btn-submit, .btn-secondary {
+        min-width: 100%;
+      }
+
+      .toast-container {
+        left: 10px;
+        right: 10px;
+        max-width: calc(100% - 20px);
+      }
+    }
+  `;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 📜 JavaScript for Web UI
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getWebJs() {
+  return `
+// Placeholder - JavaScript code will be added here
+console.log('WireGuard Bot Admin Panel Loaded');
+  `;
+}
+
+
 const Toast = {
   container: null,
-  
+
   init() {
     this.container = document.getElementById('toast-container');
     if (!this.container) {
@@ -1049,46 +1915,46 @@ const Toast = {
       document.body.appendChild(this.container);
     }
   },
-  
+
   show(message, type = 'info', duration = 5000) {
     this.init();
-    
+
     const icons = {
       success: '✓',
       error: '✕',
       warning: '⚠',
       info: 'ℹ'
     };
-    
+
     const titles = {
       success: 'موفقیت',
       error: 'خطا',
       warning: 'هشدار',
       info: 'اطلاعات'
     };
-    
+
     const toast = document.createElement('div');
     toast.className = 'toast ' + type;
-    
+
     toast.innerHTML = '<div class="toast-icon">' + (icons[type] || icons.info) + '</div>' +
       '<div class="toast-content">' +
         '<div class="toast-title">' + (titles[type] || titles.info) + '</div>' +
         '<div class="toast-message">' + message + '</div>' +
       '</div>' +
       '<button class="toast-close">×</button>';
-    
+
     this.container.appendChild(toast);
-    
+
     const closeBtn = toast.querySelector('.toast-close');
     closeBtn.addEventListener('click', () => this.remove(toast));
-    
+
     if (duration > 0) {
       setTimeout(() => this.remove(toast), duration);
     }
-    
+
     return toast;
   },
-  
+
   remove(toast) {
     toast.classList.add('removing');
     setTimeout(() => {
@@ -1097,19 +1963,19 @@ const Toast = {
       }
     }, 300);
   },
-  
+
   success(message, duration) {
     return this.show(message, 'success', duration);
   },
-  
+
   error(message, duration) {
     return this.show(message, 'error', duration);
   },
-  
+
   warning(message, duration) {
     return this.show(message, 'warning', duration);
   },
-  
+
   info(message, duration) {
     return this.show(message, 'info', duration);
   }
@@ -1144,6 +2010,86 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Event delegation for edit buttons
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.btn-edit')) {
+      const btn = e.target.closest('.btn-edit');
+      const code = btn.dataset.code;
+      const country = btn.dataset.country;
+      if (code && country) {
+        editCountry(code, country);
+      }
+    }
+
+    // Event delegation for delete address buttons
+    if (e.target.closest('.btn-delete-addr')) {
+      const btn = e.target.closest('.btn-delete-addr');
+      const code = btn.dataset.code;
+      const address = btn.dataset.address;
+      if (code && address) {
+        deleteAddress(code, address);
+      }
+    }
+  });
+
+  // Event delegation for delete form submit
+  document.addEventListener('submit', (e) => {
+    if (e.target.querySelector('.btn-delete')) {
+      if (!confirm('آیا مطمئن هستید؟')) {
+        e.preventDefault();
+      }
+    }
+  });
+
+  // Event delegation for country checkboxes
+  document.addEventListener('change', (e) => {
+    if (e.target.classList.contains('country-checkbox')) {
+      updateBulkDeleteButton();
+    }
+  });
+
+  // Button click handlers
+  const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+  if (bulkDeleteBtn) {
+    bulkDeleteBtn.addEventListener('click', bulkDeleteCountries);
+  }
+
+  const selectAllBtn = document.getElementById('select-all-btn');
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', toggleSelectAll);
+  }
+
+  const pasteBtn = document.getElementById('paste-clipboard-btn');
+  if (pasteBtn) {
+    pasteBtn.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        const textarea = document.getElementById('addresses-input');
+        if (textarea) {
+          textarea.value = text;
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          Toast.success('✅ متن از کلیپ‌بورد چسباند شد');
+        }
+      } catch (e) {
+        Toast.error('❌ خطا در خواندن کلیپ‌بورد');
+      }
+    });
+  }
+
+  const clearBtn = document.getElementById('clear-addresses-btn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      const textarea = document.getElementById('addresses-input');
+      if (textarea && textarea.value.trim()) {
+        var msg = 'آیا مطمئن هستید؟';
+        if (confirm(msg)) {
+          textarea.value = '';
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    });
+  }
+
   // Helper functions for bulk add form
   window.pasteFromClipboard = async () => {
     try {
@@ -1174,15 +2120,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (textarea) {
     const updateValidation = () => {
       const text = textarea.value;
-      const lines = text.split('\\n').filter(l => l.trim());
+      const lines = text.split('\n').filter(l => l.trim());
       const charCount = text.length;
-      
+
       document.querySelector('.char-count').textContent = charCount + ' کاراکتر';
       document.querySelector('.line-count').textContent = lines.length + ' خط';
 
       // Live validation if checkbox is checked
       if (document.getElementById('auto-validate')?.checked) {
-        const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?\\d?\\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\\d?\\d)){3}$/;
+        const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?\d?\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\d?\d)){3}$/;
         const allIps = text.split(/[^0-9.]+/).filter(a => a.trim());
         const validIps = new Set();
         const invalidIps = new Set();
@@ -1226,10 +2172,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const bulkForm = document.querySelector('form[action="/api/admin/bulk-add"]');
   if (bulkForm) {
     let cancelRequested = false;
-    
+
     bulkForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      
+
       const progress = document.getElementById('bulk-progress');
       const progressFill = progress.querySelector('.progress-fill');
       const progressText = progress.querySelector('.progress-text');
@@ -1238,34 +2184,34 @@ document.addEventListener('DOMContentLoaded', () => {
       const errorItems = progress.querySelector('.error-items');
       const btn = document.getElementById('bulk-submit');
       const textarea = bulkForm.querySelector('textarea[name="addresses"]');
-      
+
       if (!textarea.value.trim()) {
         Toast.warning('لطفاً آدرس‌ها را وارد کنید');
         return;
       }
-      
+
       const rawParts = textarea.value.split(/[^0-9.]+/);
       const addresses = Array.from(new Set(
         rawParts
           .map(a => a.trim())
           .filter(a => a && /^(25[0-5]|2[0-4][0-9]|[01]?\d?\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\d?\d)){3}$/.test(a))
       ));
-      
+
       if (addresses.length === 0) {
         Toast.error('هیچ آدرس IP معتبری یافت نشد');
         return;
       }
-      
+
       // نمایش تعداد آدرس‌های یافت شده
       Toast.info('🔍 ' + addresses.length + ' آدرس IP معتبر یافت شد');
-      
+
       // ریست کردن UI
       progress.style.display = 'block';
       progressFill.style.width = '0%';
       currentIpText.style.display = 'none';
       errorList.style.display = 'none';
       errorItems.innerHTML = '';
-      
+
       btn.disabled = true;
       btn.textContent = '⏸️ لغو';
       btn.onclick = () => {
@@ -1273,47 +2219,47 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.textContent = '⏳ در حال لغو...';
         btn.disabled = true;
       };
-      
+
       let processed = 0;
       let success = 0;
       let failed = 0;
       const byCountry = {};
       const errors = [];
-      
+
       // تنظیم دینامیک batch size بر اساس تعداد آدرس‌ها (افزایش برای سرعت بیشتر)
       const BATCH_SIZE = addresses.length > 100 ? 15 : addresses.length > 50 ? 10 : 7;
-      
+
       // تابع بروزرسانی UI با requestAnimationFrame برای عملکرد بهتر
       const updateUI = (currentIp = null) => {
         requestAnimationFrame(() => {
           const percent = Math.round((processed / addresses.length) * 100);
           progressFill.style.width = percent + '%';
           progress.querySelector('.progress-percent').textContent = percent + '%';
-          
+
           if (currentIp) {
             currentIpText.textContent = '🔄 در حال پردازش: ' + currentIp;
             currentIpText.style.display = 'block';
           }
-          
+
           progressText.textContent = '📊 ' + processed + '/' + addresses.length + ' | ✅ ' + success + ' موفق | ❌ ' + failed + ' ناموفق';
         });
       };
-      
+
       // شروع پردازش
       const startTime = Date.now();
-      
+
       for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
         if (cancelRequested) {
           Toast.warning('⏸️ عملیات لغو شد. ' + processed + ' از ' + addresses.length + ' آدرس پردازش شد.');
           break;
         }
-        
+
         const batch = addresses.slice(i, i + BATCH_SIZE);
-        
+
         // پردازش موازی batch
         const promises = batch.map(async ip => {
           updateUI(ip);
-          
+
           let attempt = 0;
           while (attempt < 3) {
             attempt++;
@@ -1341,7 +2287,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           return { ip, result: { success: false, error: 'خطای نامشخص' } };
         });
-        
+
         // پردازش نتایج
         const results = await Promise.all(promises);
         let duplicates = 0;
@@ -1361,43 +2307,43 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           processed++;
         });
-        
+
         // بروزرسانی UI بعد از هر batch
         updateUI();
-        
+
         // نمایش سرعت پردازش
         const elapsed = (Date.now() - startTime) / 1000;
         const speed = (processed / elapsed).toFixed(1);
         const remaining = addresses.length - processed;
         const eta = remaining > 0 ? Math.ceil(remaining / speed) : 0;
-        
+
         if (eta > 0 && !cancelRequested) {
           const speedInfo = progress.querySelector('.speed-info');
           speedInfo.textContent = '⚡ سرعت: ' + speed + ' IP/s | ⏱️ زمان تخمینی: ' + eta + 's';
           speedInfo.style.display = 'block';
         }
-        
+
         // تاخیر کوچک بین batch‌ها برای جلوگیری از rate limit (100ms)
         if (i + BATCH_SIZE < addresses.length && !cancelRequested) {
           await new Promise(r => setTimeout(r, 100));
         }
       }
-      
+
       // پایان پردازش
       currentIpText.style.display = 'none';
-      
+
       if (!cancelRequested) {
         const summary = Object.entries(byCountry)
           .sort((a, b) => b[1] - a[1])
           .map(([code, count]) => code + ': ' + count)
           .join(', ');
-        
+
         const duplicateText = duplicates > 0 ? ' | 🔄 ' + duplicates + ' تکراری' : '';
         progressText.textContent = '✅ تکمیل شد! ' + processed + ' آدرس | ✅ ' + success + ' جدید' + duplicateText + ' | ❌ ' + failed + ' ناموفق';
         progress.querySelector('.speed-info').style.display = 'none';
         btn.textContent = '✅ تکمیل شد';
         btn.onclick = null;
-        
+
         // نمایش خلاصه موفقیت
         const successSummary = progress.querySelector('.success-summary');
         let summaryHtml = '<strong>✅ نتایج پردازش:</strong><br>';
@@ -1407,7 +2353,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (summary) summaryHtml += '<br><strong>📊 توزیع کشورها:</strong><br>' + summary;
         successSummary.innerHTML = summaryHtml;
         successSummary.style.display = 'block';
-        
+
         if (summary) {
           const duplicateMsg = duplicates > 0 ? '\\n🔄 ' + duplicates + ' آدرس تکراری نادیده گرفته شد' : '';
           Toast.success('🎉 افزودن گروهی تکمیل شد!\\n' + summary + duplicateMsg, 10000);
@@ -1415,7 +2361,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const duplicateMsg = duplicates > 0 ? ', ' + duplicates + ' تکراری' : '';
           Toast.success('✅ تکمیل شد! ' + success + ' جدید' + duplicateMsg + ', ' + failed + ' ناموفق', 5000);
         }
-        
+
         // نمایش خطاها در UI
         if (errors.length > 0) {
           errorList.style.display = 'block';
@@ -1423,7 +2369,7 @@ document.addEventListener('DOMContentLoaded', () => {
             '<div class="error-item"><code>' + e.ip + '</code>: ' + e.error + '</div>'
           ).join('');
         }
-        
+
         // نمایش خلاصه با جزئیات بیشتر
         let message = '✅ ' + success + ' آدرس جدید اضافه شد';
         if (duplicates > 0) {
@@ -1435,7 +2381,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (summary) {
           message += '\n\n📊 توزیع کشورها:\n' + summary;
         }
-        
+
         Toast.success(message, 8000);
         setTimeout(() => window.location.href = '/', 3000);
       } else {
@@ -1444,7 +2390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.onclick = null;
         progressText.textContent = '⏸️ لغو شد | ' + processed + '/' + addresses.length + ' پردازش شد';
       }
-      
+
       cancelRequested = false;
     });
   }
@@ -1461,7 +2407,7 @@ async function editCountry(code, currentName) {
   // ایجاد فرم ویرایش با SweetAlert یا Modal ساده
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;';
-  
+
   const isDark = document.body.classList.contains('dark');
   const bgColor = isDark ? '#1f2937' : 'white';
   const textColor = isDark ? '#f3f4f6' : '#1f2937';
@@ -1470,7 +2416,7 @@ async function editCountry(code, currentName) {
   const inputBg = isDark ? '#374151' : 'white';
   const btnCancelBg = isDark ? '#374151' : '#e5e7eb';
   const btnCancelColor = isDark ? '#9ca3af' : '#6b7280';
-  
+
   modal.innerHTML = '<div style="background:' + bgColor + ';border-radius:16px;padding:30px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
     '<h2 style="margin:0 0 20px;color:' + textColor + ';font-size:24px;">✏️ ویرایش کشور</h2>' +
     '<form id="edit-form">' +
@@ -1489,64 +2435,64 @@ async function editCountry(code, currentName) {
       '</div>' +
     '</form>' +
   '</div>';
-  
+
   document.body.appendChild(modal);
-  
+
   const form = modal.querySelector('#edit-form');
   const cancelBtn = modal.querySelector('#cancel-btn');
   const nameInput = modal.querySelector('#edit-name');
   const codeInput = modal.querySelector('#edit-code');
-  
+
   // تنظیم مقادیر به صورت ایمن
   nameInput.value = currentName;
   codeInput.value = code;
-  
+
   // فوکوس روی اولین فیلد
   nameInput.focus();
   nameInput.select();
-  
+
   // بستن با کلیک روی پس‌زمینه
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
       document.body.removeChild(modal);
     }
   });
-  
+
   // دکمه لغو
   cancelBtn.addEventListener('click', () => {
     document.body.removeChild(modal);
   });
-  
+
   // ارسال فرم
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     const newName = nameInput.value.trim();
     const newCode = codeInput.value.trim().toUpperCase();
-    
+
     if (!newName || !newCode || newCode.length !== 2) {
       Toast.error('لطفاً تمام فیلدها را به درستی پر کنید');
       return;
     }
-    
+
     if (newName === currentName && newCode === code) {
       Toast.info('هیچ تغییری اعمال نشد');
       document.body.removeChild(modal);
       return;
     }
-    
+
     try {
       const formData = new FormData();
       formData.append('action', 'edit_full');
       formData.append('old_code', code);
       formData.append('new_code', newCode);
       formData.append('country', newName);
-      
+
       const response = await fetch('/api/admin/edit-dns', {
         method: 'POST',
         body: formData
       });
-      
+
       if (response.ok) {
         Toast.success('✅ کشور با موفقیت ویرایش شد');
         document.body.removeChild(modal);
@@ -1561,15 +2507,110 @@ async function editCountry(code, currentName) {
   });
 }
 
+// حذف یک آدرس خاص از کشور
+async function deleteAddress(countryCode, address) {
+  if (!confirm('آیا از حذف این آدرس مطمئن هستید؟\\n\\n' + address + '\\n\\nاز کشور: ' + countryCode)) {
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/admin/delete-address', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: countryCode, address: address })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      Toast.success('✅ آدرس ' + address + ' با موفقیت حذف شد');
+      setTimeout(function() { window.location.reload(); }, 1000);
+    } else {
+      Toast.error('❌ خطا در حذف آدرس: ' + (result.error || 'خطای نامشخص'));
+    }
+  } catch (error) {
+    Toast.error('❌ خطا: ' + error.message);
+  }
+}
+
+// به‌روزرسانی دکمه حذف گروهی
+function updateBulkDeleteButton() {
+  const checkboxes = document.querySelectorAll('.country-checkbox:checked');
+  const count = checkboxes.length;
+  const btn = document.getElementById('bulk-delete-btn');
+  const countSpan = document.getElementById('selected-count');
+
+  if (count > 0) {
+    btn.style.display = 'inline-block';
+    countSpan.textContent = count;
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+// انتخاب/لغو انتخاب همه کشورها
+function toggleSelectAll() {
+  const checkboxes = document.querySelectorAll('.country-checkbox');
+  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+
+  checkboxes.forEach(cb => {
+    cb.checked = !allChecked;
+  });
+
+  updateBulkDeleteButton();
+
+  const btn = document.getElementById('select-all-btn');
+  btn.textContent = allChecked ? '☑️ انتخاب همه' : '☐ لغو انتخاب همه';
+}
+
+// حذف گروهی کشورهای انتخاب شده
+async function bulkDeleteCountries() {
+  const checkboxes = document.querySelectorAll('.country-checkbox:checked');
+  const codes = Array.from(checkboxes).map(cb => cb.value);
+
+  if (codes.length === 0) {
+    Toast.warning('هیچ کشوری انتخاب نشده است');
+    return;
+  }
+
+  const countryNames = codes.map(function(code) {
+    const card = document.querySelector('.dns-card[data-code="' + code + '"]');
+    return card ? card.querySelector('.country-details h3').textContent : code;
+  }).join('، ');
+
+  if (!confirm('آیا از حذف ' + codes.length + ' کشور مطمئن هستید؟\\n\\n' + countryNames + '\\n\\n⚠️ این عمل غیرقابل بازگشت است!')) {
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/admin/bulk-delete-countries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codes: codes })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      Toast.success('✅ ' + result.deleted + ' کشور با موفقیت حذف شد!');
+      setTimeout(function() { window.location.reload(); }, 1500);
+    } else {
+      Toast.error('❌ خطا: ' + (result.error || 'خطای نامشخص'));
+    }
+  } catch (error) {
+    Toast.error('❌ خطا: ' + error.message);
+  }
+}
+
 async function fixCountryNames() {
   if (!confirm('آیا مطمئن هستید که می‌خواهید تمام اسم کشورها را به فارسی تبدیل کنید؟')) {
     return;
   }
-  
+
   try {
     const response = await fetch('/api/admin/fix-country-names');
     const result = await response.json();
-    
+
     if (result.success) {
       Toast.success(result.message);
       setTimeout(() => window.location.reload(), 1500);
@@ -1585,7 +2626,7 @@ async function removeDuplicates() {
   if (!confirm('آیا مطمئن هستید که می‌خواهید تمام آدرس‌های تکراری را از همه کشورها حذف کنید؟')) {
     return;
   }
-  
+
   try {
     const btn = document.querySelector('button[onclick="removeDuplicates()"]');
     if (btn) { btn.disabled = true; btn.textContent = '🧹 در حال حذف تکراری‌ها...'; }
@@ -1600,7 +2641,7 @@ async function removeDuplicates() {
     }
 
     const result = await response.json();
-    
+
     if (result.success) {
       Toast.success(result.message);
       setTimeout(() => window.location.reload(), 1500);
@@ -1619,16 +2660,16 @@ async function downloadJSON() {
   try {
     const response = await fetch('/api/dns');
     const data = await response.json();
-    
+
     if (!data || data.length === 0) {
       Toast.warning('هیچ داده‌ای برای دانلود وجود ندارد');
       return;
     }
-    
+
     const jsonString = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    
+
     const a = document.createElement('a');
     a.href = url;
     const date = new Date().toISOString().split('T')[0];
@@ -1637,7 +2678,7 @@ async function downloadJSON() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     Toast.success('فایل JSON با موفقیت دانلود شد\\n📊 تعداد کشورها: ' + data.length);
   } catch (error) {
     Toast.error('خطا در دانلود فایل: ' + error.message);
@@ -1654,13 +2695,13 @@ async function loadCountryData(code) {
     const response = await fetch('/api/dns');
     const entries = await response.json();
     const country = entries.find(e => e.code.toUpperCase() === code.toUpperCase());
-    
+
     if (country) {
       document.getElementById('edit-stock').value = country.stock || 0;
-      
+
       const addressesDiv = document.getElementById('current-addresses');
       if (country.addresses && country.addresses.length > 0) {
-        addressesDiv.innerHTML = country.addresses.map(addr => 
+        addressesDiv.innerHTML = country.addresses.map(addr =>
           '<code>' + addr + '</code>'
         ).join('');
       } else {
@@ -1670,1445 +2711,6 @@ async function loadCountryData(code) {
   } catch (error) {
     console.error('خطا در بارگذاری اطلاعات:', error);
   }
-}
-</script>
-</body>
-</html>`;
-}
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 🎨 CSS Styles for Web Panel
-// ─────────────────────────────────────────────────────────────────────────────
-
-function getWebCss() {
-  return `
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-  font-family: 'Vazirmatn', sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%);
-  background-size: 400% 400%;
-  background-attachment: fixed;
-  min-height: 100vh;
-  padding: 20px;
-  line-height: 1.6;
-  position: relative;
-  overflow-x: hidden;
-}
-
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: 
-    radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(79, 172, 254, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 40% 20%, rgba(67, 233, 123, 0.15) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-body > .container {
-  position: relative;
-  z-index: 1;
-}
-
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.main-header {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-radius: 24px;
-  padding: 40px;
-  margin-bottom: 40px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  position: relative;
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-
-.main-header:hover {
-  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
-  transform: translateY(-2px);
-}
-
-.main-header::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, 
-    #667eea, 
-    #764ba2, 
-    #f093fb,
-    #4facfe,
-    #00f2fe);
-}
-
-.header-actions {
-  margin-top: 16px;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.search-box {
-  position: relative;
-  flex: 1;
-}
-
-.search-box input {
-  width: 100%;
-  padding: 12px 40px 12px 16px;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 14px;
-  background: #ffffff;
-  transition: all 0.2s ease;
-  color: #1e293b;
-  font-weight: 500;
-}
-
-.search-box input::placeholder {
-  color: #94a3b8;
-}
-
-.search-box input:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-  background: #ffffff;
-}
-
-.search-box .search-icon {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #64748b;
-  pointer-events: none;
-  font-size: 16px;
-}
-
-.btn-toggle {
-  border: 1.5px solid #e2e8f0;
-  background: #ffffff;
-  color: #1e293b;
-  padding: 10px 14px;
-  border-radius: 10px;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transition: all 0.2s ease;
-  font-size: 18px;
-  min-width: 44px;
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-toggle::before {
-  display: none;
-}
-
-.btn-toggle:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  border-color: #667eea;
-}
-
-.btn-toggle:active {
-  transform: translateY(0);
-}
-
-.header-content h1 {
-  font-size: 36px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 8px;
-}
-
-.subtitle {
-  color: #64748b;
-  font-size: 16px;
-}
-
-.header-stats {
-  display: flex;
-  gap: 20px;
-  margin-top: 20px;
-}
-
-.stat-box {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
-  border: 1px solid rgba(200, 200, 200, 0.3);
-  color: #1e293b;
-  padding: 24px 32px;
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 150px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.stat-box::before {
-  display: none;
-}
-
-.stat-box::after {
-  display: none;
-}
-
-.stat-box:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-  border-color: rgba(102, 126, 234, 0.3);
-}
-
-.stat-box:nth-child(1) {
-  background: linear-gradient(135deg, #e0f2fe, #f0f9ff);
-  border-color: rgba(79, 172, 254, 0.2);
-}
-
-.stat-box:nth-child(2) {
-  background: linear-gradient(135deg, #dcfce7, #f0fdf4);
-  border-color: rgba(67, 233, 123, 0.2);
-}
-
-.stat-box:nth-child(3) {
-  background: linear-gradient(135deg, #fce7f3, #fdf2f8);
-  border-color: rgba(250, 112, 154, 0.2);
-}
-
-.stat-number {
-  font-size: 28px;
-  font-weight: 700;
-}
-
-.stat-text {
-  font-size: 14px;
-  opacity: 0.9;
-}
-
-.section {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-radius: 20px;
-  padding: 35px;
-  margin-bottom: 30px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  position: relative;
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-
-.section:hover {
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
-}
-
-.section::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, 
-    transparent, 
-    #667eea, 
-    #764ba2,
-    transparent);
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 25px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #e2e8f0;
-}
-
-.section-header h2 {
-  font-size: 24px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.badge {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 500;
-  box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
-}
-
-.dns-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
-}
-
-.dns-card {
-  background: rgba(255, 255, 255, 0.98);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  animation: slideInUp 0.5s ease forwards;
-  opacity: 0;
-  border: 1px solid rgba(200, 200, 200, 0.3);
-  position: relative;
-}
-
-@keyframes slideInUp {
-  from { 
-    opacity: 0; 
-    transform: translateY(20px);
-  }
-  to { 
-    opacity: 1; 
-    transform: translateY(0); 
-  }
-}
-
-.dns-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
-  border-color: rgba(102, 126, 234, 0.3);
-}
-
-.dns-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.03) 0%, rgba(79, 172, 254, 0.03) 100%);
-  pointer-events: none;
-}
-
-.dns-card::after {
-  display: none;
-}
-
-.card-header {
-  background: linear-gradient(135deg, 
-    #667eea 0%, 
-    #764ba2 50%,
-    #4facfe 100%);
-  padding: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  position: relative;
-  overflow: hidden;
-}
-
-.card-header::before {
-  display: none;
-}
-
-.country-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.country-flag {
-  font-size: 36px;
-}
-
-.country-details h3 {
-  font-size: 18px;
-  font-weight: 600;
-  color: white;
-  margin-bottom: 2px;
-}
-
-.country-code {
-  font-size: 13px;
-  color: #667eea;
-  font-weight: 500;
-  background: white;
-  padding: 2px 8px;
-  border-radius: 6px;
-}
-
-.btn-edit {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-  margin-left: 8px;
-}
-
-.btn-edit:hover {
-  background: linear-gradient(135deg, #764ba2, #667eea);
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.btn-delete {
-  background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
-}
-
-.btn-delete:hover {
-  background: linear-gradient(135deg, #ee5a6f, #ff6b6b);
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
-}
-
-.card-body {
-  padding: 20px;
-  display: flex;
-  gap: 20px;
-}
-
-.stat-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: #64748b;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.card-footer {
-  border-top: 1px solid #e2e8f0;
-  padding: 15px 20px;
-}
-
-details summary {
-  cursor: pointer;
-  font-weight: 500;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  user-select: none;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.3s;
-}
-
-details summary:hover {
-  transform: translateX(5px);
-}
-
-details summary::-webkit-details-marker {
-  display: none;
-}
-
-details summary::before {
-  content: '◀';
-  transition: transform 0.2s;
-}
-
-details[open] summary::before {
-  transform: rotate(-90deg);
-}
-
-.addresses-list {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.addresses-list code {
-  background: linear-gradient(135deg, #f8f9ff, #fff5f8);
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-family: 'Courier New', monospace;
-  font-size: 14px;
-  color: #1e293b;
-  border-left: 3px solid;
-  border-image: linear-gradient(135deg, #667eea, #f093fb) 1;
-  transition: all 0.3s;
-}
-
-.addresses-list code:hover {
-  transform: translateX(5px);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
-}
-
-.empty {
-  color: #94a3b8;
-  font-size: 14px;
-  font-style: italic;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: #64748b;
-  font-size: 16px;
-}
-
-.dns-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 15px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-group.full-width {
-  grid-column: 1 / -1;
-}
-
-label {
-  font-weight: 500;
-  color: #334155;
-  font-size: 14px;
-}
-
-input, textarea {
-  padding: 14px 18px;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 12px;
-  font-family: 'Vazirmatn', sans-serif;
-  font-size: 15px;
-  transition: all 0.2s ease;
-  background: #ffffff;
-}
-
-input:focus, textarea:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-  background: #ffffff;
-}
-
-textarea {
-  resize: vertical;
-  min-height: 100px;
-  font-family: 'Courier New', monospace;
-}
-
-small {
-  color: #64748b;
-  font-size: 13px;
-}
-
-.btn-submit {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 14px 32px;
-  border: none;
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-submit::before {
-  display: none;
-}
-
-.btn-submit:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-}
-
-.btn-submit:active {
-  transform: translateY(0);
-}
-
-.form-tabs {
-  display: flex;
-  margin-bottom: 20px;
-  border-bottom: 2px solid #e2e8f0;
-}
-
-.tab-btn {
-  background: none;
-  border: none;
-  padding: 12px 24px;
-  font-size: 16px;
-  font-weight: 500;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.2s;
-  border-bottom: 3px solid transparent;
-  font-family: 'Vazirmatn', sans-serif;
-}
-
-.tab-btn.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
-}
-
-.tab-btn:hover:not(.active) {
-  color: #475569;
-  background: #f8fafc;
-}
-
-.tab-content {
-  display: none;
-}
-
-.tab-content.active {
-  display: block;
-}
-
-select {
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
-  border-radius: 10px;
-  font-family: 'Vazirmatn', sans-serif;
-  font-size: 15px;
-  transition: all 0.2s;
-  background: white;
-  cursor: pointer;
-}
-
-select:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.current-addresses {
-  background: #f8fafc;
-  border: 2px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 15px;
-  min-height: 60px;
-  color: #64748b;
-  font-size: 14px;
-}
-
-.current-addresses code {
-  display: block;
-  background: white;
-  padding: 8px 12px;
-  border-radius: 6px;
-  margin: 4px 0;
-  font-family: 'Courier New', monospace;
-  color: #1e293b;
-  border-left: 3px solid #667eea;
-}
-
-.label-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.btn-helper {
-  background: linear-gradient(135deg, #4facfe, #00f2fe);
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(79, 172, 254, 0.3);
-}
-
-.btn-helper:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.4);
-}
-
-.textarea-info {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  font-size: 12px;
-  color: #64748b;
-  margin-top: 6px;
-}
-
-.form-options {
-  display: flex;
-  gap: 20px;
-  padding: 15px;
-  background: linear-gradient(135deg, #f0f9ff, #f0fdf4);
-  border-radius: 12px;
-  border: 1px solid rgba(102, 126, 234, 0.1);
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  color: #334155;
-  user-select: none;
-}
-
-.checkbox-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  accent-color: #667eea;
-}
-
-.validation-info {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  padding: 15px;
-  background: linear-gradient(135deg, #f8f9ff, #fff5f8);
-  border-radius: 12px;
-  border: 1px solid rgba(102, 126, 234, 0.15);
-}
-
-.info-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: center;
-}
-
-.info-label {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 500;
-}
-
-.info-row span:last-child {
-  font-size: 20px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.progress-container {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.progress-bar {
-  flex: 1;
-  height: 8px;
-  background: #e2e8f0;
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #667eea, #764ba2, #4facfe);
-  width: 0%;
-  transition: width 0.3s ease;
-  border-radius: 10px;
-}
-
-.progress-percent {
-  font-size: 13px;
-  font-weight: 600;
-  color: #667eea;
-  min-width: 40px;
-  text-align: right;
-}
-
-.speed-info {
-  font-size: 12px;
-  color: #64748b;
-  margin: 8px 0 0 0;
-}
-
-.success-summary {
-  margin-top: 15px;
-  padding: 15px;
-  background: linear-gradient(135deg, #dcfce7, #f0fdf4);
-  border-left: 4px solid #10b981;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #166534;
-}
-
-.button-group {
-  display: flex;
-  gap: 12px;
-}
-
-.btn-secondary {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: white;
-  padding: 14px 32px;
-  border: none;
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
-}
-
-.btn-secondary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
-}
-
-.btn-secondary:active {
-  transform: translateY(0);
-}
-
-.error-item {
-  padding: 10px;
-  background: #fee2e2;
-  border-left: 3px solid #dc2626;
-  border-radius: 6px;
-  margin: 6px 0;
-  font-size: 13px;
-  color: #7f1d1d;
-}
-
-.error-item code {
-  background: #fecaca;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-}
-
-@media (max-width: 768px) {
-  .dns-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-  
-  .header-stats {
-    flex-direction: column;
-  }
-  
-  .stat-box {
-    width: 100%;
-  }
-
-  .form-tabs {
-    flex-direction: column;
-  }
-  
-  .tab-btn {
-    text-align: center;
-    border-bottom: none;
-    border-right: 3px solid transparent;
-  }
-  
-  .tab-btn.active {
-    border-right-color: #667eea;
-    border-bottom-color: transparent;
-  }
-
-  .label-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .form-options {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .validation-info {
-    grid-template-columns: 1fr;
-  }
-
-  .button-group {
-    flex-direction: column;
-  }
-
-  .btn-submit, .btn-secondary {
-    width: 100%;
-  }
-}
-
-/* Dark mode */
-body.dark {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 25%, #0f3460 50%, #0a192f 75%, #162447 100%);
-  background-size: 400% 400%;
-}
-
-body.dark::before {
-  background: 
-    radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(79, 172, 254, 0.1) 0%, transparent 50%),
-    radial-gradient(circle at 40% 20%, rgba(67, 233, 123, 0.1) 0%, transparent 50%);
-}
-
-body.dark .main-header,
-body.dark .section {
-  background: rgba(30, 41, 59, 0.9);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  color: #e2e8f0;
-  border-color: rgba(148, 163, 184, 0.2);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
-}
-
-body.dark .main-header:hover,
-body.dark .section:hover {
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-}
-
-body.dark .main-header::before,
-body.dark .section::before {
-  background: linear-gradient(90deg, 
-    transparent, 
-    #667eea, 
-    #764ba2,
-    transparent);
-}
-
-body.dark .header-content h1 {
-  color: #f1f5f9;
-}
-
-body.dark .subtitle,
-body.dark .stat-text,
-body.dark .empty,
-body.dark small,
-body.dark label {
-  color: #94a3b8;
-}
-
-body.dark .dns-card { 
-  background: rgba(30, 41, 59, 0.9);
-  border-color: rgba(148, 163, 184, 0.2);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-}
-
-body.dark .dns-card:hover {
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4);
-  border-color: rgba(102, 126, 234, 0.3);
-}
-body.dark .card-body { color: #e2e8f0; }
-body.dark .country-details h3 { color: #f1f5f9; }
-body.dark .country-code { background: #1e293b; color: #93c5fd; }
-body.dark .card-footer { border-top-color: #334155; }
-body.dark .addresses-list code { background: #1e293b; color: #e2e8f0; border-color: #475569; }
-
-body.dark input,
-body.dark textarea,
-body.dark select,
-body.dark .current-addresses,
-body.dark .search-box input {
-  background: rgba(15, 23, 42, 0.95);
-  color: #e2e8f0;
-  border-color: rgba(51, 65, 85, 0.5);
-}
-
-body.dark input:focus,
-body.dark textarea:focus,
-body.dark .search-box input:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-  background: rgba(15, 23, 42, 0.98);
-}
-
-body.dark .search-box .search-icon {
-  color: #94a3b8;
-}
-
-body.dark .section-header {
-  border-bottom-color: #334155;
-}
-
-body.dark .bulk-progress {
-  background: rgba(15, 23, 42, 0.9);
-  border-color: #334155;
-}
-
-body.dark .progress-bar {
-  background: #334155;
-}
-
-body.dark .form-options {
-  background: rgba(30, 41, 59, 0.5);
-  border-color: rgba(102, 126, 234, 0.2);
-}
-
-body.dark .validation-info {
-  background: rgba(30, 41, 59, 0.5);
-  border-color: rgba(102, 126, 234, 0.2);
-}
-
-body.dark .textarea-info {
-  background: rgba(15, 23, 42, 0.8);
-  color: #94a3b8;
-}
-
-body.dark .checkbox-label {
-  color: #e2e8f0;
-}
-
-body.dark .btn-helper {
-  background: linear-gradient(135deg, #0ea5e9, #06b6d4);
-  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
-}
-
-body.dark .btn-helper:hover {
-  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.4);
-}
-
-body.dark .btn-secondary {
-  background: linear-gradient(135deg, #d97706, #b45309);
-  box-shadow: 0 4px 15px rgba(217, 119, 6, 0.3);
-}
-
-body.dark .btn-secondary:hover {
-  box-shadow: 0 8px 25px rgba(217, 119, 6, 0.4);
-}
-
-body.dark .success-summary {
-  background: rgba(5, 150, 105, 0.2);
-  border-left-color: #10b981;
-  color: #86efac;
-}
-
-body.dark .error-item {
-  background: rgba(220, 38, 38, 0.2);
-  border-left-color: #ef4444;
-  color: #fca5a5;
-}
-
-body.dark .error-item code {
-  background: rgba(220, 38, 38, 0.3);
-  color: #fecaca;
-}
-
-.bulk-progress {
-  margin: 15px 0;
-  padding: 20px;
-  background: linear-gradient(135deg, #f8fafc, #ffffff);
-  border-radius: 16px;
-  border: 2px solid #e2e8f0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.progress-bar {
-  width: 100%;
-  height: 12px;
-  background: #e2e8f0;
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 12px;
-  position: relative;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
-  background-size: 200% 100%;
-  width: 0%;
-  transition: width 0.4s ease;
-  animation: shimmer 2s infinite;
-  position: relative;
-}
-
-.progress-fill::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-  animation: shine 1.5s infinite;
-}
-
-@keyframes shimmer {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
-@keyframes shine {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-.current-ip {
-  font-size: 13px;
-  color: #6366f1;
-  text-align: center;
-  margin: 8px 0 4px 0;
-  font-weight: 600;
-  font-family: 'Courier New', monospace;
-  animation: fadeInOut 1.5s infinite;
-  padding: 6px 12px;
-  background: rgba(99, 102, 241, 0.1);
-  border-radius: 8px;
-  border: 1px solid rgba(99, 102, 241, 0.2);
-}
-
-.progress-text {
-  font-size: 14px;
-  color: #475569;
-  text-align: center;
-  margin: 0;
-  font-weight: 500;
-}
-
-@keyframes fadeInOut {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-
-body.dark .bulk-progress {
-  background: #0f172a;
-  border-color: #1f2937;
-}
-
-body.dark .progress-bar {
-  background: #1f2937;
-}
-
-body.dark .current-ip {
-  color: #818cf8;
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.3);
-}
-
-body.dark .progress-text {
-  color: #94a3b8;
-}
-
-.error-list {
-  margin-top: 15px;
-  padding: 12px;
-  background: rgba(239, 68, 68, 0.05);
-  border-radius: 8px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.error-summary {
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: #dc2626;
-  padding: 4px 0;
-  user-select: none;
-}
-
-.error-summary:hover {
-  color: #b91c1c;
-}
-
-.error-items {
-  margin-top: 10px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.error-item {
-  padding: 6px 10px;
-  margin: 4px 0;
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 6px;
-  font-size: 12px;
-  color: #475569;
-  border-left: 3px solid #ef4444;
-}
-
-.error-item code {
-  background: rgba(239, 68, 68, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  color: #dc2626;
-  font-weight: 600;
-}
-
-body.dark .error-list {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.3);
-}
-
-body.dark .error-summary {
-  color: #f87171;
-}
-
-body.dark .error-summary:hover {
-  color: #fca5a5;
-}
-
-body.dark .error-item {
-  background: rgba(15, 23, 42, 0.5);
-  color: #cbd5e1;
-}
-
-body.dark .error-item code {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-}
-
-/* Toast Notifications */
-.toast-container {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  z-index: 10000;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 400px;
-}
-
-.toast {
-  background: white;
-  border-radius: 16px;
-  padding: 18px 24px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  animation: slideInRight 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  border-left: 4px solid;
-  position: relative;
-  overflow: hidden;
-  backdrop-filter: blur(10px);
-  min-width: 320px;
-}
-
-@keyframes slideInRight {
-  from {
-    transform: translateX(120%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-.toast.removing {
-  animation: slideOutRight 0.3s ease-out forwards;
-}
-
-@keyframes slideOutRight {
-  to {
-    transform: translateX(120%);
-    opacity: 0;
-  }
-}
-
-.toast::before {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 3px;
-  background: currentColor;
-  animation: progress 5s linear forwards;
-}
-
-@keyframes progress {
-  from { width: 100%; }
-  to { width: 0%; }
-}
-
-.toast-icon {
-  font-size: 24px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-}
-
-.toast-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.toast-title {
-  font-weight: 600;
-  font-size: 15px;
-  color: #1e293b;
-}
-
-.toast-message {
-  font-size: 13px;
-  color: #64748b;
-  line-height: 1.5;
-  white-space: pre-line;
-}
-
-.toast-close {
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: #94a3b8;
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s;
-  flex-shrink: 0;
-}
-
-.toast-close:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #64748b;
-}
-
-.toast.success {
-  border-left-color: #10b981;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(255, 255, 255, 0.98));
-}
-
-.toast.success .toast-icon {
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
-}
-
-.toast.error {
-  border-left-color: #ef4444;
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(255, 255, 255, 0.98));
-}
-
-.toast.error .toast-icon {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-}
-
-.toast.warning {
-  border-left-color: #f59e0b;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05), rgba(255, 255, 255, 0.98));
-}
-
-.toast.warning .toast-icon {
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
-}
-
-.toast.info {
-  border-left-color: #3b82f6;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(255, 255, 255, 0.98));
-}
-
-.toast.info .toast-icon {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-}
-
-/* Dark mode toast styles */
-body.dark .toast {
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.98));
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-body.dark .toast-title {
-  color: #f1f5f9;
-}
-
-body.dark .toast-message {
-  color: #94a3b8;
-}
-
-body.dark .toast-close {
-  color: #64748b;
-}
-
-body.dark .toast-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #94a3b8;
-}
-
-body.dark .toast.success {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(15, 23, 42, 0.98));
-}
-
-body.dark .toast.error {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(15, 23, 42, 0.98));
-}
-
-body.dark .toast.warning {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(15, 23, 42, 0.98));
-}
-
-body.dark .toast.info {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(15, 23, 42, 0.98));
-}
-`;
 }
 
 
@@ -3133,10 +2735,10 @@ function renderIpv6Page(entries, userCount) {
           </div>
         </div>
         <div class="card-actions">
-          <button class="btn-edit" onclick="editCountry('${escapeHtml(e.code)}', '${escapeHtml(e.country)}')" title="ویرایش نام">✏️</button>
+          <button class="btn-edit" data-code="${escapeHtml(e.code)}" data-country="${escapeHtml(e.country)}" title="ویرایش نام">✏️</button>
           <form method="POST" action="/api/admin/delete-ipv6" style="display:inline;">
             <input type="hidden" name="code" value="${escapeHtml(e.code)}">
-            <button type="submit" class="btn-delete" onclick="return confirm('آیا مطمئن هستید؟')" title="حذف">🗑️</button>
+            <button type="submit" class="btn-delete" title="حذف">🗑️</button>
           </form>
         </div>
       </div>
@@ -3269,7 +2871,7 @@ function renderIpv6Page(entries, userCount) {
 // Toast Notification System
 const Toast = {
   container: null,
-  
+
   init() {
     this.container = document.getElementById('toast-container');
     if (!this.container) {
@@ -3279,46 +2881,46 @@ const Toast = {
       document.body.appendChild(this.container);
     }
   },
-  
+
   show(message, type = 'info', duration = 5000) {
     this.init();
-    
+
     const icons = {
       success: '✓',
       error: '✕',
       warning: '⚠',
       info: 'ℹ'
     };
-    
+
     const titles = {
       success: 'موفقیت',
       error: 'خطا',
       warning: 'هشدار',
       info: 'اطلاعات'
     };
-    
+
     const toast = document.createElement('div');
     toast.className = 'toast ' + type;
-    
+
     toast.innerHTML = '<div class="toast-icon">' + (icons[type] || icons.info) + '</div>' +
       '<div class="toast-content">' +
         '<div class="toast-title">' + (titles[type] || titles.info) + '</div>' +
         '<div class="toast-message">' + message + '</div>' +
       '</div>' +
       '<button class="toast-close">×</button>';
-    
+
     this.container.appendChild(toast);
-    
+
     const closeBtn = toast.querySelector('.toast-close');
     closeBtn.addEventListener('click', () => this.remove(toast));
-    
+
     if (duration > 0) {
       setTimeout(() => this.remove(toast), duration);
     }
-    
+
     return toast;
   },
-  
+
   remove(toast) {
     toast.classList.add('removing');
     setTimeout(() => {
@@ -3327,19 +2929,19 @@ const Toast = {
       }
     }, 300);
   },
-  
+
   success(message, duration) {
     return this.show(message, 'success', duration);
   },
-  
+
   error(message, duration) {
     return this.show(message, 'error', duration);
   },
-  
+
   warning(message, duration) {
     return this.show(message, 'warning', duration);
   },
-  
+
   info(message, duration) {
     return this.show(message, 'info', duration);
   }
@@ -3378,7 +2980,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function editCountry(code, currentName) {
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10000;';
-  
+
   const isDark = document.body.classList.contains('dark');
   const bgColor = isDark ? '#1f2937' : 'white';
   const textColor = isDark ? '#f3f4f6' : '#1f2937';
@@ -3387,7 +2989,7 @@ async function editCountry(code, currentName) {
   const inputBg = isDark ? '#374151' : 'white';
   const btnCancelBg = isDark ? '#374151' : '#e5e7eb';
   const btnCancelColor = isDark ? '#9ca3af' : '#6b7280';
-  
+
   modal.innerHTML = '<div style="background:' + bgColor + ';border-radius:16px;padding:30px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
     '<h2 style="margin:0 0 20px;color:' + textColor + ';font-size:24px;">✏️ ویرایش کشور</h2>' +
     '<form id="edit-form">' +
@@ -3406,60 +3008,60 @@ async function editCountry(code, currentName) {
       '</div>' +
     '</form>' +
   '</div>';
-  
+
   document.body.appendChild(modal);
-  
+
   const form = modal.querySelector('#edit-form');
   const cancelBtn = modal.querySelector('#cancel-btn');
   const nameInput = modal.querySelector('#edit-name');
   const codeInput = modal.querySelector('#edit-code');
-  
+
   // تنظیم مقادیر به صورت ایمن
   nameInput.value = currentName;
   codeInput.value = code;
-  
+
   nameInput.focus();
   nameInput.select();
-  
+
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
       document.body.removeChild(modal);
     }
   });
-  
+
   cancelBtn.addEventListener('click', () => {
     document.body.removeChild(modal);
   });
-  
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     const newName = nameInput.value.trim();
     const newCode = codeInput.value.trim().toUpperCase();
-    
+
     if (!newName || !newCode || newCode.length !== 2) {
       Toast.error('لطفاً تمام فیلدها را به درستی پر کنید');
       return;
     }
-    
+
     if (newName === currentName && newCode === code) {
       Toast.info('هیچ تغییری اعمال نشد');
       document.body.removeChild(modal);
       return;
     }
-    
+
     try {
       const formData = new FormData();
       formData.append('action', 'edit_full');
       formData.append('old_code', code);
       formData.append('new_code', newCode);
       formData.append('country', newName);
-      
+
       const response = await fetch('/api/admin/update-ipv6-name', {
         method: 'POST',
         body: formData
       });
-      
+
       if (response.ok) {
         Toast.success('کشور با موفقیت ویرایش شد!');
         setTimeout(() => window.location.reload(), 1500);
@@ -3469,7 +3071,7 @@ async function editCountry(code, currentName) {
     } catch (error) {
       Toast.error('خطا در ارتباط با سرور');
     }
-    
+
     document.body.removeChild(modal);
   });
 }
@@ -4797,24 +4399,6 @@ export async function handleUpdate(update, env) {
         }
       }
 
-      // وایرگارد: انتخاب نوع نام‌گذاری => ذخیره و نمایش اپراتورها
-      else if (data.startsWith('wg_name:')) {
-        const namingType = data.split(':')[1];
-        const state = await getWgState(env.DB, from.id);
-        if (!state || !state.dns) {
-          await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'ابتدا DNS را انتخاب کنید', show_alert: true });
-        } else {
-          await setWgState(env.DB, from.id, { ...state, namingType, step: 'op' });
-          const kb = buildWireguardOperatorKb();
-          await telegramApi(env, '/editMessageText', {
-            chat_id: chat,
-            message_id: messageId,
-            text: `اپراتور خود را انتخاب کنید:`,
-            reply_markup: kb
-          });
-        }
-      }
-
       // حساب کاربری
       else if (data === 'account') {
         const dnsQuota = await getUserQuota(env.DB, from.id, 'dns');
@@ -5226,27 +4810,27 @@ export default {
   <div class="container">
     <div class="status-icon">${allOk ? '✅' : '⚠️'}</div>
     <h1>${allOk ? 'همه چیز آماده است!' : 'مشکلاتی وجود دارد'}</h1>
-    
+
     <div class="check-item">
       <span class="check-label">🗄️ KV Database (DB)</span>
       <span class="check-value ${checks.env_db ? 'ok' : 'error'}">${checks.env_db ? 'متصل' : 'تنظیم نشده'}</span>
     </div>
-    
+
     <div class="check-item">
       <span class="check-label">🔑 Bot Token</span>
       <span class="check-value ${checks.env_bot_token ? 'ok' : 'error'}">${checks.env_bot_token ? 'تنظیم شده' : 'تنظیم نشده'}</span>
     </div>
-    
+
     <div class="check-item">
       <span class="check-label">💾 اتصال KV</span>
       <span class="check-value ${checks.kv_connection ? 'ok' : 'error'}">${checks.kv_connection ? 'موفق' : 'ناموفق'}</span>
     </div>
-    
+
     <div class="check-item">
       <span class="check-label">🤖 Telegram API</span>
       <span class="check-value ${checks.telegram_api ? 'ok' : 'error'}">${checks.telegram_api ? 'موفق' : 'ناموفق'}</span>
     </div>
-    
+
     ${checks.bot_info ? `
     <div class="bot-info">
       <h3>🤖 اطلاعات ربات</h3>
@@ -5255,15 +4839,15 @@ export default {
       <p><strong>شناسه:</strong> ${checks.bot_info.id}</p>
     </div>
     ` : ''}
-    
+
     ${checks.kv_error ? `<p style="color: #e74c3c; margin-top: 15px;">❌ خطای KV: ${checks.kv_error}</p>` : ''}
     ${checks.telegram_error ? `<p style="color: #e74c3c; margin-top: 15px;">❌ خطای Telegram: ${checks.telegram_error}</p>` : ''}
-    
+
     <div class="btn-group">
       <a href="/" class="btn">🏠 صفحه اصلی</a>
       <a href="/health" class="btn">🔄 بررسی مجدد</a>
     </div>
-    
+
     <div class="timestamp">
       زمان بررسی: ${new Date().toLocaleString('fa-IR')}
     </div>
@@ -5453,7 +5037,7 @@ export default {
     <div class="success-icon"></div>
     <h1>🎉 کشور جدید اضافه شد!</h1>
     <p class="subtitle">کشور با موفقیت به سیستم اضافه شد</p>
-    
+
     <div class="info-box">
       <div class="info-row">
         <span class="info-label">🌍 نام کشور</span>
@@ -5472,13 +5056,13 @@ export default {
         <span class="info-value">${entry.stock} IP</span>
       </div>
     </div>
-    
+
     <button class="btn-home" onclick="window.location.href='/'">
       🏠 بازگشت به صفحه اصلی
     </button>
     <p class="countdown">بازگشت خودکار در <span id="timer">3</span> ثانیه...</p>
   </div>
-  
+
   <script>
     let seconds = 3;
     const timer = setInterval(() => {
@@ -5658,9 +5242,9 @@ export default {
 <body>
   <div class="success-card">
     <div class="success-icon"></div>
-    <h1>✅ کشور بروزرسانی شد!</h1>
+    <h1>✅کشور بروزرسانی شد!</h1>
     <p class="subtitle">اطلاعات کشور با موفقیت بروزرسانی شد</p>
-    
+
     <div class="info-box">
       <div class="info-row">
         <span class="info-label">🌍 نام کشور</span>
@@ -5679,13 +5263,13 @@ export default {
         <span class="info-value">${totalCount} آدرس</span>
       </div>
     </div>
-    
+
     <button class="btn-home" onclick="window.location.href='/'">
       🏠 بازگشت به صفحه اصلی
     </button>
     <p class="countdown">بازگشت خودکار در <span id="timer">3</span> ثانیه...</p>
   </div>
-  
+
   <script>
     let seconds = 3;
     const timer = setInterval(() => {
@@ -5744,7 +5328,7 @@ export default {
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="2;url=/">
 <title>موفقیت</title>
-<body style="font-family: sans-serif; padding:20px; text-align:center;">
+<body style="font-family: sans-serif; padding:20px;">
   <h2>✅ کشور با موفقیت ویرایش شد</h2>
   <p>نام: ${newName}</p>
   <p>کد: ${newCode}</p>
@@ -5792,6 +5376,63 @@ export default {
   <script>setTimeout(()=>location.href='/',2000)</script>
 </body>
 </html>`);
+      }
+
+      // API: حذف آدرس خاص از کشور
+      if (url.pathname === '/api/admin/delete-address' && req.method === 'POST') {
+        try {
+          const body = await req.json();
+          const code = (body.code || '').toUpperCase().trim();
+          const address = (body.address || '').trim();
+
+          if (!code || !address) {
+            return json({ success: false, error: 'کد کشور یا آدرس نامعتبر است' });
+          }
+
+          const success = await removeAddressFromEntry(env.DB, code, address);
+
+          if (success) {
+            invalidateDnsCache();
+            return json({ success: true, message: 'آدرس با موفقیت حذف شد' });
+          } else {
+            return json({ success: false, error: 'کشور یا آدرس یافت نشد' });
+          }
+        } catch (e) {
+          console.error('خطا در حذف آدرس:', e);
+          return json({ success: false, error: e.message || 'خطای نامشخص' });
+        }
+      }
+
+      // API: حذف گروهی کشورها
+      if (url.pathname === '/api/admin/bulk-delete-countries' && req.method === 'POST') {
+        try {
+          const body = await req.json();
+          const codes = body.codes || [];
+
+          if (!Array.isArray(codes) || codes.length === 0) {
+            return json({ success: false, error: 'لیست کشورها خالی است' });
+          }
+
+          let deleted = 0;
+          for (const code of codes) {
+            try {
+              await deleteDnsEntry(env.DB, code.toUpperCase());
+              deleted++;
+            } catch (e) {
+              console.error(`خطا در حذف کشور ${code}:`, e);
+            }
+          }
+
+          invalidateDnsCache();
+          return json({
+            success: true,
+            deleted: deleted,
+            message: `${deleted} کشور با موفقیت حذف شد`
+          });
+        } catch (e) {
+          console.error('خطا در حذف گروهی:', e);
+          return json({ success: false, error: e.message || 'خطای نامشخص' });
+        }
       }
 
       // API: افزودن تک IP (برای نمایش پیشرفت زنده)
@@ -5954,7 +5595,7 @@ export default {
               const existing = await getDnsEntry(env.DB, code);
 
               if (existing) {
-                // حذف تکراری‌ها و اضافه کردن
+                // حذف آدرس‌های تکراری از لیست موجود
                 existing.addresses = [...new Set(existing.addresses)];
 
                 if (!existing.addresses.includes(ip)) {
@@ -5964,6 +5605,7 @@ export default {
                   results.success++;
                   results.byCountry[code] = (results.byCountry[code] || 0) + 1;
                 } else {
+                  // آدرس تکراری است
                   results.duplicate++;
                 }
               } else {
