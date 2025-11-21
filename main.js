@@ -579,14 +579,17 @@ async function detectCountryFromIP(ip, kv) {
   }
 
   try {
-    // timeout 4 ثانیه برای سرعت بیشتر
+    // timeout 6 ثانیه
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-    // استفاده از ip-api.com که سریع‌تر و قابل اعتمادتر است
-    // توجه: این API محدودیت 45 درخواست در دقیقه دارد
-    const res = await fetch(`https://ip-api.com/json/${ip}?fields=status,countryCode,country`, {
-      signal: controller.signal
+    // استفاده از api.iplocation.net - بدون محدودیت rate limit سخت‌گیرانه
+    // این API سریع‌تر و بدون نیاز به ثبت‌نام است
+    const res = await fetch(`https://api.iplocation.net/?cmd=ip-country&ip=${ip}`, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'WireGuard-Bot/1.0'
+      }
     });
 
     clearTimeout(timeoutId);
@@ -597,10 +600,11 @@ async function detectCountryFromIP(ip, kv) {
 
     const data = await res.json();
 
-    if (data && data.status === 'success' && data.countryCode) {
+    // فرمت پاسخ: {"ip":"8.8.8.8","country_code":"US","country_name":"United States"}
+    if (data && data.country_code) {
       const result = {
-        code: data.countryCode.toUpperCase(),
-        name: getCountryNameFromCode(data.countryCode.toUpperCase())
+        code: data.country_code.toUpperCase(),
+        name: getCountryNameFromCode(data.country_code.toUpperCase())
       };
       // ذخیره در KV با TTL 30 روز
       await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: 2592000 });
@@ -5990,11 +5994,12 @@ export default {
           await putIpv6Entry(env.DB, existing);
         } else {
           // ایجاد کشور جدید
+          const uniqueIpv6Addresses = [...new Set(addresses)];
           const newEntry = {
             code: code,
             country: countryName,
-            addresses: [...new Set(addresses)],
-            stock: addresses.length
+            addresses: uniqueIpv6Addresses,
+            stock: uniqueIpv6Addresses.length
           };
           await putIpv6Entry(env.DB, newEntry);
         }
