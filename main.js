@@ -3,7 +3,8 @@
 // ═════════════════════════════════════════════════════════════════════════════
 
 const TELEGRAM_BASE = (token) => `https://api.telegram.org/bot${token}`;
-const ADMIN_ID = 7240662021;
+// Helper function to get admin ID from env or fallback to default
+const getAdminId = (env) => (env && env.ADMIN_ID) ? Number(env.ADMIN_ID) : 7240662021;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 📤 Response Helpers
@@ -40,12 +41,12 @@ function getTimeUntilReset() {
   return `${hours} ساعت و ${minutes} دقیقه`;
 }
 
-async function getUserQuota(kv, userId, type) {
+async function getUserQuota(kv, userId, type, adminId = 7240662021) {
   const key = `quota:${type}:${userId}:${todayKey()}`;
   const raw = await kv.get(key);
   const count = raw ? Number(raw) || 0 : 0;
   // ادمین محدودیت ندارد
-  const limit = Number(userId) === Number(ADMIN_ID) ? 999999 : 3;
+  const limit = Number(userId) === Number(adminId) ? 999999 : 3;
   return { count, limit };
 }
 
@@ -1042,20 +1043,85 @@ function renderMainPage(entries, userCount) {
 
 function getWebCss() {
   return `
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #1f2937;
-      line-height: 1.6;
-      min-height: 100vh;
-      padding: 20px;
+    :root {
+      /* Color System - Light Mode */
+      --bg-gradient-start: #667eea;
+      --bg-gradient-end: #764ba2;
+      --bg-primary: #ffffff;
+      --bg-secondary: #f9fafb;
+      --bg-tertiary: #f3f4f6;
+      --bg-elevated: #ffffff;
+      
+      --text-primary: #1f2937;
+      --text-secondary: #6b7280;
+      --text-tertiary: #9ca3af;
+      
+      --border-color: #e5e7eb;
+      --border-color-hover: #d1d5db;
+      
+      --accent-primary: #667eea;
+      --accent-secondary: #764ba2;
+      --accent-gradient: linear-gradient(135deg, #667eea, #764ba2);
+      
+      --success-color: #10b981;
+      --error-color: #ef4444;
+      --warning-color: #f59e0b;
+      --info-color: #3b82f6;
+      
+      --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 10px 40px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 15px 50px rgba(0, 0, 0, 0.15);
+      
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      
+      --transition-fast: 150ms ease;
+      --transition-base: 250ms ease;
+      --transition-slow: 400ms ease;
     }
 
     body.dark {
-      background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-      color: #f3f4f6;
+      /* Color System - Dark Mode */
+      --bg-gradient-start: #0f172a;
+      --bg-gradient-end: #1e293b;
+      --bg-primary: #1e293b;
+      --bg-secondary: #334155;
+      --bg-tertiary: #475569;
+      --bg-elevated: #273449;
+      
+      --text-primary: #f1f5f9;
+      --text-secondary: #cbd5e1;
+      --text-tertiary: #94a3b8;
+      
+      --border-color: #334155;
+      --border-color-hover: #475569;
+      
+      --accent-primary: #818cf8;
+      --accent-secondary: #a78bfa;
+      --accent-gradient: linear-gradient(135deg, #818cf8, #a78bfa);
+      
+      --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 10px 40px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 15px 50px rgba(0, 0, 0, 0.5);
+    }
+
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
+    }
+
+    body {
+      font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+      background-attachment: fixed;
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: 20px;
+      transition: background var(--transition-slow), color var(--transition-base);
     }
 
     .container {
@@ -1064,17 +1130,13 @@ function getWebCss() {
     }
 
     .main-header {
-      background: white;
-      border-radius: 24px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius-xl);
       padding: 40px;
       margin-bottom: 30px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--shadow-md);
       animation: slideDown 0.5s ease;
-    }
-
-    body.dark .main-header {
-      background: #1f2937;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      transition: all var(--transition-base);
     }
 
     @keyframes slideDown {
@@ -1084,19 +1146,17 @@ function getWebCss() {
 
     .header-content h1 {
       font-size: 2.5em;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: var(--accent-gradient);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 10px;
+      font-weight: 700;
     }
 
     .subtitle {
-      color: #6b7280;
+      color: var(--text-secondary);
       font-size: 1.1em;
-    }
-
-    body.dark .subtitle {
-      color: #9ca3af;
     }
 
     .header-actions {
@@ -1115,23 +1175,19 @@ function getWebCss() {
     .search-box input {
       width: 100%;
       padding: 12px 45px 12px 20px;
-      border: 2px solid #e5e7eb;
-      border-radius: 12px;
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-md);
       font-size: 16px;
-      transition: all 0.3s;
+      transition: all var(--transition-base);
       font-family: inherit;
-    }
-
-    body.dark .search-box input {
-      background: #374151;
-      border-color: #4b5563;
-      color: #f3f4f6;
+      background: var(--bg-primary);
+      color: var(--text-primary);
     }
 
     .search-box input:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
     }
 
     .search-icon {
@@ -1144,17 +1200,23 @@ function getWebCss() {
 
     .btn-toggle {
       padding: 12px 20px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: var(--accent-gradient);
       color: white;
       border: none;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       font-size: 20px;
       cursor: pointer;
-      transition: transform 0.2s;
+      transition: all var(--transition-base);
+      box-shadow: var(--shadow-sm);
     }
 
     .btn-toggle:hover {
-      transform: scale(1.05);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-toggle:active {
+      transform: translateY(0);
     }
 
     .header-stats {
@@ -1165,48 +1227,45 @@ function getWebCss() {
     }
 
     .stat-box {
-      background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+      background: var(--bg-secondary);
       padding: 20px;
-      border-radius: 16px;
+      border-radius: var(--radius-lg);
       text-align: center;
+      transition: all var(--transition-base);
+      border: 1px solid var(--border-color);
     }
 
-    body.dark .stat-box {
-      background: linear-gradient(135deg, #374151, #4b5563);
+    .stat-box:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
     }
 
     .stat-number {
       display: block;
       font-size: 2em;
-      font-weight: bold;
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      font-weight: 700;
+      background: var(--accent-gradient);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
     .stat-text {
       display: block;
-      color: #6b7280;
+      color: var(--text-secondary);
       font-size: 0.9em;
       margin-top: 5px;
     }
 
-    body.dark .stat-text {
-      color: #9ca3af;
-    }
-
     .section {
-      background: white;
-      border-radius: 24px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius-xl);
       padding: 30px;
       margin-bottom: 30px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--shadow-md);
       animation: fadeIn 0.5s ease;
-    }
-
-    body.dark .section {
-      background: #1f2937;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      transition: all var(--transition-base);
+      border: 1px solid var(--border-color);
     }
 
     @keyframes fadeIn {
@@ -1220,29 +1279,23 @@ function getWebCss() {
       align-items: center;
       margin-bottom: 25px;
       padding-bottom: 15px;
-      border-bottom: 2px solid #f3f4f6;
-    }
-
-    body.dark .section-header {
-      border-bottom-color: #374151;
+      border-bottom: 2px solid var(--border-color);
     }
 
     .section-header h2 {
       font-size: 1.8em;
-      color: #1f2937;
-    }
-
-    body.dark .section-header h2 {
-      color: #f3f4f6;
+      color: var(--text-primary);
+      font-weight: 700;
     }
 
     .badge {
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: var(--accent-gradient);
       color: white;
       padding: 6px 16px;
       border-radius: 20px;
       font-size: 0.9em;
       font-weight: 600;
+      box-shadow: var(--shadow-sm);
     }
 
     .dns-grid {
@@ -1252,15 +1305,12 @@ function getWebCss() {
     }
 
     .dns-card {
-      background: linear-gradient(135deg, #f9fafb, #f3f4f6);
-      border-radius: 16px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-lg);
       padding: 20px;
-      transition: all 0.3s;
+      transition: all var(--transition-base);
       animation: slideUp 0.5s ease;
-    }
-
-    body.dark .dns-card {
-      background: linear-gradient(135deg, #374151, #4b5563);
+      border: 1px solid var(--border-color);
     }
 
     @keyframes slideUp {
@@ -1270,7 +1320,8 @@ function getWebCss() {
 
     .dns-card:hover {
       transform: translateY(-5px);
-      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--accent-primary);
     }
 
     .card-header {
@@ -1307,9 +1358,9 @@ function getWebCss() {
       font-family: monospace;
       background: rgba(102, 126, 234, 0.1);
       padding: 2px 8px;
-      border-radius: 6px;
+      border-radius: var(--radius-sm);
       font-size: 0.85em;
-      color: #667eea;
+      color: var(--accent-primary);
     }
 
     .card-actions {
@@ -1341,12 +1392,8 @@ function getWebCss() {
     }
 
     .stat-label {
-      color: #6b7280;
+      color: var(--text-secondary);
       font-size: 0.95em;
-    }
-
-    body.dark .stat-label {
-      color: #9ca3af;
     }
 
     .stat-value {
@@ -1361,14 +1408,16 @@ function getWebCss() {
     .card-footer summary {
       padding: 10px;
       background: rgba(102, 126, 234, 0.05);
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       font-weight: 600;
-      color: #667eea;
+      color: var(--accent-primary);
       user-select: none;
+      transition: all var(--transition-fast);
     }
 
     .card-footer summary:hover {
       background: rgba(102, 126, 234, 0.1);
+      transform: translateX(2px);
     }
 
     .addresses-list {
@@ -1383,27 +1432,28 @@ function getWebCss() {
       justify-content: space-between;
       align-items: center;
       padding: 8px 12px;
-      background: white;
-      border-radius: 8px;
+      background: var(--bg-primary);
+      border-radius: var(--radius-sm);
       gap: 10px;
+      transition: all var(--transition-fast);
     }
 
-    body.dark .address-item {
-      background: #1f2937;
+    .address-item:hover {
+      background: var(--bg-tertiary);
     }
 
     .addresses-list code {
       font-family: 'Courier New', monospace;
       background: rgba(102, 126, 234, 0.1);
       padding: 4px 10px;
-      border-radius: 6px;
+      border-radius: var(--radius-sm);
       font-size: 0.9em;
-      color: #667eea;
+      color: var(--accent-primary);
       flex: 1;
     }
 
     .empty {
-      color: #9ca3af;
+      color: var(--text-tertiary);
       font-style: italic;
       text-align: center;
       padding: 20px;
@@ -1433,45 +1483,32 @@ function getWebCss() {
 
     .form-group label {
       font-weight: 600;
-      color: #374151;
+      color: var(--text-primary);
       font-size: 0.95em;
-    }
-
-    body.dark .form-group label {
-      color: #d1d5db;
     }
 
     .form-group input,
     .form-group textarea {
       padding: 12px 16px;
-      border: 2px solid #e5e7eb;
-      border-radius: 10px;
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-md);
       font-size: 16px;
       font-family: inherit;
-      transition: all 0.3s;
-    }
-
-    body.dark .form-group input,
-    body.dark .form-group textarea {
-      background: #374151;
-      border-color: #4b5563;
-      color: #f3f4f6;
+      transition: all var(--transition-base);
+      background: var(--bg-primary);
+      color: var(--text-primary);
     }
 
     .form-group input:focus,
     .form-group textarea:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
     }
 
     .form-group small {
-      color: #6b7280;
+      color: var(--text-secondary);
       font-size: 0.85em;
-    }
-
-    body.dark .form-group small {
-      color: #9ca3af;
     }
 
     .label-row {
@@ -1482,29 +1519,26 @@ function getWebCss() {
 
     .btn-helper {
       padding: 6px 12px;
-      background: linear-gradient(135deg, #10b981, #059669);
+      background: linear-gradient(135deg, var(--success-color), #059669);
       color: white;
       border: none;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       font-size: 0.85em;
       cursor: pointer;
-      transition: transform 0.2s;
+      transition: all var(--transition-base);
     }
 
     .btn-helper:hover {
       transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
     }
 
     .textarea-info {
       display: flex;
       justify-content: space-between;
       font-size: 0.85em;
-      color: #6b7280;
+      color: var(--text-secondary);
       margin-top: -5px;
-    }
-
-    body.dark .textarea-info {
-      color: #9ca3af;
     }
 
     .form-options {
@@ -1531,12 +1565,9 @@ function getWebCss() {
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 15px;
       padding: 15px;
-      background: linear-gradient(135deg, #f9fafb, #f3f4f6);
-      border-radius: 12px;
-    }
-
-    body.dark .validation-info {
-      background: linear-gradient(135deg, #374151, #4b5563);
+      background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
     }
 
     .info-row {
@@ -1546,39 +1577,32 @@ function getWebCss() {
     .info-label {
       display: block;
       font-size: 0.9em;
-      color: #6b7280;
+      color: var(--text-secondary);
       margin-bottom: 5px;
-    }
-
-    body.dark .info-label {
-      color: #9ca3af;
     }
 
     .valid-count, .invalid-count, .duplicate-count {
       font-size: 1.5em;
-      font-weight: bold;
+      font-weight: 700;
     }
 
     .valid-count {
-      color: #10b981;
+      color: var(--success-color);
     }
 
     .invalid-count {
-      color: #ef4444;
+      color: var(--error-color);
     }
 
     .duplicate-count {
-      color: #f59e0b;
+      color: var(--warning-color);
     }
 
     .bulk-progress {
       padding: 20px;
-      background: linear-gradient(135deg, #f9fafb, #f3f4f6);
-      border-radius: 12px;
-    }
-
-    body.dark .bulk-progress {
-      background: linear-gradient(135deg, #374151, #4b5563);
+      background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
     }
 
     .progress-container {
@@ -1591,15 +1615,16 @@ function getWebCss() {
     .progress-bar {
       flex: 1;
       height: 30px;
-      background: rgba(0, 0, 0, 0.05);
+      background: var(--bg-tertiary);
       border-radius: 15px;
       overflow: hidden;
+      border: 1px solid var(--border-color);
     }
 
     .progress-fill {
       height: 100%;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      transition: width 0.3s ease;
+      background: var(--accent-gradient);
+      transition: width var(--transition-base);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1623,19 +1648,15 @@ function getWebCss() {
     .current-ip {
       text-align: center;
       font-family: monospace;
-      color: #667eea;
+      color: var(--accent-primary);
       margin: 10px 0;
     }
 
     .speed-info {
       text-align: center;
-      color: #6b7280;
+      color: var(--text-secondary);
       font-size: 0.9em;
       margin: 10px 0;
-    }
-
-    body.dark .speed-info {
-      color: #9ca3af;
     }
 
     .error-list {
@@ -1646,9 +1667,14 @@ function getWebCss() {
       cursor: pointer;
       padding: 10px;
       background: rgba(239, 68, 68, 0.1);
-      border-radius: 8px;
-      color: #ef4444;
+      border-radius: var(--radius-sm);
+      color: var(--error-color);
       font-weight: 600;
+      transition: all var(--transition-fast);
+    }
+
+    .error-summary:hover {
+      background: rgba(239, 68, 68, 0.15);
     }
 
     .error-items {
@@ -1659,21 +1685,17 @@ function getWebCss() {
 
     .error-item {
       padding: 8px;
-      background: white;
-      border-radius: 6px;
+      background: var(--bg-primary);
+      border-radius: var(--radius-sm);
       margin: 5px 0;
       font-size: 0.9em;
-    }
-
-    body.dark .error-item {
-      background: #1f2937;
     }
 
     .success-summary {
       padding: 15px;
       background: rgba(16, 185, 129, 0.1);
-      border-radius: 8px;
-      color: #10b981;
+      border-radius: var(--radius-sm);
+      color: var(--success-color);
       margin-top: 15px;
     }
 
@@ -1686,53 +1708,52 @@ function getWebCss() {
     .btn-submit, .btn-secondary {
       padding: 14px 28px;
       border: none;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s;
+      transition: all var(--transition-base);
       flex: 1;
       min-width: 200px;
     }
 
     .btn-submit {
-      background: linear-gradient(135deg, #667eea, #764ba2);
+      background: var(--accent-gradient);
       color: white;
+      box-shadow: var(--shadow-sm);
     }
 
     .btn-submit:hover {
       transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-submit:active {
+      transform: translateY(0);
     }
 
     .btn-submit:disabled {
       opacity: 0.6;
       cursor: not-allowed;
       transform: none;
+      box-shadow: none;
     }
 
     .btn-secondary {
-      background: #e5e7eb;
-      color: #374151;
-    }
-
-    body.dark .btn-secondary {
-      background: #4b5563;
-      color: #f3f4f6;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
     }
 
     .btn-secondary:hover {
-      background: #d1d5db;
-    }
-
-    body.dark .btn-secondary:hover {
-      background: #6b7280;
+      background: var(--bg-tertiary);
+      border-color: var(--border-color-hover);
     }
 
     .empty-state {
       text-align: center;
       padding: 60px 20px;
-      color: #9ca3af;
+      color: var(--text-tertiary);
       font-size: 1.1em;
     }
 
@@ -1748,18 +1769,15 @@ function getWebCss() {
     }
 
     .toast {
-      background: white;
-      border-radius: 12px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius-md);
       padding: 16px 20px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--shadow-md);
       display: flex;
       align-items: start;
       gap: 12px;
       animation: slideInLeft 0.3s ease;
-    }
-
-    body.dark .toast {
-      background: #1f2937;
+      border: 1px solid var(--border-color);
     }
 
     @keyframes slideInLeft {
@@ -1801,22 +1819,22 @@ function getWebCss() {
     }
 
     .toast.success .toast-icon {
-      background: #10b981;
+      background: var(--success-color);
       color: white;
     }
 
     .toast.error .toast-icon {
-      background: #ef4444;
+      background: var(--error-color);
       color: white;
     }
 
     .toast.warning .toast-icon {
-      background: #f59e0b;
+      background: var(--warning-color);
       color: white;
     }
 
     .toast.info .toast-icon {
-      background: #3b82f6;
+      background: var(--info-color);
       color: white;
     }
 
@@ -1831,13 +1849,9 @@ function getWebCss() {
     }
 
     .toast-message {
-      color: #6b7280;
+      color: var(--text-secondary);
       font-size: 0.9em;
       line-height: 1.4;
-    }
-
-    body.dark .toast-message {
-      color: #9ca3af;
     }
 
     .toast-close {
@@ -1845,19 +1859,16 @@ function getWebCss() {
       border: none;
       font-size: 20px;
       cursor: pointer;
-      color: #9ca3af;
+      color: var(--text-tertiary);
       padding: 0;
       width: 24px;
       height: 24px;
       flex-shrink: 0;
+      transition: color var(--transition-fast);
     }
 
     .toast-close:hover {
-      color: #374151;
-    }
-
-    body.dark .toast-close:hover {
-      color: #f3f4f6;
+      color: var(--text-primary);
     }
 
     @media (max-width: 768px) {
@@ -3150,7 +3161,7 @@ function invalidateDnsCache() {
 // ⌨️ Telegram Keyboard Builders
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildMainKeyboard(userId) {
+function buildMainKeyboard(userId, adminId = 7240662021) {
   const rows = [];
   // سطر اول: وایرگارد و دی ان اس کنار هم
   rows.push([
@@ -3163,7 +3174,7 @@ function buildMainKeyboard(userId) {
     { text: '👤 حساب کاربری', callback_data: 'account' }
   ]);
   // سطر سوم: ادمین (در صورت نیاز)
-  if (Number(userId) === Number(ADMIN_ID)) {
+  if (Number(userId) === Number(adminId)) {
     rows.push([
       { text: '📢 پیام همگانی', callback_data: 'broadcast' },
       { text: '🎁 ریست محدودیت', callback_data: 'reset_quota' }
@@ -3313,7 +3324,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
   }
 
   // محدودیت روزانه کاربر برای دریافت DNS
-  const quota = await getUserQuota(env.DB, userId, 'dns');
+  const quota = await getUserQuota(env.DB, userId, 'dns', getAdminId(env));
   if (quota.count >= quota.limit) {
     const timeLeft = getTimeUntilReset();
     return telegramApi(env, '/editMessageText', {
@@ -3341,7 +3352,7 @@ async function handleDnsSelection(chat, messageId, code, env, userId) {
 
   // افزایش مصرف کاربر و حذف آدرس از لیست
   await incUserQuota(env.DB, userId, 'dns');
-  const newQuota = await getUserQuota(env.DB, userId, 'dns');
+  const newQuota = await getUserQuota(env.DB, userId, 'dns', getAdminId(env));
   await addUserHistory(env.DB, userId, 'dns', `${entry.code}:${selectedDns}`);
   // حذف آدرس استفاده شده از لیست و بروزرسانی خودکار موجودی
   await removeAddressFromEntry(env.DB, code, selectedDns);
@@ -3487,7 +3498,7 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
   }
 
   // محدودیت روزانه کاربر برای دریافت IPv6
-  const quota = await getUserQuota(env.DB, userId, 'ipv6');
+  const quota = await getUserQuota(env.DB, userId, 'ipv6', getAdminId(env));
   if (quota.count >= quota.limit) {
     const timeLeft = getTimeUntilReset();
     return telegramApi(env, '/editMessageText', {
@@ -3527,7 +3538,7 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
 
   // افزایش مصرف کاربر
   await incUserQuota(env.DB, userId, 'ipv6');
-  const newQuota = await getUserQuota(env.DB, userId, 'ipv6');
+  const newQuota = await getUserQuota(env.DB, userId, 'ipv6', getAdminId(env));
 
   // ذخیره در تاریخچه
   const historyItem = selectedIpv6_2
@@ -3585,15 +3596,15 @@ export async function handleUpdate(update, env) {
         }
       } catch {}
 
-      if (Number(from.id) === Number(ADMIN_ID)) {
-        const state = await env.DB.get(`admin_state:${ADMIN_ID}`);
+      if (Number(from.id) === Number(getAdminId(env))) {
+        const state = await env.DB.get(`admin_state:${getAdminId(env)}`);
 
         // ارسال پیام همگانی (متن، عکس، ویدیو، فایل با کپشن)
         if (state === 'broadcast_waiting') {
           const res = await env.DB.list({ prefix: 'users:' });
           const totalUsers = res.keys.filter(k => {
             const userId = Number(k.name.split(':')[1]);
-            return userId && userId !== ADMIN_ID;
+            return userId && userId !== getAdminId(env);
           }).length;
 
           let sent = 0;
@@ -3632,7 +3643,7 @@ export async function handleUpdate(update, env) {
 
             const userIds = res.keys
               .map(k => Number(k.name.split(':')[1]))
-              .filter(uid => uid && uid !== ADMIN_ID);
+              .filter(uid => uid && uid !== getAdminId(env));
 
             const BATCH_SIZE = 5;
             for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
@@ -3680,7 +3691,7 @@ export async function handleUpdate(update, env) {
                 await new Promise(r => setTimeout(r, BASE_DELAY_MS));
               }
             }
-            await env.DB.delete(`admin_state:${ADMIN_ID}`);
+            await env.DB.delete(`admin_state:${getAdminId(env)}`);
 
             // پیام نهایی
             if (progressMsgId) {
@@ -3699,7 +3710,7 @@ export async function handleUpdate(update, env) {
 
             const userIds = res.keys
               .map(k => Number(k.name.split(':')[1]))
-              .filter(uid => uid && uid !== ADMIN_ID);
+              .filter(uid => uid && uid !== getAdminId(env));
 
             const BATCH_SIZE = 5;
             try {
@@ -3748,7 +3759,7 @@ export async function handleUpdate(update, env) {
                 }
               }
             } finally {
-              await env.DB.delete(`admin_state:${ADMIN_ID}`);
+              await env.DB.delete(`admin_state:${getAdminId(env)}`);
               if (progressMsgId) {
                 await telegramApi(env, '/editMessageText', {
                   chat_id: chat,
@@ -3766,7 +3777,7 @@ export async function handleUpdate(update, env) {
 
             const userIds = res.keys
               .map(k => Number(k.name.split(':')[1]))
-              .filter(uid => uid && uid !== ADMIN_ID);
+              .filter(uid => uid && uid !== getAdminId(env));
 
             const BATCH_SIZE = 5;
             try {
@@ -3815,7 +3826,7 @@ export async function handleUpdate(update, env) {
                 }
               }
             } finally {
-              await env.DB.delete(`admin_state:${ADMIN_ID}`);
+              await env.DB.delete(`admin_state:${getAdminId(env)}`);
               if (progressMsgId) {
                 await telegramApi(env, '/editMessageText', {
                   chat_id: chat,
@@ -3831,7 +3842,7 @@ export async function handleUpdate(update, env) {
           else if (text && !text.startsWith('/start')) {
             const userIds = res.keys
               .map(k => Number(k.name.split(':')[1]))
-              .filter(uid => uid && uid !== ADMIN_ID);
+              .filter(uid => uid && uid !== getAdminId(env));
 
             const BATCH_SIZE = 5;
             for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
@@ -3873,7 +3884,7 @@ export async function handleUpdate(update, env) {
                 await new Promise(r => setTimeout(r, BASE_DELAY_MS));
               }
             }
-            await env.DB.delete(`admin_state:${ADMIN_ID}`);
+            await env.DB.delete(`admin_state:${getAdminId(env)}`);
 
             if (progressMsgId) {
               await telegramApi(env, '/editMessageText', {
@@ -3926,7 +3937,7 @@ export async function handleUpdate(update, env) {
               });
             }
 
-            await env.DB.delete(`admin_state:${ADMIN_ID}`);
+            await env.DB.delete(`admin_state:${getAdminId(env)}`);
             await telegramApi(env, '/sendMessage', {
               chat_id: chat,
               text: '✅ پاسخ شما با موفقیت به کاربر ارسال شد!'
@@ -3958,7 +3969,7 @@ export async function handleUpdate(update, env) {
               const photo = msg.photo[msg.photo.length - 1];
               const caption = msg.caption || '';
               await telegramApi(env, '/sendPhoto', {
-                chat_id: ADMIN_ID,
+                chat_id: getAdminId(env),
                 photo: photo.file_id,
                 caption: feedbackMsg + (caption ? `📝 متن:\n${caption}` : '🖼️ عکس بدون متن'),
                 parse_mode: 'Markdown',
@@ -3969,7 +3980,7 @@ export async function handleUpdate(update, env) {
             } else if (msg.video) {
               const caption = msg.caption || '';
               await telegramApi(env, '/sendVideo', {
-                chat_id: ADMIN_ID,
+                chat_id: getAdminId(env),
                 video: msg.video.file_id,
                 caption: feedbackMsg + (caption ? `📝 متن:\n${caption}` : '🎬 ویدیو بدون متن'),
                 parse_mode: 'Markdown',
@@ -3980,7 +3991,7 @@ export async function handleUpdate(update, env) {
             } else if (msg.document) {
               const caption = msg.caption || '';
               await telegramApi(env, '/sendDocument', {
-                chat_id: ADMIN_ID,
+                chat_id: getAdminId(env),
                 document: msg.document.file_id,
                 caption: feedbackMsg + (caption ? `📝 متن:\n${caption}` : '📎 فایل بدون متن'),
                 parse_mode: 'Markdown',
@@ -3991,7 +4002,7 @@ export async function handleUpdate(update, env) {
             } else if (text) {
               feedbackMsg += `📝 متن:\n${text}`;
               await telegramApi(env, '/sendMessage', {
-                chat_id: ADMIN_ID,
+                chat_id: getAdminId(env),
                 text: feedbackMsg,
                 parse_mode: 'Markdown',
                 reply_markup: {
@@ -4016,7 +4027,7 @@ export async function handleUpdate(update, env) {
       }
 
       if (text.startsWith('/start')) {
-        const kb = buildMainKeyboard(from.id);
+        const kb = buildMainKeyboard(from.id, getAdminId(env));
         await telegramApi(env, '/sendMessage', {
           chat_id: chat,
           text: '🌍 *به ربات دسترسی جهانی خوش آمدید*\n\n🛡️ دریافت سرورهای DNS و WireGuard از لوکیشن‌های مختلف جهان\n\n🔻 لطفاً سرویس موردنظر خود را انتخاب کنید:',
@@ -4054,7 +4065,7 @@ export async function handleUpdate(update, env) {
 
       // نمایش منوی اصلی
       if (data === 'back_main') {
-        const kb = buildMainKeyboard(from.id);
+        const kb = buildMainKeyboard(from.id, getAdminId(env));
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
           message_id: messageId,
@@ -4249,7 +4260,7 @@ export async function handleUpdate(update, env) {
             await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'ابتدا کشور و دی ان اس را انتخاب کنید', show_alert: true });
           } else {
             // کوئوتا وایرگارد
-            const quota = await getUserQuota(env.DB, from.id, 'wg');
+            const quota = await getUserQuota(env.DB, from.id, 'wg', getAdminId(env));
             if (quota.count >= quota.limit) {
               const timeLeft = getTimeUntilReset();
               await telegramApi(env, '/editMessageText', {
@@ -4296,7 +4307,7 @@ export async function handleUpdate(update, env) {
                 });
               } else {
                 await incUserQuota(env.DB, from.id, 'wg');
-                const newQuota = await getUserQuota(env.DB, from.id, 'wg');
+                const newQuota = await getUserQuota(env.DB, from.id, 'wg', getAdminId(env));
                 await addUserHistory(env.DB, from.id, 'wg', `${state.country}|${dnsList.join('+')}|${mtu}|${listenPort}`);
 
                 // حذف DNS استفاده شده از لیست (اگر از کشور انتخاب شده بود)
@@ -4407,8 +4418,8 @@ export async function handleUpdate(update, env) {
 
       // حساب کاربری
       else if (data === 'account') {
-        const dnsQuota = await getUserQuota(env.DB, from.id, 'dns');
-        const wgQuota = await getUserQuota(env.DB, from.id, 'wg');
+        const dnsQuota = await getUserQuota(env.DB, from.id, 'dns', getAdminId(env));
+        const wgQuota = await getUserQuota(env.DB, from.id, 'wg', getAdminId(env));
         const dnsHistory = await getUserHistory(env.DB, from.id, 'dns');
         const wgHistory = await getUserHistory(env.DB, from.id, 'wg');
 
@@ -4472,11 +4483,11 @@ export async function handleUpdate(update, env) {
 
       // پاسخ به بازخورد کاربر (فقط ادمین)
       else if (data.startsWith('reply_feedback:')) {
-        if (Number(from.id) !== Number(ADMIN_ID)) {
+        if (Number(from.id) !== Number(getAdminId(env))) {
           await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اجازه دسترسی ندارید', show_alert: true });
         } else {
           const targetUserId = data.split(':')[1];
-          await env.DB.put(`admin_state:${ADMIN_ID}`, `reply_feedback:${targetUserId}`);
+          await env.DB.put(`admin_state:${getAdminId(env)}`, `reply_feedback:${targetUserId}`);
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
             message_id: messageId,
@@ -4488,8 +4499,8 @@ export async function handleUpdate(update, env) {
       }
 
       else if (data === 'cancel_reply_feedback') {
-        if (Number(from.id) === Number(ADMIN_ID)) {
-          await env.DB.delete(`admin_state:${ADMIN_ID}`);
+        if (Number(from.id) === Number(getAdminId(env))) {
+          await env.DB.delete(`admin_state:${getAdminId(env)}`);
         }
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
@@ -4501,10 +4512,10 @@ export async function handleUpdate(update, env) {
 
       // پیام همگانی (فقط ادمین)
       else if (data === 'broadcast') {
-        if (Number(from.id) !== Number(ADMIN_ID)) {
+        if (Number(from.id) !== Number(getAdminId(env))) {
           await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اجازه دسترسی ندارید', show_alert: true });
         } else {
-          await env.DB.put(`admin_state:${ADMIN_ID}`, 'broadcast_waiting');
+          await env.DB.put(`admin_state:${getAdminId(env)}`, 'broadcast_waiting');
           await telegramApi(env, '/editMessageText', {
             chat_id: chat,
             message_id: messageId,
@@ -4516,8 +4527,8 @@ export async function handleUpdate(update, env) {
       }
 
       else if (data === 'cancel_broadcast') {
-        if (Number(from.id) === Number(ADMIN_ID)) {
-          await env.DB.delete(`admin_state:${ADMIN_ID}`);
+        if (Number(from.id) === Number(getAdminId(env))) {
+          await env.DB.delete(`admin_state:${getAdminId(env)}`);
         }
         await telegramApi(env, '/editMessageText', {
           chat_id: chat,
@@ -4529,7 +4540,7 @@ export async function handleUpdate(update, env) {
 
       // ریست محدودیت (فقط ادمین)
       else if (data === 'reset_quota') {
-        if (Number(from.id) !== Number(ADMIN_ID)) {
+        if (Number(from.id) !== Number(getAdminId(env))) {
           await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اجازه دسترسی ندارید', show_alert: true });
         } else {
           await telegramApi(env, '/editMessageText', {
@@ -4549,7 +4560,7 @@ export async function handleUpdate(update, env) {
 
       // نمایش آمار (فقط ادمین)
       else if (data === 'stats') {
-        if (Number(from.id) !== Number(ADMIN_ID)) {
+        if (Number(from.id) !== Number(getAdminId(env))) {
           await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اجازه دسترسی ندارید', show_alert: true });
         } else {
           const stats = await getUserStats(env.DB);
@@ -4570,7 +4581,7 @@ export async function handleUpdate(update, env) {
 
       // تایید ریست محدودیت
       else if (data === 'confirm_reset_quota') {
-        if (Number(from.id) !== Number(ADMIN_ID)) {
+        if (Number(from.id) !== Number(getAdminId(env))) {
           await telegramApi(env, '/answerCallbackQuery', { callback_query_id: cb.id, text: 'اجازه دسترسی ندارید', show_alert: true });
         } else {
           // حذف تمام کلیدهای quota
@@ -4600,7 +4611,7 @@ export async function handleUpdate(update, env) {
           for (const k of users.keys) {
             try {
               const userId = k.name.replace('users:', '');
-              if (Number(userId) !== Number(ADMIN_ID)) {
+              if (Number(userId) !== Number(getAdminId(env))) {
                 await telegramApi(env, '/sendMessage', {
                   chat_id: userId,
                   text: giftMsg,
