@@ -1981,6 +1981,8 @@ const Toast = {
   }
 };
 
+// Only run client-side code in browser environment
+if (typeof document !== 'undefined') {
 document.addEventListener('DOMContentLoaded', () => {
   const cards = document.querySelectorAll('.dns-card');
   cards.forEach((card, i) => { card.style.animationDelay = (i * 0.05) + 's'; });
@@ -2395,6 +2397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+}
 
 function showTab(tabName) {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -2947,6 +2950,8 @@ const Toast = {
   }
 };
 
+// Only run client-side code in browser environment
+if (typeof document !== 'undefined') {
 document.addEventListener('DOMContentLoaded', () => {
   const cards = document.querySelectorAll('.dns-card');
   cards.forEach((card, i) => { card.style.animationDelay = (i * 0.05) + 's'; });
@@ -2976,6 +2981,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+}
 
 async function editCountry(code, currentName) {
   const modal = document.createElement('div');
