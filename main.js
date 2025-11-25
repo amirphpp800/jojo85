@@ -41,6 +41,23 @@ const COUNTRY_NAMES_FA = {
   LT: "لیتوانی", EE: "استونی", SK: "اسلواکی", SI: "اسلوونی", LU: "لوکزامبورگ"
 };
 
+// Country names in English (for config filenames)
+const COUNTRY_NAMES_EN = {
+  IR: "Iran", US: "USA", GB: "UK", DE: "Germany", FR: "France",
+  NL: "Netherlands", SE: "Sweden", FI: "Finland", NO: "Norway", DK: "Denmark",
+  CH: "Switzerland", AT: "Austria", BE: "Belgium", ES: "Spain", IT: "Italy",
+  PL: "Poland", RO: "Romania", CZ: "Czech", HU: "Hungary", BG: "Bulgaria",
+  UA: "Ukraine", RU: "Russia", TR: "Turkey", AE: "UAE", SA: "Saudi",
+  JP: "Japan", KR: "Korea", SG: "Singapore", HK: "HongKong", AU: "Australia",
+  CA: "Canada", BR: "Brazil", MX: "Mexico", AR: "Argentina", CL: "Chile",
+  IN: "India", ID: "Indonesia", TH: "Thailand", VN: "Vietnam", MY: "Malaysia",
+  PH: "Philippines", ZA: "SouthAfrica", EG: "Egypt", NG: "Nigeria",
+  IL: "Israel", GE: "Georgia", AM: "Armenia", AZ: "Azerbaijan",
+  KZ: "Kazakhstan", UZ: "Uzbekistan", IS: "Iceland", IE: "Ireland",
+  PT: "Portugal", GR: "Greece", HR: "Croatia", RS: "Serbia", LV: "Latvia",
+  LT: "Lithuania", EE: "Estonia", SK: "Slovakia", SI: "Slovenia", LU: "Luxembourg"
+};
+
 // User-selectable operators with their address ranges
 const OPERATORS = {
   irancell: { title: "ایرانسل", addresses: ["2.144.0.0/16"] },
@@ -132,6 +149,47 @@ async function allocateAddress(env, code) {
   return addr;
 }
 
+/* ---------------------- IPv6 KV Helpers ---------------------- */
+async function getDNS6(env, code) {
+  if (!code) return null;
+  const raw = await env.DB.get(`dns6:${code.toUpperCase()}`);
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function listDNS6(env) {
+  const res = await env.DB.list({ prefix: "dns6:", limit: 1000 });
+  const out = [];
+  for (const k of res.keys || []) {
+    try {
+      const raw = await env.DB.get(k.name);
+      if (raw) out.push(JSON.parse(raw));
+    } catch (e) { /* skip */ }
+  }
+  return out;
+}
+
+async function updateDNS6(env, code, obj) {
+  await env.DB.put(`dns6:${code.toUpperCase()}`, JSON.stringify(obj));
+}
+
+async function deleteDNS6(env, code) {
+  await env.DB.delete(`dns6:${code.toUpperCase()}`);
+}
+
+/**
+ * For IPv6, allocate TWO addresses at once
+ */
+async function allocateAddress6(env, code) {
+  const rec = await getDNS6(env, code);
+  if (!rec || !Array.isArray(rec.addresses) || rec.addresses.length < 2) return null;
+  const addr1 = rec.addresses.shift();
+  const addr2 = rec.addresses.shift();
+  rec.stock = rec.addresses.length;
+  if (rec.stock < 0) rec.stock = 0;
+  await updateDNS6(env, code, rec);
+  return [addr1, addr2];
+}
+
 async function addUser(env, id) {
   const raw = await env.DB.get("users:list");
   const arr = raw ? JSON.parse(raw) : [];
@@ -170,8 +228,8 @@ function stockEmoji(n) {
 
 function mainMenuKeyboard(isAdmin = false) {
   const rows = [
-    [ { text: "🛡️ WireGuard", callback_data: "menu_wg" }, { text: "🌐 DNS", callback_data: "menu_dns" } ],
-    [ { text: "👤 my Account", callback_data: "menu_account" } ]
+    [ { text: "🛡️ WireGuard", callback_data: "menu_wg" }, { text: "🌐 DNS", callback_data: "menu_dns_proto" } ],
+    [ { text: "👤 حساب من", callback_data: "menu_account" } ]
   ];
   if (isAdmin) {
     rows.push([
@@ -180,6 +238,18 @@ function mainMenuKeyboard(isAdmin = false) {
     ]);
   }
   return { inline_keyboard: rows };
+}
+
+function protocolSelectionKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "IPv4 🌐", callback_data: "proto:ipv4" },
+        { text: "IPv6 🌐", callback_data: "proto:ipv6" }
+      ],
+      [{ text: "🔙 بازگشت به منو", callback_data: "back" }]
+    ]
+  };
 }
 
 function countriesKeyboard(list, page = 0, mode = 'select') {
@@ -196,7 +266,11 @@ function countriesKeyboard(list, page = 0, mode = 'select') {
     const stockCount = r.stock ?? 0;
     const emoji = stockEmoji(stockCount);
     
-    const callbackData = mode === 'dns' ? `dns:${code}` : (mode === 'wg' ? `wg:${code}` : `ct:${code}`);
+    let callbackData;
+    if (mode === 'dns4') callbackData = `dns4:${code}`;
+    else if (mode === 'dns6') callbackData = `dns6:${code}`;
+    else if (mode === 'wg') callbackData = `wg:${code}`;
+    else callbackData = `ct:${code}`;
     
     rows.push([
       { text: emoji, callback_data: `noop:${code}` },
@@ -333,7 +407,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const parts = data.split(":");
         const mode = parts[1] || 'select';
         const page = parseInt(parts[2]) || 0;
-        const list = await listDNS(env);
+        
+        const list = (mode === 'dns6') ? await listDNS6(env) : await listDNS(env);
         if (!list || list.length === 0) {
           await sendMsg(token, chatId, "فعلاً رکوردی موجود نیست.");
           return;
@@ -347,7 +422,11 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           .sort((a, b) => b.stock - a.stock);
         
         const totalPages = Math.ceil(mapped.length / 14);
-        const title = mode === 'dns' ? '🌐 دریافت DNS' : (mode === 'wg' ? '🛡️ دریافت WireGuard' : '📡 لیست کشورها');
+        let title = '📡 لیست کشورها';
+        if (mode === 'dns4') title = '🌐 دریافت DNS IPv4';
+        else if (mode === 'dns6') title = '🌐 دریافت DNS IPv6';
+        else if (mode === 'wg') title = '🛡️ دریافت WireGuard';
+        
         await tg(token, "editMessageText", {
           chat_id: chatId,
           message_id: callback.message.message_id,
@@ -362,23 +441,50 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         return;
       }
 
-      if (data === "menu_dns") {
-        const list = await listDNS(env);
-        if (!list || list.length === 0) {
-          await sendMsg(token, chatId, "فعلاً رکوردی موجود نیست.");
-          return;
-        }
-        const mapped = list
-          .map(r => ({ 
-            code: (r.code || "").toUpperCase(), 
-            country: r.country || r.code, 
-            stock: r.stock || 0 
-          }))
-          .sort((a, b) => b.stock - a.stock);
-        
-        await sendMsg(token, chatId, "🌐 دریافت DNS - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام", { 
-          reply_markup: countriesKeyboard(mapped, 0, 'dns') 
+      if (data === "menu_dns_proto") {
+        await sendMsg(token, chatId, "🌐 DNS - پروتکل مورد نظر را انتخاب کنید:", { 
+          reply_markup: protocolSelectionKeyboard() 
         });
+        return;
+      }
+
+      if (data.startsWith("proto:")) {
+        const protocol = data.slice(6);
+        if (protocol === "ipv4") {
+          const list = await listDNS(env);
+          if (!list || list.length === 0) {
+            await sendMsg(token, chatId, "فعلاً رکوردی موجود نیست.");
+            return;
+          }
+          const mapped = list
+            .map(r => ({ 
+              code: (r.code || "").toUpperCase(), 
+              country: r.country || r.code, 
+              stock: r.stock || 0 
+            }))
+            .sort((a, b) => b.stock - a.stock);
+          
+          await sendMsg(token, chatId, "🌐 دریافت DNS IPv4 - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام", { 
+            reply_markup: countriesKeyboard(mapped, 0, 'dns4') 
+          });
+        } else if (protocol === "ipv6") {
+          const list = await listDNS6(env);
+          if (!list || list.length === 0) {
+            await sendMsg(token, chatId, "فعلاً رکوردی IPv6 موجود نیست.");
+            return;
+          }
+          const mapped = list
+            .map(r => ({ 
+              code: (r.code || "").toUpperCase(), 
+              country: r.country || r.code, 
+              stock: r.stock || 0 
+            }))
+            .sort((a, b) => b.stock - a.stock);
+          
+          await sendMsg(token, chatId, "🌐 دریافت DNS IPv6 - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام", { 
+            reply_markup: countriesKeyboard(mapped, 0, 'dns6') 
+          });
+        }
         return;
       }
 
@@ -445,9 +551,9 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         return;
       }
 
-      // dns request flow
-      if (data.startsWith("dns:")) {
-        const code = data.slice(4);
+      // IPv4 DNS request flow
+      if (data.startsWith("dns4:")) {
+        const code = data.slice(5);
         if (!user) { await sendMsg(token, chatId, "کاربر نامشخص"); return; }
         const q = await getQuota(env, user);
         if (q.dnsLeft <= 0) {
@@ -466,7 +572,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const stock = rec?.stock || 0;
         const checkUrl = `https://check-host.net/check-ping?host=${addr}`;
         
-        const message = `${flag} <b>${countryName}</b>
+        const message = `${flag} <b>${countryName}</b> - IPv4
 
 🌐 آدرس اختصاصی شما:
 <code>${addr}</code>
@@ -498,7 +604,55 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         try {
           const raw = await env.DB.get(histKey);
           const h = raw ? JSON.parse(raw) : [];
-          h.unshift({ type: "dns", country: code, at: new Date().toISOString(), value: addr });
+          h.unshift({ type: "dns-ipv4", country: code, at: new Date().toISOString(), value: addr });
+          if (h.length > 20) h.splice(20);
+          await env.DB.put(histKey, JSON.stringify(h));
+        } catch (e) { console.error("history save err", e); }
+        return;
+      }
+
+      // IPv6 DNS request flow (gives 2 addresses, no filter check)
+      if (data.startsWith("dns6:")) {
+        const code = data.slice(5);
+        if (!user) { await sendMsg(token, chatId, "کاربر نامشخص"); return; }
+        const q = await getQuota(env, user);
+        if (q.dnsLeft <= 0) {
+          await sendMsg(token, chatId, `محدودیت روزانه DNS شما به پایان رسیده است.\nباقی‌مانده: ${q.dnsLeft}`);
+          return;
+        }
+        const addresses = await allocateAddress6(env, code);
+        if (!addresses || addresses.length < 2) {
+          await sendMsg(token, chatId, `برای ${code} آدرس IPv6 کافی موجود نیست.`);
+          return;
+        }
+        
+        const rec = await getDNS6(env, code);
+        const flag = flagFromCode(code);
+        const countryName = COUNTRY_NAMES_FA[code] || rec?.country || code;
+        const stock = rec?.stock || 0;
+        
+        const message = `${flag} <b>${countryName}</b> - IPv6
+
+🌐 آدرس‌های اختصاصی شما:
+<code>${addresses[0]}</code>
+<code>${addresses[1]}</code>
+
+📊 موجودی باقی‌مانده ${countryName}: ${stock} عدد
+📈 سهمیه امروز شما: ${q.dnsUsed + 1}/${MAX_DNS_PER_DAY}`;
+        
+        await sendMsg(token, chatId, message, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🔙 بازگشت به منو", callback_data: "back" }]
+            ]
+          }
+        });
+        await incQuota(env, user, "dns");
+        const histKey = `history:${user}`;
+        try {
+          const raw = await env.DB.get(histKey);
+          const h = raw ? JSON.parse(raw) : [];
+          h.unshift({ type: "dns-ipv6", country: code, at: new Date().toISOString(), value: addresses.join(", ") });
           if (h.length > 20) h.splice(20);
           await env.DB.put(histKey, JSON.stringify(h));
         } catch (e) { console.error("history save err", e); }
@@ -533,6 +687,11 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           await sendMsg(token, chatId, `محدودیت روزانه WireGuard شما به پایان رسیده است.\nباقی‌مانده: ${q.wgLeft}`);
           return;
         }
+        
+        // IMPORTANT: Get location DNS from the dedicated dns field (not from addresses array)
+        const rec = await getDNS(env, code);
+        const locationDns = (rec && rec.dns && rec.dns.length) ? rec.dns[0] : null;
+        
         const endpoint = await allocateAddress(env, code);
         if (!endpoint) {
           await sendMsg(token, chatId, `برای ${code} آدرسی موجود نیست.`);
@@ -541,11 +700,9 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const mtu = pickRandom(WG_MTUS);
         const userDns = dnsValue || pickRandom(WG_FIXED_DNS);
         const priv = randBase64(32);
-        const rec = await getDNS(env, code);
         
-        // DNS: یکی انتخابی کاربر، یکی از لوکیشن
-        const locationDns = (rec && rec.dns && rec.dns.length) ? rec.dns[0] : null;
-        const combinedDns = locationDns ? `${locationDns}, ${userDns}` : userDns;
+        // DNS: use actual location address instead of placeholder
+        const combinedDns = locationDns ? `${userDns}, ${locationDns}` : userDns;
         
         // Address: از اپراتور انتخابی
         const operatorData = OPERATORS[op];
@@ -561,11 +718,17 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           operatorAddress 
         });
         
-        // نام فایل فقط نام کشور
-        const countryName = COUNTRY_NAMES_FA[code] || rec?.country || code;
-        const filename = `${countryName}.conf`;
+        // Use English country name for filename
+        const countryNameFa = COUNTRY_NAMES_FA[code] || rec?.country || code;
+        const countryNameEn = COUNTRY_NAMES_EN[code] || code;
+        const operatorName = operatorData ? operatorData.title : op;
+        const filename = `${countryNameEn}_WG.conf`;
         const flag = flagFromCode(code);
-        const caption = `${flag} <b>${countryName}</b>\n🔧 اپراتور: ${operatorData ? operatorData.title : op}`;
+        
+        const caption = `${flag} <b>${countryNameFa}</b>
+🔧 اپراتور: ${operatorName}
+🌐 DNS: ${combinedDns}
+📡 موجودی باقی‌مانده: ${rec?.stock || 0}`;
         
         await sendFile(token, chatId, filename, iface, caption);
         await incQuota(env, user, "wg");
@@ -656,64 +819,114 @@ const app = {
 <head>
 <meta charset='utf-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>پنل مدیریت ربات</title>
+<title>پنل مدیریت ربات WireGuard</title>
 <style>
-:root{--bg:#0a0e27;--card:#141b2d;--muted:#8b9bb5;--accent:#00d9ff;--btn:#00b8d4;--text:#e8f4f8;--border:#1e2940}
+:root{--bg:#0a0e27;--card:#141b2d;--muted:#8b9bb5;--accent:#00d9ff;--btn:#00b8d4;--text:#e8f4f8;--border:#1e2940;--success:#10b981;--danger:#ef4444}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Tahoma,Arial;background:linear-gradient(135deg,#0a0e27 0%,#1a1f3a 100%);color:var(--text);padding:20px;min-height:100vh}
-.container{max-width:1200px;margin:0 auto}
+.container{max-width:1400px;margin:0 auto}
 .header{text-align:center;margin-bottom:30px}
-.brand{font-size:24px;font-weight:700;color:var(--accent);margin-bottom:10px}
+.brand{font-size:28px;font-weight:700;color:var(--accent);margin-bottom:8px;text-shadow:0 2px 10px rgba(0,217,255,.3)}
+.subtitle{font-size:14px;color:var(--muted)}
+.tabs{display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);overflow-x:auto}
+.tab{padding:12px 24px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-weight:600;transition:all .3s;border-bottom:3px solid transparent;white-space:nowrap}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:hover{color:var(--text)}
+.tab-content{display:none}
+.tab-content.active{display:block}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(450px,1fr));gap:20px}
-.card{background:var(--card);border-radius:16px;padding:24px;box-shadow:0 10px 40px rgba(0,0,0,.4);border:1px solid var(--border)}
-.card h3{color:var(--accent);margin-bottom:16px;font-size:18px}
-input,textarea{background:#0a1120;border:1px solid var(--border);color:var(--text);padding:12px;border-radius:8px;width:100%;font-family:Tahoma;margin-bottom:10px;transition:border .3s}
-input:focus,textarea:focus{outline:none;border-color:var(--accent)}
-button{background:var(--btn);border:0;color:#fff;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:600;transition:transform .2s,background .3s;width:100%}
-button:hover{background:#00a3b8;transform:translateY(-2px)}
+.card{background:var(--card);border-radius:16px;padding:24px;box-shadow:0 10px 40px rgba(0,0,0,.4);border:1px solid var(--border);transition:transform .2s}
+.card:hover{transform:translateY(-2px)}
+.card h3{color:var(--accent);margin-bottom:16px;font-size:18px;display:flex;align-items:center;gap:8px}
+input,textarea{background:#0a1120;border:1px solid var(--border);color:var(--text);padding:12px;border-radius:8px;width:100%;font-family:Tahoma;margin-bottom:10px;transition:border .3s;font-size:14px}
+input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,217,255,.1)}
+button{background:var(--btn);border:0;color:#fff;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:600;transition:all .3s;width:100%;font-size:14px}
+button:hover{background:#00a3b8;transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,184,212,.3)}
 button:active{transform:translateY(0)}
 table{width:100%;border-collapse:collapse;margin-top:12px}
 th,td{padding:12px 8px;text-align:right;border-bottom:1px solid var(--border);font-size:13px}
-th{color:var(--accent);font-weight:600}
+th{color:var(--accent);font-weight:600;background:rgba(0,217,255,.05)}
+tr:hover{background:rgba(0,217,255,.03)}
 .flag{font-size:20px;margin-left:8px}
-.small{font-size:12px;color:var(--muted)}
-.del{width:auto;padding:6px 12px;background:#dc3545;font-size:12px}
-.del:hover{background:#c82333}
+.small{font-size:13px;color:var(--muted)}
+.del{width:auto;padding:6px 12px;background:var(--danger);font-size:12px;transition:all .2s}
+.del:hover{background:#dc2626;box-shadow:0 2px 8px rgba(239,68,68,.3)}
 .controls{display:grid;grid-template-columns:1fr 1fr 100px;gap:8px;margin-bottom:10px}
 .note{background:#1a2332;padding:12px;border-radius:8px;color:var(--muted);font-size:12px;margin-top:12px;border-right:3px solid var(--accent)}
+.badge{display:inline-block;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-left:8px}
+.badge-ipv4{background:rgba(16,185,129,.2);color:var(--success)}
+.badge-ipv6{background:rgba(59,130,246,.2);color:#3b82f6}
 @media(max-width:980px){.grid{grid-template-columns:1fr}.controls{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class='container'>
   <div class='header'>
-    <div class='brand'>🤖 پنل مدیریت ربات DNS</div>
+    <div class='brand'>🛡️ پنل مدیریت ربات WireGuard</div>
+    <div class='subtitle'>مدیریت کشورها، کاربران و تنظیمات ربات</div>
   </div>
 
-  <div class='grid'>
-    <div class='card'>
-      <h3>📋 مدیریت DNS</h3>
-      <div id='dns-list' class='small'>در حال بارگذاری...</div>
-      <hr style='border:0;border-top:1px solid var(--border);margin:20px 0'/>
-      <h3>➕ افزودن کشور جدید</h3>
-      <form id='dns-form'>
-        <div class='controls'>
-          <input id='code' placeholder='کد کشور (EE)' required />
-          <input id='country' placeholder='نام کشور (استونی)' required />
-          <input id='stock' type='number' value='0' placeholder='موجودی' />
-        </div>
-        <textarea id='addresses' rows='4' placeholder='آدرس‌های IP (هر خط یک آدرس)'></textarea>
-        <button type='submit'>💾 ذخیره</button>
-      </form>
-    </div>
+  <div class='tabs'>
+    <button class='tab active' data-tab='ipv4'>🌐 IPv4 DNS</button>
+    <button class='tab' data-tab='ipv6'>🌐 IPv6 DNS</button>
+    <button class='tab' data-tab='users'>👥 کاربران</button>
+  </div>
 
-    <div class='card'>
-      <h3>👥 کاربران</h3>
-      <div id='users' class='small'>در حال بارگذاری...</div>
-      <hr style='border:0;border-top:1px solid var(--border);margin:20px 0'/>
-      <h3>📢 پیام همگانی</h3>
-      <textarea id='broadcast' rows='4' placeholder='متن پیام خود را وارد کنید...'></textarea>
-      <button id='send-bc'>📤 ارسال</button>
+  <div class='tab-content active' id='ipv4'>
+    <div class='grid'>
+      <div class='card'>
+        <h3><span>📋</span> مدیریت کشورهای IPv4</h3>
+        <div id='dns4-list' class='small'>در حال بارگذاری...</div>
+      </div>
+      <div class='card'>
+        <h3><span>➕</span> افزودن کشور IPv4 جدید</h3>
+        <form id='dns4-form'>
+          <div class='controls'>
+            <input id='code4' placeholder='کد کشور (US)' required />
+            <input id='country4' placeholder='نام کشور (آمریکا)' required />
+          </div>
+          <textarea id='addresses4' rows='4' placeholder='آدرس‌های IPv4 (هر خط یک آدرس)' required></textarea>
+          <textarea id='dns4' rows='2' placeholder='DNS سرورهای این لوکیشن (هر خط یک DNS) - اختیاری'></textarea>
+          <div class='note'>💡 موجودی به صورت خودکار از تعداد آدرس‌ها محاسبه می‌شود</div>
+          <button type='submit'>💾 ذخیره کشور IPv4</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class='tab-content' id='ipv6'>
+    <div class='grid'>
+      <div class='card'>
+        <h3><span>📋</span> مدیریت کشورهای IPv6</h3>
+        <div id='dns6-list' class='small'>در حال بارگذاری...</div>
+      </div>
+      <div class='card'>
+        <h3><span>➕</span> افزودن کشور IPv6 جدید</h3>
+        <form id='dns6-form'>
+          <div class='controls'>
+            <input id='code6' placeholder='کد کشور (US)' required />
+            <input id='country6' placeholder='نام کشور (آمریکا)' required />
+          </div>
+          <textarea id='addresses6' rows='5' placeholder='آدرس‌های IPv6 (هر خط یک آدرس)' required></textarea>
+          <div class='note'>💡 توجه: هر کاربر 2 آدرس IPv6 دریافت می‌کند</div>
+          <div class='note'>💡 موجودی به صورت خودکار از تعداد آدرس‌ها محاسبه می‌شود</div>
+          <button type='submit'>💾 ذخیره کشور IPv6</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class='tab-content' id='users'>
+    <div class='grid'>
+      <div class='card'>
+        <h3><span>👥</span> آمار کاربران</h3>
+        <div id='users-stat' class='small'>در حال بارگذاری...</div>
+      </div>
+      <div class='card'>
+        <h3><span>📢</span> پیام همگانی</h3>
+        <textarea id='broadcast' rows='5' placeholder='متن پیام خود را برای ارسال به همه کاربران وارد کنید...'></textarea>
+        <button id='send-bc'>📤 ارسال پیام به همه کاربران</button>
+      </div>
     </div>
   </div>
 </div>
@@ -721,69 +934,149 @@ th{color:var(--accent);font-weight:600}
 <script>
 console.log('WireGuard Bot Admin Panel Loaded');
 const ADMIN = new URL(location).searchParams.get('admin') || '';
+
+// Tab switching
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab).classList.add('active');
+  };
+});
+
 function authHeaders() {
   const h = {};
   if (ADMIN) h['x-admin-id'] = ADMIN;
   return h;
 }
+
 async function fetchJson(path, opts = {}) {
   opts.headers = Object.assign({}, opts.headers || {}, authHeaders());
   const res = await fetch(path, opts);
   if (!res.ok) throw new Error('خطا');
   return res.json();
 }
-async function loadDNS() {
+
+async function loadDNS4() {
   try {
     const list = await fetchJson('/api/dns');
     if (!list || list.length === 0) {
-      document.getElementById('dns-list').innerText = 'هیچ کشوری ثبت نشده';
+      document.getElementById('dns4-list').innerText = 'هیچ کشور IPv4 ثبت نشده';
       return;
     }
     const rows = list.map(r => {
       const flag = (r.flag) ? r.flag : '';
       const country = r.country || r.code;
-      return '<tr><td>'+flag+' '+(r.code||'')+'</td><td>'+country+'</td><td>'+(r.stock||0)+'</td><td><button data-code="'+(r.code||'')+'" class="del">❌</button></td></tr>';
+      // Auto-calculate stock from actual addresses in KV
+      const actualStock = (r.addresses && r.addresses.length) ? r.addresses.length : 0;
+      return '<tr><td>'+flag+' '+(r.code||'')+'</td><td>'+country+'</td><td>'+actualStock+'</td><td><button data-code="'+(r.code||'')+'" class="del del4">❌</button></td></tr>';
     }).join('');
-    document.getElementById('dns-list').innerHTML = '<table><tr><th>کد</th><th>کشور</th><th>موجودی</th><th></th></tr>'+rows+'</table>';
-    document.querySelectorAll('.del').forEach(b => b.onclick = async e => {
+    document.getElementById('dns4-list').innerHTML = '<table><tr><th>کد</th><th>کشور</th><th>موجودی</th><th></th></tr>'+rows+'</table>';
+    document.querySelectorAll('.del4').forEach(b => b.onclick = async e => {
       const code = e.target.dataset.code;
-      if (!confirm('حذف '+code+'?')) return;
+      if (!confirm('حذف '+code+' از IPv4?')) return;
       await fetch('/api/dns/' + code, { method: 'DELETE', headers: authHeaders() });
-      loadDNS();
+      loadDNS4();
     });
   } catch (e) {
-    document.getElementById('dns-list').innerText = 'خطا در بارگذاری';
+    document.getElementById('dns4-list').innerText = 'خطا در بارگذاری';
   }
 }
+
+async function loadDNS6() {
+  try {
+    const list = await fetchJson('/api/dns6');
+    if (!list || list.length === 0) {
+      document.getElementById('dns6-list').innerText = 'هیچ کشور IPv6 ثبت نشده';
+      return;
+    }
+    const rows = list.map(r => {
+      const flag = (r.flag) ? r.flag : '';
+      const country = r.country || r.code;
+      // Auto-calculate stock from actual addresses in KV
+      const actualStock = (r.addresses && r.addresses.length) ? r.addresses.length : 0;
+      return '<tr><td>'+flag+' '+(r.code||'')+'</td><td>'+country+'</td><td>'+actualStock+'</td><td><button data-code="'+(r.code||'')+'" class="del del6">❌</button></td></tr>';
+    }).join('');
+    document.getElementById('dns6-list').innerHTML = '<table><tr><th>کد</th><th>کشور</th><th>موجودی</th><th></th></tr>'+rows+'</table>';
+    document.querySelectorAll('.del6').forEach(b => b.onclick = async e => {
+      const code = e.target.dataset.code;
+      if (!confirm('حذف '+code+' از IPv6?')) return;
+      await fetch('/api/dns6/' + code, { method: 'DELETE', headers: authHeaders() });
+      loadDNS6();
+    });
+  } catch (e) {
+    document.getElementById('dns6-list').innerText = 'خطا در بارگذاری';
+  }
+}
+
 async function loadUsers() {
   try {
     const j = await fetchJson('/api/users');
-    document.getElementById('users').innerHTML = '<div class="note">تعداد: '+ (j.users||[]).length +' کاربر</div>';
+    const users = j.users || [];
+    let html = '<div class="note">✅ تعداد کل کاربران: <strong>'+ users.length +' نفر</strong></div>';
+    if (users.length > 0) {
+      html += '<table><tr><th>شماره</th><th>شناسه کاربر</th></tr>';
+      users.forEach((uid, idx) => {
+        html += '<tr><td>'+(idx+1)+'</td><td>'+uid+'</td></tr>';
+      });
+      html += '</table>';
+    }
+    document.getElementById('users-stat').innerHTML = html;
   } catch (e) {
-    document.getElementById('users').innerText = 'خطا';
+    document.getElementById('users-stat').innerText = 'خطا در بارگذاری';
   }
 }
-document.getElementById('dns-form').onsubmit = async ev => {
+
+document.getElementById('dns4-form').onsubmit = async ev => {
   ev.preventDefault();
-  const code = document.getElementById('code').value.trim().toUpperCase();
-  const country = document.getElementById('country').value.trim();
-  const stock = parseInt(document.getElementById('stock').value, 10) || 0;
-  const addresses = document.getElementById('addresses').value.split(/\n+/).map(s=>s.trim()).filter(Boolean);
-  const body = { code, country, stock, addresses, flag: (code.length===2?String.fromCodePoint(...code.split('').map(c=>c.charCodeAt(0)+127397)): '') };
+  const code = document.getElementById('code4').value.trim().toUpperCase();
+  const country = document.getElementById('country4').value.trim();
+  const addresses = document.getElementById('addresses4').value.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  const dns = document.getElementById('dns4').value.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  
+  // Auto-detect stock from addresses count
+  const stock = addresses.length;
+  
+  const body = { code, country, stock, addresses, dns, flag: (code.length===2?String.fromCodePoint(...code.split('').map(c=>c.charCodeAt(0)+127397)): '') };
   await fetch('/api/dns/' + code, { method: 'PUT', headers: Object.assign({'Content-Type':'application/json'}, authHeaders()), body: JSON.stringify(body) });
-  document.getElementById('dns-form').reset();
-  loadDNS();
+  document.getElementById('dns4-form').reset();
+  loadDNS4();
+  alert('✅ کشور IPv4 ذخیره شد - موجودی: ' + stock);
 };
+
+document.getElementById('dns6-form').onsubmit = async ev => {
+  ev.preventDefault();
+  const code = document.getElementById('code6').value.trim().toUpperCase();
+  const country = document.getElementById('country6').value.trim();
+  const addresses = document.getElementById('addresses6').value.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  
+  // Auto-detect stock from addresses count
+  const stock = addresses.length;
+  
+  const body = { code, country, stock, addresses, flag: (code.length===2?String.fromCodePoint(...code.split('').map(c=>c.charCodeAt(0)+127397)): '') };
+  await fetch('/api/dns6/' + code, { method: 'PUT', headers: Object.assign({'Content-Type':'application/json'}, authHeaders()), body: JSON.stringify(body) });
+  document.getElementById('dns6-form').reset();
+  loadDNS6();
+  alert('✅ کشور IPv6 ذخیره شد - موجودی: ' + stock);
+};
+
 document.getElementById('send-bc').onclick = async () => {
   const text = document.getElementById('broadcast').value.trim();
   if (!text) return alert('متن وارد کنید');
   await fetch('/api/broadcast', { method: 'POST', headers: Object.assign({'Content-Type':'application/json'}, authHeaders()), body: JSON.stringify({ text }) });
-  alert('✅ پیام ارسال شد');
+  alert('✅ پیام به همه کاربران ارسال شد');
   document.getElementById('broadcast').value = '';
 };
-if (ADMIN) { loadDNS(); loadUsers(); } else {
-  document.getElementById('dns-list').innerHTML = '<div class="note">⚠️ برای دسترسی به پنل، ?admin=ADMIN_ID به URL اضافه کنید</div>';
-  document.getElementById('users').innerHTML = '<div class="note">⚠️ برای دسترسی به پنل، ?admin=ADMIN_ID به URL اضافه کنید</div>';
+
+if (ADMIN) { 
+  loadDNS4(); 
+  loadDNS6(); 
+  loadUsers(); 
+} else {
+  // Hide entire admin panel when not authenticated
+  const warningHTML = '<div class="header"><div class="brand">🛡️ پنل مدیریت ربات WireGuard</div><div class="subtitle">مدیریت کشورها، کاربران و تنظیمات ربات</div></div><div class="card" style="max-width:600px;margin:40px auto;text-align:center;"><h3 style="color:#f59e0b;margin-bottom:20px;">🔒 دسترسی محدود</h3><p style="font-size:15px;line-height:2;color:#94a3b8;">برای دسترسی به پنل مدیریت، لطفا پارامتر <code style="background:#1a2332;padding:4px 8px;border-radius:4px;color:#00d9ff;">?admin=ADMIN_ID</code> را به URL اضافه کنید.</p><div class="note" style="margin-top:20px;">مثال: <code>https://your-domain.com/?admin=YOUR_ADMIN_ID</code></div></div>';
+  document.querySelector('.container').innerHTML = warningHTML;
 }
 </script>
 </body>
@@ -829,6 +1122,40 @@ if (ADMIN) { loadDNS(); loadUsers(); } else {
       }
       if (method === "DELETE") {
         await deleteDNS(env, code);
+        return jsonResponse({ ok: true });
+      }
+    }
+
+    // IPv6 DNS endpoints
+    if (path === "/api/dns6" && method === "GET") {
+      if (!isAdminReq(request, env)) return new Response("forbidden", { status: 403 });
+      const list = await listDNS6(env);
+      return jsonResponse(list);
+    }
+
+    if (path.startsWith("/api/dns6/")) {
+      if (!isAdminReq(request, env)) return new Response("forbidden", { status: 403 });
+      const parts = path.split("/");
+      const code = parts[2] || parts[3];
+      if (!code) return new Response("bad request", { status: 400 });
+
+      if (method === "GET") {
+        const rec = await getDNS6(env, code);
+        if (!rec) return new Response("not found", { status: 404 });
+        return jsonResponse(rec);
+      }
+      if (method === "PUT") {
+        try {
+          const body = await request.json();
+          body.code = code.toUpperCase();
+          await updateDNS6(env, code, body);
+          return jsonResponse({ ok: true });
+        } catch (e) {
+          return jsonResponse({ error: "invalid json" }, 400);
+        }
+      }
+      if (method === "DELETE") {
+        await deleteDNS6(env, code);
         return jsonResponse({ ok: true });
       }
     }
