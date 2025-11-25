@@ -4,77 +4,87 @@
 <head>
     <meta charset='utf-8'>
     <meta name='viewport' content='width=device-width,initial-scale=1'>
-    <title>پنل مدیریت ربات WireGuard</title>
+    <title>پنل مدیریت WireGuard</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap');
 
         :root {
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
-            --primary-light: #818cf8;
-            --bg: #0f172a;
-            --surface: #1e293b;
-            --surface-light: #334155;
-            --text: #f1f5f9;
-            --text-muted: #94a3b8;
-            --text-dim: #64748b;
-            --success: #22c55e;
+            --primary: #7c3aed;
+            --primary-dark: #6d28d9;
+            --primary-light: #a78bfa;
+            --secondary: #ec4899;
+            --accent: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
             --info: #3b82f6;
-            --border: #475569;
-            --shadow: rgba(0, 0, 0, .3);
-            --gradient-1: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --gradient-2: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            --gradient-3: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            --gradient-4: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+
+            --bg-dark: #0f0f23;
+            --bg-darker: #080813;
+            --surface: #1a1a2e;
+            --surface-light: #252541;
+            --surface-hover: #2d2d4a;
+
+            --text: #f8fafc;
+            --text-muted: #cbd5e1;
+            --text-dim: #94a3b8;
+
+            --border: rgba(139, 92, 246, 0.15);
+            --border-light: rgba(139, 92, 246, 0.08);
+            --shadow: rgba(124, 58, 237, 0.15);
+            --shadow-lg: rgba(124, 58, 237, 0.25);
+
+            --gradient-primary: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
+            --gradient-success: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+            --gradient-danger: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+            --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #eab308 100%);
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
-            padding: 0
+            padding: 0;
         }
 
         body {
-            font-family: 'Inter', Tahoma, sans-serif;
-            background: var(--bg);
+            font-family: 'Vazirmatn', 'Inter', sans-serif;
+            background: var(--bg-dark);
             color: var(--text);
-            padding: 0;
             min-height: 100vh;
-            overflow-x: hidden
+            overflow-x: hidden;
+            position: relative;
         }
 
-        .bg-pattern {
+        body::before {
+            content: '';
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            opacity: .03;
-            background-image: radial-gradient(circle at 25px 25px, var(--text) 2%, transparent 0), radial-gradient(circle at 75px 75px, var(--text) 2%, transparent 0);
-            background-size: 100px 100px;
+            background:
+                radial-gradient(circle at 20% 30%, rgba(124, 58, 237, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(236, 72, 153, 0.15) 0%, transparent 50%);
             pointer-events: none;
-            z-index: 0
+            z-index: 0;
         }
 
         .container {
-            max-width: 1600px;
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 30px 20px;
             position: relative;
-            z-index: 1
+            z-index: 1;
         }
 
         .header {
             text-align: center;
-            margin-bottom: 40px;
-            padding: 40px 20px;
-            background: var(--gradient-1);
-            border-radius: 20px;
-            box-shadow: 0 20px 60px var(--shadow);
+            margin-bottom: 50px;
+            padding: 60px 30px;
+            background: var(--gradient-primary);
+            border-radius: 24px;
+            box-shadow: 0 25px 80px var(--shadow-lg);
             position: relative;
-            overflow: hidden
+            overflow: hidden;
         }
 
         .header::before {
@@ -84,119 +94,156 @@
             right: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(circle, rgba(255, 255, 255, .1) 0%, transparent 70%);
-            animation: pulse 15s ease-in-out infinite
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+            animation: pulse 20s ease-in-out infinite;
         }
 
         @keyframes pulse {
 
             0%,
             100% {
-                transform: scale(1)
+                transform: scale(1) rotate(0deg);
             }
 
             50% {
-                transform: scale(1.1)
+                transform: scale(1.2) rotate(180deg);
             }
         }
 
         .brand {
-            font-size: 36px;
-            font-weight: 700;
+            font-size: 42px;
+            font-weight: 800;
             color: #fff;
-            margin-bottom: 12px;
-            text-shadow: 0 4px 20px rgba(0, 0, 0, .3);
-            letter-spacing: -0.5px;
+            margin-bottom: 16px;
+            text-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+            letter-spacing: -1px;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 12px
+            gap: 16px;
+            position: relative;
+            z-index: 1;
         }
 
         .brand-icon {
-            font-size: 42px;
-            animation: rotate 20s linear infinite
+            font-size: 48px;
+            filter: drop-shadow(0 4px 20px rgba(0, 0, 0, 0.3));
+            animation: float 6s ease-in-out infinite;
         }
 
-        @keyframes rotate {
-            from {
-                transform: rotate(0deg)
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0px);
             }
 
-            to {
-                transform: rotate(360deg)
+            50% {
+                transform: translateY(-15px);
             }
         }
 
         .subtitle {
-            font-size: 16px;
-            color: rgba(255, 255, 255, .9);
-            font-weight: 500
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.95);
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
         }
 
-        .stats-bar {
+        .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
         }
 
         .stat-card {
             background: var(--surface);
-            border-radius: 16px;
-            padding: 20px;
+            border-radius: 20px;
+            padding: 30px;
             text-align: center;
             border: 1px solid var(--border);
-            box-shadow: 0 4px 15px var(--shadow);
-            transition: all .3s
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--gradient-primary);
+            transform: scaleX(0);
+            transition: transform 0.4s;
         }
 
         .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px var(--shadow)
+            transform: translateY(-8px);
+            box-shadow: 0 15px 40px var(--shadow);
+            border-color: var(--primary-light);
+        }
+
+        .stat-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .stat-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            filter: drop-shadow(0 4px 12px rgba(124, 58, 237, 0.4));
         }
 
         .stat-value {
-            font-size: 32px;
-            font-weight: 700;
-            background: var(--gradient-3);
+            font-size: 40px;
+            font-weight: 800;
+            background: var(--gradient-primary);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 8px
+            margin-bottom: 12px;
+            line-height: 1;
         }
 
         .stat-label {
-            font-size: 13px;
+            font-size: 14px;
             color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 600
+            letter-spacing: 1.5px;
+            font-weight: 600;
         }
 
         .tabs {
             display: flex;
-            gap: 12px;
-            margin-bottom: 30px;
+            gap: 16px;
+            margin-bottom: 40px;
             background: var(--surface);
-            padding: 8px;
-            border-radius: 16px;
-            box-shadow: 0 4px 15px var(--shadow);
-            flex-wrap: wrap
+            padding: 12px;
+            border-radius: 20px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+            flex-wrap: wrap;
         }
 
         .tab {
-            padding: 14px 28px;
+            flex: 1;
+            min-width: 150px;
+            padding: 18px 32px;
             background: transparent;
             border: none;
-            color: var(--text-muted);
+            color: var(--text-dim);
             cursor: pointer;
-            font-weight: 600;
-            transition: all .3s;
-            border-radius: 12px;
-            font-size: 15px;
+            font-weight: 700;
+            font-size: 16px;
+            transition: all 0.3s;
+            border-radius: 14px;
             position: relative;
-            overflow: hidden
+            overflow: hidden;
+            font-family: 'Vazirmatn', sans-serif;
         }
 
         .tab::before {
@@ -206,65 +253,70 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: var(--gradient-1);
+            background: var(--gradient-primary);
             opacity: 0;
-            transition: opacity .3s;
-            z-index: 0
+            transition: opacity 0.3s;
+            z-index: 0;
         }
 
         .tab.active {
-            color: #fff
+            color: #fff;
         }
 
         .tab.active::before {
-            opacity: 1
+            opacity: 1;
         }
 
         .tab span {
             position: relative;
-            z-index: 1
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
         }
 
-        .tab:hover {
-            color: var(--text)
+        .tab:hover:not(.active) {
+            color: var(--text);
+            background: var(--surface-hover);
         }
 
         .tab-content {
             display: none;
-            animation: fadeIn .4s
+            animation: fadeIn 0.5s ease-out;
         }
 
         .tab-content.active {
-            display: block
+            display: block;
         }
 
         @keyframes fadeIn {
             from {
                 opacity: 0;
-                transform: translateY(10px)
+                transform: translateY(20px);
             }
 
             to {
                 opacity: 1;
-                transform: translateY(0)
+                transform: translateY(0);
             }
         }
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 25px
+            grid-template-columns: repeat(auto-fit, minmax(550px, 1fr));
+            gap: 30px;
         }
 
         .card {
             background: var(--surface);
-            border-radius: 20px;
-            padding: 28px;
-            box-shadow: 0 10px 40px var(--shadow);
+            border-radius: 24px;
+            padding: 35px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
             border: 1px solid var(--border);
-            transition: all .3s;
+            transition: all 0.4s;
             position: relative;
-            overflow: hidden
+            overflow: hidden;
         }
 
         .card::before {
@@ -273,85 +325,92 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: 4px;
-            background: var(--gradient-1);
+            height: 5px;
+            background: var(--gradient-primary);
             opacity: 0;
-            transition: opacity .3s
+            transition: opacity 0.3s;
         }
 
         .card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 15px 50px var(--shadow)
+            transform: translateY(-6px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border-color: var(--primary-light);
         }
 
         .card:hover::before {
-            opacity: 1
+            opacity: 1;
         }
 
         .card h3 {
             color: var(--primary-light);
-            margin-bottom: 20px;
-            font-size: 20px;
+            margin-bottom: 28px;
+            font-size: 22px;
+            font-weight: 700;
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-weight: 600
+            gap: 12px;
+        }
+
+        .card h3 span {
+            font-size: 28px;
+            filter: drop-shadow(0 2px 8px rgba(124, 58, 237, 0.4));
         }
 
         .form-group {
-            margin-bottom: 16px
+            margin-bottom: 20px;
         }
 
         .form-label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             color: var(--text-muted);
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: .5px
+            letter-spacing: 0.5px;
         }
 
         input,
         textarea {
-            background: var(--bg);
+            background: var(--bg-darker);
             border: 2px solid var(--border);
             color: var(--text);
-            padding: 14px 16px;
-            border-radius: 12px;
+            padding: 16px 18px;
+            border-radius: 14px;
             width: 100%;
-            font-family: 'Inter', Tahoma;
-            transition: all .3s;
-            font-size: 14px
+            font-family: 'Vazirmatn', sans-serif;
+            font-size: 15px;
+            transition: all 0.3s;
         }
 
         input:focus,
         textarea:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 4px rgba(99, 102, 241, .1);
-            background: var(--surface-light)
+            box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.15);
+            background: var(--surface-light);
         }
 
         input::placeholder,
         textarea::placeholder {
-            color: var(--text-dim)
+            color: var(--text-dim);
         }
 
         button {
-            background: var(--gradient-1);
+            background: var(--gradient-primary);
             border: 0;
             color: #fff;
-            padding: 14px 24px;
-            border-radius: 12px;
+            padding: 16px 28px;
+            border-radius: 14px;
             cursor: pointer;
-            font-weight: 600;
-            transition: all .3s;
+            font-weight: 700;
+            font-size: 16px;
+            font-family: 'Vazirmatn', sans-serif;
+            transition: all 0.3s;
             width: 100%;
-            font-size: 15px;
-            box-shadow: 0 4px 15px rgba(99, 102, 241, .3);
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.4);
             position: relative;
-            overflow: hidden
+            overflow: hidden;
         }
 
         button::before {
@@ -362,160 +421,162 @@
             width: 0;
             height: 0;
             border-radius: 50%;
-            background: rgba(255, 255, 255, .3);
-            transition: width .6s, height .6s;
-            transform: translate(-50%, -50%)
-        }
-
-        button:hover::before {
-            width: 300px;
-            height: 300px
+            background: rgba(255, 255, 255, 0.3);
+            transition: width 0.6s, height 0.6s;
+            transform: translate(-50%, -50%);
         }
 
         button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(99, 102, 241, .4)
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(124, 58, 237, 0.5);
+        }
+
+        button:hover::before {
+            width: 400px;
+            height: 400px;
         }
 
         button:active {
-            transform: translateY(0)
+            transform: translateY(-1px);
         }
 
         button span {
             position: relative;
-            z-index: 1
+            z-index: 1;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
         }
 
         table {
             width: 100%;
             border-collapse: separate;
             border-spacing: 0;
-            margin-top: 16px;
+            margin-top: 20px;
             overflow: hidden;
-            border-radius: 12px
+            border-radius: 16px;
+            background: var(--bg-darker);
         }
 
         th,
         td {
-            padding: 14px 12px;
+            padding: 18px 16px;
             text-align: right;
-            border-bottom: 1px solid var(--border);
-            font-size: 14px
+            border-bottom: 1px solid var(--border-light);
+            font-size: 15px;
         }
 
         th {
             color: var(--primary-light);
-            font-weight: 600;
-            background: rgba(99, 102, 241, .1);
-            position: sticky;
-            top: 0
+            font-weight: 700;
+            background: rgba(124, 58, 237, 0.1);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 13px;
         }
 
         tbody tr {
-            transition: all .2s
+            transition: all 0.2s;
         }
 
         tbody tr:hover {
-            background: rgba(99, 102, 241, .05)
+            background: rgba(124, 58, 237, 0.08);
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
         }
 
         .flag {
-            font-size: 22px;
-            margin-left: 10px
-        }
-
-        .small {
-            font-size: 14px;
-            color: var(--text-muted)
+            font-size: 26px;
+            margin-left: 12px;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
         }
 
         .del {
             width: auto;
-            padding: 8px 16px;
-            background: var(--gradient-2);
-            font-size: 13px;
-            transition: all .3s;
-            box-shadow: 0 4px 12px rgba(239, 68, 68, .3)
+            padding: 10px 20px;
+            background: var(--gradient-danger);
+            font-size: 14px;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
         }
 
         .del:hover {
-            transform: scale(1.05);
-            box-shadow: 0 6px 20px rgba(239, 68, 68, .5)
-        }
-
-        .controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 16px
-        }
-
-        .note {
-            background: rgba(99, 102, 241, .1);
-            padding: 14px;
-            border-radius: 12px;
-            color: var(--text-muted);
-            font-size: 13px;
-            margin-top: 12px;
-            border-right: 4px solid var(--primary);
-            line-height: 1.6
+            transform: scale(1.05) translateY(-2px);
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.6);
         }
 
         .badge {
             display: inline-block;
-            padding: 5px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-left: 8px
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            margin-left: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
         .badge-ipv4 {
-            background: rgba(34, 197, 94, .2);
-            color: var(--success);
-            border: 1px solid var(--success)
+            background: var(--gradient-success);
+            color: #fff;
         }
 
         .badge-ipv6 {
-            background: rgba(59, 130, 246, .2);
-            color: var(--info);
-            border: 1px solid var(--info)
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: #fff;
+        }
+
+        .note {
+            background: rgba(124, 58, 237, 0.12);
+            padding: 18px;
+            border-radius: 14px;
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-top: 16px;
+            border-right: 5px solid var(--primary);
+            line-height: 1.7;
+        }
+
+        .scroll-container {
+            max-height: 550px;
+            overflow-y: auto;
+            border-radius: 16px;
+            padding-right: 5px;
+        }
+
+        .scroll-container::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .scroll-container::-webkit-scrollbar-track {
+            background: var(--bg-darker);
+            border-radius: 10px;
+        }
+
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: var(--gradient-primary);
+            border-radius: 10px;
+        }
+
+        .scroll-container::-webkit-scrollbar-thumb:hover {
+            background: var(--gradient-success);
         }
 
         .empty-state {
             text-align: center;
-            padding: 60px 20px;
-            color: var(--text-dim)
+            padding: 80px 30px;
+            color: var(--text-dim);
         }
 
         .empty-state-icon {
-            font-size: 64px;
-            margin-bottom: 16px;
-            opacity: .5
-        }
-
-        .scroll-container {
-            max-height: 500px;
-            overflow-y: auto;
-            border-radius: 12px
-        }
-
-        .scroll-container::-webkit-scrollbar {
-            width: 8px
-        }
-
-        .scroll-container::-webkit-scrollbar-track {
-            background: var(--bg);
-            border-radius: 4px
-        }
-
-        .scroll-container::-webkit-scrollbar-thumb {
-            background: var(--primary);
-            border-radius: 4px
-        }
-
-        .scroll-container::-webkit-scrollbar-thumb:hover {
-            background: var(--primary-dark)
+            font-size: 80px;
+            margin-bottom: 20px;
+            opacity: 0.6;
+            filter: drop-shadow(0 4px 12px rgba(124, 58, 237, 0.3));
         }
 
         .access-denied {
@@ -523,110 +584,165 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)
+            background: var(--bg-dark);
+            position: relative;
+        }
+
+        .access-denied::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 30% 40%, rgba(124, 58, 237, 0.2) 0%, transparent 50%),
+                radial-gradient(circle at 70% 60%, rgba(236, 72, 153, 0.2) 0%, transparent 50%);
         }
 
         .access-card {
-            background: #1e293b;
-            padding: 60px 40px;
-            border-radius: 24px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
-            max-width: 500px;
-            text-align: center
+            background: var(--surface);
+            padding: 70px 50px;
+            border-radius: 28px;
+            box-shadow: 0 30px 100px rgba(0, 0, 0, 0.5);
+            max-width: 550px;
+            text-align: center;
+            border: 1px solid var(--border);
+            position: relative;
+            z-index: 1;
         }
 
         .access-icon {
-            font-size: 64px;
-            margin-bottom: 20px
+            font-size: 80px;
+            margin-bottom: 28px;
+            filter: drop-shadow(0 8px 20px rgba(124, 58, 237, 0.4));
         }
 
         .access-title {
-            color: #f1f5f9;
-            margin-bottom: 16px;
-            font-size: 28px
+            color: var(--text);
+            margin-bottom: 20px;
+            font-size: 32px;
+            font-weight: 800;
         }
 
         .access-text {
-            color: #94a3b8;
-            line-height: 1.8;
-            margin-bottom: 24px
+            color: var(--text-muted);
+            line-height: 1.9;
+            margin-bottom: 28px;
+            font-size: 16px;
         }
 
         .access-code {
-            background: #0f172a;
-            padding: 6px 12px;
-            border-radius: 8px;
-            color: #818cf8;
-            font-weight: 600
+            background: var(--bg-darker);
+            padding: 8px 16px;
+            border-radius: 10px;
+            color: var(--primary-light);
+            font-weight: 700;
+            border: 1px solid var(--border);
         }
 
         .access-example {
-            background: rgba(99, 102, 241, .1);
-            padding: 16px;
-            border-radius: 12px;
-            border-right: 4px solid #6366f1
+            background: rgba(124, 58, 237, 0.12);
+            padding: 20px;
+            border-radius: 16px;
+            border-right: 5px solid var(--primary);
+            margin-top: 24px;
         }
 
         .access-example code {
-            color: #c7d2fe;
-            font-size: 13px
+            color: var(--primary-light);
+            font-size: 14px;
+            font-weight: 600;
         }
 
-        @media(max-width:1100px) {
+        @media (max-width: 1100px) {
             .grid {
-                grid-template-columns: 1fr
+                grid-template-columns: 1fr;
             }
 
             .controls {
-                grid-template-columns: 1fr
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .brand {
+                font-size: 32px;
+            }
+
+            .subtitle {
+                font-size: 16px;
+            }
+
+            .header {
+                padding: 40px 20px;
+            }
+
+            .tabs {
+                gap: 10px;
+            }
+
+            .tab {
+                padding: 14px 20px;
+                font-size: 14px;
             }
         }
     </style>
 </head>
 
 <body>
-    <div class='bg-pattern'></div>
     <div class='container' id='app-container'>
         <div class='header'>
-            <div class='brand'><span class='brand-icon'>🛡️</span> پنل مدیریت ربات WireGuard</div>
-            <div class='subtitle'>مدیریت هوشمند کشورها، کاربران و تنظیمات پیشرفته</div>
+            <div class='brand'>
+                <span class='brand-icon'>🛡️</span>
+                پنل مدیریت WireGuard
+            </div>
+            <div class='subtitle'>مدیریت هوشمند و پیشرفته کشورها، کاربران و تنظیمات</div>
         </div>
 
-        <div class='stats-bar' id='stats-bar'>
+        <div class='stats-grid' id='stats-grid'>
             <div class='stat-card'>
+                <div class='stat-icon'>🌍</div>
                 <div class='stat-value' id='total-countries'>-</div>
-                <div class='stat-label'>🌍 کل کشورها</div>
+                <div class='stat-label'>کل کشورها</div>
             </div>
             <div class='stat-card'>
+                <div class='stat-icon'>👥</div>
                 <div class='stat-value' id='total-users'>-</div>
-                <div class='stat-label'>👥 کاربران فعال</div>
+                <div class='stat-label'>کاربران فعال</div>
             </div>
             <div class='stat-card'>
+                <div class='stat-icon'>📡</div>
                 <div class='stat-value' id='total-ipv4'>-</div>
-                <div class='stat-label'>📡 IPv4 موجود</div>
+                <div class='stat-label'>IPv4 موجود</div>
             </div>
             <div class='stat-card'>
+                <div class='stat-icon'>🌐</div>
                 <div class='stat-value' id='total-ipv6'>-</div>
-                <div class='stat-label'>📡 IPv6 موجود</div>
+                <div class='stat-label'>IPv6 موجود</div>
             </div>
         </div>
 
         <div class='tabs'>
-            <button class='tab active' data-tab='ipv4'><span>🌐 IPv4 DNS</span></button>
-            <button class='tab' data-tab='ipv6'><span>🌐 IPv6 DNS</span></button>
+            <button class='tab active' data-tab='ipv4'><span>🔷 IPv4 DNS</span></button>
+            <button class='tab' data-tab='ipv6'><span>🔶 IPv6 DNS</span></button>
             <button class='tab' data-tab='users'><span>👥 کاربران</span></button>
         </div>
 
         <div class='tab-content active' id='ipv4'>
             <div class='grid'>
                 <div class='card'>
-                    <h3><span>📋</span> مدیریت کشورهای IPv4</h3>
+                    <h3><span>📋</span>مدیریت کشورهای IPv4</h3>
                     <div class='scroll-container'>
-                        <div id='dns4-list' class='small'>در حال بارگذاری...</div>
+                        <div id='dns4-list'>در حال بارگذاری...</div>
                     </div>
                 </div>
                 <div class='card'>
-                    <h3><span>➕</span> افزودن کشور IPv4 جدید</h3>
+                    <h3><span>➕</span>افزودن کشور IPv4 جدید</h3>
                     <form id='dns4-form'>
                         <div class='controls'>
                             <div class='form-group'>
@@ -657,13 +773,13 @@
         <div class='tab-content' id='ipv6'>
             <div class='grid'>
                 <div class='card'>
-                    <h3><span>📋</span> مدیریت کشورهای IPv6</h3>
+                    <h3><span>📋</span>مدیریت کشورهای IPv6</h3>
                     <div class='scroll-container'>
-                        <div id='dns6-list' class='small'>در حال بارگذاری...</div>
+                        <div id='dns6-list'>در حال بارگذاری...</div>
                     </div>
                 </div>
                 <div class='card'>
-                    <h3><span>➕</span> افزودن کشور IPv6 جدید</h3>
+                    <h3><span>➕</span>افزودن کشور IPv6 جدید</h3>
                     <form id='dns6-form'>
                         <div class='controls'>
                             <div class='form-group'>
@@ -692,13 +808,13 @@
         <div class='tab-content' id='users'>
             <div class='grid'>
                 <div class='card'>
-                    <h3><span>👥</span> آمار و لیست کاربران</h3>
+                    <h3><span>👥</span>آمار و لیست کاربران</h3>
                     <div class='scroll-container'>
-                        <div id='users-stat' class='small'>در حال بارگذاری...</div>
+                        <div id='users-stat'>در حال بارگذاری...</div>
                     </div>
                 </div>
                 <div class='card'>
-                    <h3><span>📢</span> پیام همگانی</h3>
+                    <h3><span>📢</span>پیام همگانی</h3>
                     <div class='form-group'>
                         <label class='form-label'>متن پیام</label>
                         <textarea id='broadcast' rows='6'
@@ -717,18 +833,15 @@
             console.log('WireGuard Bot Admin Panel Loaded');
             const ADMIN = new URL(location).searchParams.get('admin') || '';
 
-            // Check admin access
             if (!ADMIN) {
                 document.body.innerHTML = '<div class="access-denied"><div class="access-card"><div class="access-icon">🔒</div><h2 class="access-title">دسترسی محدود</h2><p class="access-text">برای ورود به پنل مدیریت، پارامتر <code class="access-code">?admin=ADMIN_ID</code> را به URL اضافه کنید.</p><div class="access-example"><code>https://your-domain.com/?admin=YOUR_ID</code></div></div></div>';
                 return;
             }
 
-            // Tab switching
             document.querySelectorAll('.tab').forEach(function (tab) {
                 tab.addEventListener('click', function () {
                     var targetTab = this.getAttribute('data-tab');
 
-                    // Remove active class from all tabs and contents
                     document.querySelectorAll('.tab').forEach(function (t) {
                         t.classList.remove('active');
                     });
@@ -736,7 +849,6 @@
                         tc.classList.remove('active');
                     });
 
-                    // Add active class to clicked tab and corresponding content
                     this.classList.add('active');
                     var targetContent = document.getElementById(targetTab);
                     if (targetContent) {
@@ -871,7 +983,7 @@
                 var country = document.getElementById('country4').value.trim();
                 var dnsInput = document.getElementById('dns4').value.trim();
                 var addressesText = document.getElementById('addresses4').value;
-                var addresses = addressesText.split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
+                var addresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
 
                 if (!code || !country || addresses.length === 0) {
                     alert('⚠️ لطفا همه فیلدها را پر کنید');
@@ -904,7 +1016,7 @@
                 var code = document.getElementById('code6').value.trim().toUpperCase();
                 var country = document.getElementById('country6').value.trim();
                 var addressesText = document.getElementById('addresses6').value;
-                var addresses = addressesText.split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
+                var addresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
 
                 if (!code || !country || addresses.length === 0) {
                     alert('⚠️ لطفا همه فیلدها را پر کنید');
@@ -948,7 +1060,6 @@
                 document.getElementById('broadcast').value = '';
             });
 
-            // Initialize
             loadDNS4();
             loadDNS6();
             loadUsers();
