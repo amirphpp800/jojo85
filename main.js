@@ -1,14 +1,24 @@
-// ═════════════════════════════════════════════════════════════════════════════
-// 🔧 CONFIGURATION & CONSTANTS
-// ═════════════════════════════════════════════════════════════════════════════
+// ============================================================================
+// WIREGUARD BOT - Telegram Bot & Web Panel for DNS/WireGuard Management
+// ============================================================================
+// Features:
+//  • Telegram bot for distributing DNS/IPv6 addresses
+//  • WireGuard configuration file generation
+//  • Web-based admin panel for managing DNS/IPv6 databases
+//  • User quota management (3 requests/day per user)
+//  • Broadcasting system for admin
+//  • Country-based IP detection and organization
+// ============================================================================
 
+// 🔧 CONFIGURATION & CONSTANTS
+
+
+// ========== CONFIGURATION & CONSTANTS ==========
 const TELEGRAM_BASE = (token) => `https://api.telegram.org/bot${token}`;
 // Helper function to get admin ID from env or fallback to default
 const getAdminId = (env) => (env && env.ADMIN_ID) ? Number(env.ADMIN_ID) : 7240662021;
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 📤 Response Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj, null, 2), {
@@ -16,10 +26,10 @@ const json = (obj, status = 200) =>
     headers: { 'Content-Type': 'application/json; charset=utf-8' }
   });
 
-
-// ═════════════════════════════════════════════════════════════════════════════
 // 👥 USER QUOTA & HISTORY MANAGEMENT
-// ═════════════════════════════════════════════════════════════════════════════
+
+
+// ========== USER QUOTA & HISTORY ==========
 function todayKey() {
   const d = new Date();
   const y = d.getUTCFullYear();
@@ -80,14 +90,12 @@ const html = (s) =>
     headers: { 'Content-Type': 'text/html; charset=utf-8' }
   });
 
-
-// ═════════════════════════════════════════════════════════════════════════════
 // 📨 TELEGRAM API HELPERS
-// ═════════════════════════════════════════════════════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 📤 ارسال فایل به تلگرام (sendDocument)
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+// ========== TELEGRAM API HELPERS ==========
 async function telegramUpload(env, method, formData) {
   try {
     const res = await fetch(`${TELEGRAM_BASE(env.BOT_TOKEN)}/${method}`, {
@@ -101,15 +109,12 @@ async function telegramUpload(env, method, formData) {
   }
 }
 
-
-// ═════════════════════════════════════════════════════════════════════════════
 // 🛰️ WIREGUARD CONFIGURATION & HELPERS
-// ═════════════════════════════════════════════════════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 🔢 WireGuard Constants
-// ─────────────────────────────────────────────────────────────────────────────
 
+
+// ========== WIREGUARD CONFIGURATION ==========
 const WG_MTUS = [1280, 1320, 1360, 1380, 1400, 1420, 1440, 1480, 1500];
 const WG_FIXED_DNS = [
   '1.1.1.1', '1.0.0.1', '8.8.8.8', '8.8.4.4', '9.9.9.9', '10.202.10.10', '78.157.42.100', '208.67.222.222', '208.67.220.220', '185.55.226.26', '185.55.225.25', '185.51.200.2'
@@ -176,10 +181,7 @@ function getCountryNameEnglish(code) {
 }
 
 function b64(bytes) {
-  let bin = '';
-  bytes.forEach(b => bin += String.fromCharCode(b));
-  const base = btoa(bin);
-  return base;
+  return btoa(String.fromCharCode(...bytes));
 }
 
 async function generateWireGuardKeys() {
@@ -216,10 +218,10 @@ MTU = ${mtu}
 `;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // ⌨️ WireGuard Keyboard Builders
-// ─────────────────────────────────────────────────────────────────────────────
 
+
+// ========== KEYBOARD BUILDERS ==========
 function buildWireguardOperatorKb() {
   const rows = [];
   const ops = [
@@ -258,9 +260,7 @@ function buildWireguardDnsKb() {
   return { inline_keyboard: rows };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 💾 WireGuard State Management
-// ─────────────────────────────────────────────────────────────────────────────
 
 async function setWgState(kv, userId, state) {
   await kv.put(`wg_state:${userId}`, JSON.stringify(state), { expirationTtl: 900 });
@@ -295,14 +295,7 @@ function buildWireguardCountryKb(entries, page = 0, sortOrder = 'default') {
     // تبدیل نام کشور به فارسی
     const countryName = ensurePersianCountryName(e.country, e.code);
 
-    let stockEmoji = '🔴';
-    if (stock > 10) {
-      stockEmoji = '🟢';
-    } else if (stock > 5) {
-      stockEmoji = '🟡';
-    } else if (stock > 0) {
-      stockEmoji = '🟡';
-    }
+    const stockEmoji = stock > 10 ? '🟢' : stock > 0 ? '🟡' : '🔴';
 
     // سه دکمه در یک ردیف - دایره رنگی سمت چپ، تعداد وسط، کشور سمت راست
     rows.push([
@@ -363,15 +356,12 @@ function buildWireguardCountryKb(entries, page = 0, sortOrder = 'default') {
   return { inline_keyboard: rows };
 }
 
-
-// ═════════════════════════════════════════════════════════════════════════════
 // 🌍 COUNTRY & LOCALIZATION HELPERS
-// ═════════════════════════════════════════════════════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 🏳️ تبدیل کد کشور به پرچم
-// ─────────────────────────────────────────────────────────────────────────────
 
+
+// ========== LOCALIZATION HELPERS ==========
 function countryCodeToFlag(code) {
   if (!code || code.length !== 2) return '🌐';
   const A = 0x1F1E6;
@@ -380,19 +370,12 @@ function countryCodeToFlag(code) {
     .join('');
 }
 
-
-// ═════════════════════════════════════════════════════════════════════════════
 // 🎲 UTILITY FUNCTIONS
-// ═════════════════════════════════════════════════════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 🎯 انتخاب رندوم از آرایه
-// ─────────────────────────────────────────────────────────────────────────────
 
-function getRandomItem(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
 
+// ========== VALIDATION UTILITIES ==========
 function isValidIPv4(ip) {
   return /^(25[0-5]|2[0-4][0-9]|[01]?\d?\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\d?\d)){3}$/.test(ip);
 }
@@ -410,15 +393,12 @@ function isPublicIPv4(ip) {
   return true;
 }
 
-
-// ═════════════════════════════════════════════════════════════════════════════
 // 💾 KV DATABASE OPERATIONS
-// ═════════════════════════════════════════════════════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 📡 DNS IPv4 Database Functions
-// ─────────────────────────────────────────────────────────────────────────────
 
+
+// ========== DATABASE OPERATIONS ==========
 async function listDnsEntries(kv) {
   const res = await kv.list({ prefix: 'dns:' });
   // بارگذاری موازی برای سرعت بیشتر
@@ -471,10 +451,7 @@ async function removeAddressFromEntry(kv, code, address) {
   return false;
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 🌐 IPv6 Database Functions
-// ─────────────────────────────────────────────────────────────────────────────
 
 async function listIpv6Entries(kv) {
   const list = await kv.list({ prefix: 'ipv6:' });
@@ -538,11 +515,10 @@ function isValidIPv6(ip) {
   return ipv6Pattern.test(ip);
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 👤 User Management
-// ─────────────────────────────────────────────────────────────────────────────
 
+
+// ========== USER MANAGEMENT ==========
 async function saveUser(kv, from) {
   if (!from || !from.id) return;
   const data = {
@@ -562,10 +538,7 @@ function getRandomDns(entry) {
   return entry.addresses[Math.floor(Math.random() * entry.addresses.length)];
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 🔍 IP Geolocation & Country Detection
-// ─────────────────────────────────────────────────────────────────────────────
 
 // تشخیص کشور از IP با استفاده از API و cache در KV
 async function detectCountryFromIP(ip, kv) {
@@ -651,6 +624,8 @@ async function detectCountryFromIP(ip, kv) {
 }
 
 // تبدیل نام کشور به فارسی (اگر انگلیسی باشد از کد آن استفاده می‌کند)
+
+// ========== COUNTRY NAME MAPPING ==========
 function ensurePersianCountryName(countryName, countryCode) {
   // اگر نام فارسی است (شامل حروف فارسی)، همان را برگردان
   if (/[\u0600-\u06FF]/.test(countryName)) {
@@ -742,14 +717,9 @@ function getCountryNameFromCode(code) {
   return map[code.toUpperCase()] || code.toUpperCase();
 }
 
-
-// ═════════════════════════════════════════════════════════════════════════════
 // 🎨 WEB UI RENDERING & MANAGEMENT
-// ═════════════════════════════════════════════════════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 📊 User Statistics
-// ─────────────────────────────────────────────────────────────────────────────
 
 async function countUsers(kv) {
   try {
@@ -808,11 +778,10 @@ async function getUserStats(kv) {
   }
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 🖥️ Main Page Renderer (IPv4 DNS Management)
-// ─────────────────────────────────────────────────────────────────────────────
 
+
+// ========== WEB PANEL RENDERING ==========
 function renderMainPage(entries, userCount) {
   const rows = entries.map(e => {
     const flag = countryCodeToFlag(e.code);
@@ -821,15 +790,15 @@ function renderMainPage(entries, userCount) {
 
     const addressesHTML = count > 0
       ? e.addresses.map(addr =>
-          '<div class="address-item">' +
-            '<code>' + escapeHtml(addr) + '</code>' +
-            '<button class="btn-delete-addr" data-code="' + escapeHtml(e.code) + '" data-address="' + escapeHtml(addr) + '" title="حذف این آدرس">' +
-              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
-                '<path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>' +
-              '</svg>' +
-            '</button>' +
-          '</div>'
-        ).join('')
+        '<div class="address-item">' +
+        '<code>' + escapeHtml(addr) + '</code>' +
+        '<button class="btn-delete-addr" data-code="' + escapeHtml(e.code) + '" data-address="' + escapeHtml(addr) + '" title="حذف این آدرس">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+        '<path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>' +
+        '</svg>' +
+        '</button>' +
+        '</div>'
+      ).join('')
       : '<span class="empty">هیچ آدرسی ثبت نشده</span>';
 
     return `
@@ -1076,10 +1045,7 @@ function renderMainPage(entries, userCount) {
   `;
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 🎨 CSS Styles for Web UI
-// ─────────────────────────────────────────────────────────────────────────────
 
 function getWebCss() {
   return `
@@ -1091,32 +1057,32 @@ function getWebCss() {
       --bg-secondary: #f9fafb;
       --bg-tertiary: #f3f4f6;
       --bg-elevated: #ffffff;
-      
+
       --text-primary: #1f2937;
       --text-secondary: #6b7280;
       --text-tertiary: #9ca3af;
-      
+
       --border-color: #e5e7eb;
       --border-color-hover: #d1d5db;
-      
+
       --accent-primary: #667eea;
       --accent-secondary: #764ba2;
       --accent-gradient: linear-gradient(135deg, #667eea, #764ba2);
-      
+
       --success-color: #10b981;
       --error-color: #ef4444;
       --warning-color: #f59e0b;
       --info-color: #3b82f6;
-      
+
       --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.05);
       --shadow-md: 0 10px 40px rgba(0, 0, 0, 0.1);
       --shadow-lg: 0 15px 50px rgba(0, 0, 0, 0.15);
-      
+
       --radius-sm: 8px;
       --radius-md: 12px;
       --radius-lg: 16px;
       --radius-xl: 24px;
-      
+
       --transition-fast: 150ms ease;
       --transition-base: 250ms ease;
       --transition-slow: 400ms ease;
@@ -1130,27 +1096,27 @@ function getWebCss() {
       --bg-secondary: #334155;
       --bg-tertiary: #475569;
       --bg-elevated: #273449;
-      
+
       --text-primary: #f1f5f9;
       --text-secondary: #cbd5e1;
       --text-tertiary: #94a3b8;
-      
+
       --border-color: #334155;
       --border-color-hover: #475569;
-      
+
       --accent-primary: #818cf8;
       --accent-secondary: #a78bfa;
       --accent-gradient: linear-gradient(135deg, #818cf8, #a78bfa);
-      
+
       --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
       --shadow-md: 0 10px 40px rgba(0, 0, 0, 0.4);
       --shadow-lg: 0 15px 50px rgba(0, 0, 0, 0.5);
     }
 
-    * { 
-      margin: 0; 
-      padding: 0; 
-      box-sizing: border-box; 
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
 
     body {
@@ -1941,10 +1907,7 @@ function getWebCss() {
   `;
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 📜 JavaScript for Web UI
-// ─────────────────────────────────────────────────────────────────────────────
 
 function getWebJs() {
   return `
@@ -1952,7 +1915,6 @@ function getWebJs() {
 console.log('WireGuard Bot Admin Panel Loaded');
   `;
 }
-
 
 const Toast = {
   container: null,
@@ -1989,8 +1951,8 @@ const Toast = {
 
     toast.innerHTML = '<div class="toast-icon">' + (icons[type] || icons.info) + '</div>' +
       '<div class="toast-content">' +
-        '<div class="toast-title">' + (titles[type] || titles.info) + '</div>' +
-        '<div class="toast-message">' + message + '</div>' +
+      '<div class="toast-title">' + (titles[type] || titles.info) + '</div>' +
+      '<div class="toast-message">' + message + '</div>' +
       '</div>' +
       '<button class="toast-close">×</button>';
 
@@ -2034,87 +1996,117 @@ const Toast = {
 
 // Only run client-side code in browser environment
 if (typeof document !== 'undefined') {
-document.addEventListener('DOMContentLoaded', () => {
-  const cards = document.querySelectorAll('.dns-card');
-  cards.forEach((card, i) => { card.style.animationDelay = (i * 0.05) + 's'; });
+  document.addEventListener('DOMContentLoaded', () => {
+    const cards = document.querySelectorAll('.dns-card');
+    cards.forEach((card, i) => { card.style.animationDelay = (i * 0.05) + 's'; });
 
-  const toggleBtn = document.getElementById('theme-toggle');
-  const savedTheme = localStorage.getItem('theme');
-  if (savedTheme === 'dark') { document.body.classList.add('dark'); toggleBtn.textContent = '☀️'; }
-  toggleBtn.addEventListener('click', () => {
-    document.body.classList.toggle('dark');
-    const dark = document.body.classList.contains('dark');
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
-    toggleBtn.textContent = dark ? '☀️' : '🌙';
-  });
-
-  const search = document.getElementById('search');
-  const grid = document.getElementById('dns-grid');
-  if (search && grid) {
-    search.addEventListener('input', () => {
-      const q = search.value.trim().toLowerCase();
-      grid.querySelectorAll('.dns-card').forEach(card => {
-        const name = card.querySelector('.country-details h3')?.textContent?.toLowerCase() || '';
-        const code = card.querySelector('.country-code')?.textContent?.toLowerCase() || '';
-        const addrs = Array.from(card.querySelectorAll('.addresses-list code')).map(c => c.textContent.toLowerCase()).join(' ');
-        const ok = !q || name.includes(q) || code.includes(q) || addrs.includes(q);
-        card.style.display = ok ? '' : 'none';
-      });
+    const toggleBtn = document.getElementById('theme-toggle');
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') { document.body.classList.add('dark'); toggleBtn.textContent = '☀️'; }
+    toggleBtn.addEventListener('click', () => {
+      document.body.classList.toggle('dark');
+      const dark = document.body.classList.contains('dark');
+      localStorage.setItem('theme', dark ? 'dark' : 'light');
+      toggleBtn.textContent = dark ? '☀️' : '🌙';
     });
-  }
 
-  // Event delegation for edit buttons
-  document.addEventListener('click', (e) => {
-    if (e.target.closest('.btn-edit')) {
-      const btn = e.target.closest('.btn-edit');
-      const code = btn.dataset.code;
-      const country = btn.dataset.country;
-      if (code && country) {
-        editCountry(code, country);
+    const search = document.getElementById('search');
+    const grid = document.getElementById('dns-grid');
+    if (search && grid) {
+      search.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase();
+        grid.querySelectorAll('.dns-card').forEach(card => {
+          const name = card.querySelector('.country-details h3')?.textContent?.toLowerCase() || '';
+          const code = card.querySelector('.country-code')?.textContent?.toLowerCase() || '';
+          const addrs = Array.from(card.querySelectorAll('.addresses-list code')).map(c => c.textContent.toLowerCase()).join(' ');
+          const ok = !q || name.includes(q) || code.includes(q) || addrs.includes(q);
+          card.style.display = ok ? '' : 'none';
+        });
+      });
+    }
+
+    // Event delegation for edit buttons
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-edit')) {
+        const btn = e.target.closest('.btn-edit');
+        const code = btn.dataset.code;
+        const country = btn.dataset.country;
+        if (code && country) {
+          editCountry(code, country);
+        }
       }
-    }
 
-    // Event delegation for delete address buttons
-    if (e.target.closest('.btn-delete-addr')) {
-      const btn = e.target.closest('.btn-delete-addr');
-      const code = btn.dataset.code;
-      const address = btn.dataset.address;
-      if (code && address) {
-        deleteAddress(code, address);
+      // Event delegation for delete address buttons
+      if (e.target.closest('.btn-delete-addr')) {
+        const btn = e.target.closest('.btn-delete-addr');
+        const code = btn.dataset.code;
+        const address = btn.dataset.address;
+        if (code && address) {
+          deleteAddress(code, address);
+        }
       }
-    }
-  });
+    });
 
-  // Event delegation for delete form submit
-  document.addEventListener('submit', (e) => {
-    if (e.target.querySelector('.btn-delete')) {
-      if (!confirm('آیا مطمئن هستید؟')) {
-        e.preventDefault();
+    // Event delegation for delete form submit
+    document.addEventListener('submit', (e) => {
+      if (e.target.querySelector('.btn-delete')) {
+        if (!confirm('آیا مطمئن هستید؟')) {
+          e.preventDefault();
+        }
       }
+    });
+
+    // Event delegation for country checkboxes
+    document.addEventListener('change', (e) => {
+      if (e.target.classList.contains('country-checkbox')) {
+        updateBulkDeleteButton();
+      }
+    });
+
+    // Button click handlers
+    const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+    if (bulkDeleteBtn) {
+      bulkDeleteBtn.addEventListener('click', bulkDeleteCountries);
     }
-  });
 
-  // Event delegation for country checkboxes
-  document.addEventListener('change', (e) => {
-    if (e.target.classList.contains('country-checkbox')) {
-      updateBulkDeleteButton();
+    const selectAllBtn = document.getElementById('select-all-btn');
+    if (selectAllBtn) {
+      selectAllBtn.addEventListener('click', toggleSelectAll);
     }
-  });
 
-  // Button click handlers
-  const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
-  if (bulkDeleteBtn) {
-    bulkDeleteBtn.addEventListener('click', bulkDeleteCountries);
-  }
+    const pasteBtn = document.getElementById('paste-clipboard-btn');
+    if (pasteBtn) {
+      pasteBtn.addEventListener('click', async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          const textarea = document.getElementById('addresses-input');
+          if (textarea) {
+            textarea.value = text;
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            Toast.success('✅ متن از کلیپ‌بورد چسباند شد');
+          }
+        } catch (e) {
+          Toast.error('❌ خطا در خواندن کلیپ‌بورد');
+        }
+      });
+    }
 
-  const selectAllBtn = document.getElementById('select-all-btn');
-  if (selectAllBtn) {
-    selectAllBtn.addEventListener('click', toggleSelectAll);
-  }
+    const clearBtn = document.getElementById('clear-addresses-btn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        const textarea = document.getElementById('addresses-input');
+        if (textarea && textarea.value.trim()) {
+          var msg = 'آیا مطمئن هستید؟';
+          if (confirm(msg)) {
+            textarea.value = '';
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+      });
+    }
 
-  const pasteBtn = document.getElementById('paste-clipboard-btn');
-  if (pasteBtn) {
-    pasteBtn.addEventListener('click', async () => {
+    // Helper functions for bulk add form
+    window.pasteFromClipboard = async () => {
       try {
         const text = await navigator.clipboard.readText();
         const textarea = document.getElementById('addresses-input');
@@ -2126,335 +2118,305 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) {
         Toast.error('❌ خطا در خواندن کلیپ‌بورد');
       }
-    });
-  }
+    };
 
-  const clearBtn = document.getElementById('clear-addresses-btn');
-  if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
+    window.clearAddresses = () => {
       const textarea = document.getElementById('addresses-input');
       if (textarea && textarea.value.trim()) {
-        var msg = 'آیا مطمئن هستید؟';
-        if (confirm(msg)) {
+        if (confirm('آیا مطمئن هستید؟')) {
           textarea.value = '';
           textarea.dispatchEvent(new Event('input', { bubbles: true }));
         }
       }
-    });
-  }
-
-  // Helper functions for bulk add form
-  window.pasteFromClipboard = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      const textarea = document.getElementById('addresses-input');
-      if (textarea) {
-        textarea.value = text;
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        Toast.success('✅ متن از کلیپ‌بورد چسباند شد');
-      }
-    } catch (e) {
-      Toast.error('❌ خطا در خواندن کلیپ‌بورد');
-    }
-  };
-
-  window.clearAddresses = () => {
-    const textarea = document.getElementById('addresses-input');
-    if (textarea && textarea.value.trim()) {
-      if (confirm('آیا مطمئن هستید؟')) {
-        textarea.value = '';
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    }
-  };
-
-  // Live validation and counter for textarea
-  const textarea = document.getElementById('addresses-input');
-  if (textarea) {
-    const updateValidation = () => {
-      const text = textarea.value;
-      const lines = text.split('\n').filter(l => l.trim());
-      const charCount = text.length;
-
-      document.querySelector('.char-count').textContent = charCount + ' کاراکتر';
-      document.querySelector('.line-count').textContent = lines.length + ' خط';
-
-      // Live validation if checkbox is checked
-      if (document.getElementById('auto-validate')?.checked) {
-        const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?\d?\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\d?\d)){3}$/;
-        const allIps = text.split(/[^0-9.]+/).filter(a => a.trim());
-        const validIps = new Set();
-        const invalidIps = new Set();
-        const duplicates = new Set();
-
-        allIps.forEach(ip => {
-          if (ipRegex.test(ip)) {
-            if (validIps.has(ip)) {
-              duplicates.add(ip);
-            } else {
-              validIps.add(ip);
-            }
-          } else if (ip) {
-            invalidIps.add(ip);
-          }
-        });
-
-        const validCount = validIps.size;
-        const invalidCount = invalidIps.size;
-        const duplicateCount = duplicates.size;
-
-        if (validCount > 0 || invalidCount > 0 || duplicateCount > 0) {
-          document.getElementById('validation-info').style.display = 'grid';
-          document.querySelector('.valid-count').textContent = validCount;
-          document.querySelector('.invalid-count').textContent = invalidCount;
-          document.querySelector('.duplicate-count').textContent = duplicateCount;
-          document.getElementById('address-count').style.display = 'inline-block';
-          document.getElementById('address-count').textContent = validCount + ' آدرس معتبر';
-        } else {
-          document.getElementById('validation-info').style.display = 'none';
-          document.getElementById('address-count').style.display = 'none';
-        }
-      }
     };
 
-    textarea.addEventListener('input', updateValidation);
-    document.getElementById('auto-validate')?.addEventListener('change', updateValidation);
-  }
+    // Live validation and counter for textarea
+    const textarea = document.getElementById('addresses-input');
+    if (textarea) {
+      const updateValidation = () => {
+        const text = textarea.value;
+        const lines = text.split('\n').filter(l => l.trim());
+        const charCount = text.length;
 
-  // Bulk add form with live progress
-  const bulkForm = document.querySelector('form[action="/api/admin/bulk-add"]');
-  if (bulkForm) {
-    let cancelRequested = false;
+        document.querySelector('.char-count').textContent = charCount + ' کاراکتر';
+        document.querySelector('.line-count').textContent = lines.length + ' خط';
 
-    bulkForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
+        // Live validation if checkbox is checked
+        if (document.getElementById('auto-validate')?.checked) {
+          const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?\d?\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\d?\d)){3}$/;
+          const allIps = text.split(/[^0-9.]+/).filter(a => a.trim());
+          const validIps = new Set();
+          const invalidIps = new Set();
+          const duplicates = new Set();
 
-      const progress = document.getElementById('bulk-progress');
-      const progressFill = progress.querySelector('.progress-fill');
-      const progressText = progress.querySelector('.progress-text');
-      const currentIpText = progress.querySelector('.current-ip');
-      const errorList = progress.querySelector('.error-list');
-      const errorItems = progress.querySelector('.error-items');
-      const btn = document.getElementById('bulk-submit');
-      const textarea = bulkForm.querySelector('textarea[name="addresses"]');
-
-      if (!textarea.value.trim()) {
-        Toast.warning('لطفاً آدرس‌ها را وارد کنید');
-        return;
-      }
-
-      const rawParts = textarea.value.split(/[^0-9.]+/);
-      const addresses = Array.from(new Set(
-        rawParts
-          .map(a => a.trim())
-          .filter(a => a && /^(25[0-5]|2[0-4][0-9]|[01]?\d?\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\d?\d)){3}$/.test(a))
-      ));
-
-      if (addresses.length === 0) {
-        Toast.error('هیچ آدرس IP معتبری یافت نشد');
-        return;
-      }
-
-      // نمایش تعداد آدرس‌های یافت شده
-      Toast.info('🔍 ' + addresses.length + ' آدرس IP معتبر یافت شد');
-
-      // ریست کردن UI
-      progress.style.display = 'block';
-      progressFill.style.width = '0%';
-      currentIpText.style.display = 'none';
-      errorList.style.display = 'none';
-      errorItems.innerHTML = '';
-
-      btn.disabled = true;
-      btn.textContent = '⏸️ لغو';
-      btn.onclick = () => {
-        cancelRequested = true;
-        btn.textContent = '⏳ در حال لغو...';
-        btn.disabled = true;
-      };
-
-      let processed = 0;
-      let success = 0;
-      let failed = 0;
-      const byCountry = {};
-      const errors = [];
-
-      // تنظیم دینامیک batch size بر اساس تعداد آدرس‌ها (افزایش برای سرعت بیشتر)
-      const BATCH_SIZE = addresses.length > 100 ? 15 : addresses.length > 50 ? 10 : 7;
-
-      // تابع بروزرسانی UI با requestAnimationFrame برای عملکرد بهتر
-      const updateUI = (currentIp = null) => {
-        requestAnimationFrame(() => {
-          const percent = Math.round((processed / addresses.length) * 100);
-          progressFill.style.width = percent + '%';
-          progress.querySelector('.progress-percent').textContent = percent + '%';
-
-          if (currentIp) {
-            currentIpText.textContent = '🔄 در حال پردازش: ' + currentIp;
-            currentIpText.style.display = 'block';
-          }
-
-          progressText.textContent = '📊 ' + processed + '/' + addresses.length + ' | ✅ ' + success + ' موفق | ❌ ' + failed + ' ناموفق';
-        });
-      };
-
-      // دریافت کشور دستی (اگر انتخاب شده باشد)
-      const manualCountry = document.getElementById('manual-country-select')?.value || '';
-      
-      // شروع پردازش
-      const startTime = Date.now();
-
-      for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
-        if (cancelRequested) {
-          Toast.warning('⏸️ عملیات لغو شد. ' + processed + ' از ' + addresses.length + ' آدرس پردازش شد.');
-          break;
-        }
-
-        const batch = addresses.slice(i, i + BATCH_SIZE);
-
-        // پردازش موازی batch
-        const promises = batch.map(async ip => {
-          updateUI(ip);
-
-          let attempt = 0;
-          while (attempt < 3) {
-            attempt++;
-            try {
-              const controller = new AbortController();
-              const t = setTimeout(() => controller.abort(), 10000);
-              const requestBody = { ip };
-              if (manualCountry) {
-                requestBody.manual_country = manualCountry;
+          allIps.forEach(ip => {
+            if (ipRegex.test(ip)) {
+              if (validIps.has(ip)) {
+                duplicates.add(ip);
+              } else {
+                validIps.add(ip);
               }
-              const res = await fetch('/api/admin/bulk-add-single', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody),
-                signal: controller.signal
-              });
-              clearTimeout(t);
-              const result = await res.json();
-              if (result && result.success !== undefined) {
-                return { ip, result };
-              }
-              return { ip, result: { success: false, error: 'پاسخ نامعتبر از سرور' } };
-            } catch (e) {
-              if (attempt >= 3) {
-                return { ip, result: { success: false, error: e.name === 'AbortError' ? 'timeout' : e.message } };
-              }
-              await new Promise(r => setTimeout(r, 500 * attempt));
+            } else if (ip) {
+              invalidIps.add(ip);
             }
-          }
-          return { ip, result: { success: false, error: 'خطای نامشخص' } };
-        });
+          });
 
-        // پردازش نتایج
-        const results = await Promise.all(promises);
-        let duplicates = 0;
-        results.forEach(({ ip, result }) => {
-          if (result.success) {
-            if (result.action === 'duplicate') {
-              duplicates++;
-            } else {
-              success++;
-            }
-            if (result.country) {
-              byCountry[result.country] = (byCountry[result.country] || 0) + 1;
-            }
+          const validCount = validIps.size;
+          const invalidCount = invalidIps.size;
+          const duplicateCount = duplicates.size;
+
+          if (validCount > 0 || invalidCount > 0 || duplicateCount > 0) {
+            document.getElementById('validation-info').style.display = 'grid';
+            document.querySelector('.valid-count').textContent = validCount;
+            document.querySelector('.invalid-count').textContent = invalidCount;
+            document.querySelector('.duplicate-count').textContent = duplicateCount;
+            document.getElementById('address-count').style.display = 'inline-block';
+            document.getElementById('address-count').textContent = validCount + ' آدرس معتبر';
           } else {
-            failed++;
-            errors.push({ ip, error: result.error || 'خطای نامشخص' });
+            document.getElementById('validation-info').style.display = 'none';
+            document.getElementById('address-count').style.display = 'none';
           }
-          processed++;
-        });
+        }
+      };
 
-        // بروزرسانی UI بعد از هر batch
-        updateUI();
+      textarea.addEventListener('input', updateValidation);
+      document.getElementById('auto-validate')?.addEventListener('change', updateValidation);
+    }
 
-        // نمایش سرعت پردازش
-        const elapsed = (Date.now() - startTime) / 1000;
-        const speed = (processed / elapsed).toFixed(1);
-        const remaining = addresses.length - processed;
-        const eta = remaining > 0 ? Math.ceil(remaining / speed) : 0;
+    // Bulk add form with live progress
+    const bulkForm = document.querySelector('form[action="/api/admin/bulk-add"]');
+    if (bulkForm) {
+      let cancelRequested = false;
 
-        if (eta > 0 && !cancelRequested) {
-          const speedInfo = progress.querySelector('.speed-info');
-          speedInfo.textContent = '⚡ سرعت: ' + speed + ' IP/s | ⏱️ زمان تخمینی: ' + eta + 's';
-          speedInfo.style.display = 'block';
+      bulkForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const progress = document.getElementById('bulk-progress');
+        const progressFill = progress.querySelector('.progress-fill');
+        const progressText = progress.querySelector('.progress-text');
+        const currentIpText = progress.querySelector('.current-ip');
+        const errorList = progress.querySelector('.error-list');
+        const errorItems = progress.querySelector('.error-items');
+        const btn = document.getElementById('bulk-submit');
+        const textarea = bulkForm.querySelector('textarea[name="addresses"]');
+
+        if (!textarea.value.trim()) {
+          Toast.warning('لطفاً آدرس‌ها را وارد کنید');
+          return;
         }
 
-        // تاخیر کوچک بین batch‌ها برای جلوگیری از rate limit (100ms)
-        if (i + BATCH_SIZE < addresses.length && !cancelRequested) {
-          await new Promise(r => setTimeout(r, 100));
+        const rawParts = textarea.value.split(/[^0-9.]+/);
+        const addresses = Array.from(new Set(
+          rawParts
+            .map(a => a.trim())
+            .filter(a => a && /^(25[0-5]|2[0-4][0-9]|[01]?\d?\d)(\.(25[0-5]|2[0-4][0-9]|[01]?\d?\d)){3}$/.test(a))
+        ));
+
+        if (addresses.length === 0) {
+          Toast.error('هیچ آدرس IP معتبری یافت نشد');
+          return;
         }
-      }
 
-      // پایان پردازش
-      currentIpText.style.display = 'none';
+        // نمایش تعداد آدرس‌های یافت شده
+        Toast.info('🔍 ' + addresses.length + ' آدرس IP معتبر یافت شد');
 
-      if (!cancelRequested) {
-        const summary = Object.entries(byCountry)
-          .sort((a, b) => b[1] - a[1])
-          .map(([code, count]) => code + ': ' + count)
-          .join(', ');
+        // ریست کردن UI
+        progress.style.display = 'block';
+        progressFill.style.width = '0%';
+        currentIpText.style.display = 'none';
+        errorList.style.display = 'none';
+        errorItems.innerHTML = '';
 
-        const duplicateText = duplicates > 0 ? ' | 🔄 ' + duplicates + ' تکراری' : '';
-        progressText.textContent = '✅ تکمیل شد! ' + processed + ' آدرس | ✅ ' + success + ' جدید' + duplicateText + ' | ❌ ' + failed + ' ناموفق';
-        progress.querySelector('.speed-info').style.display = 'none';
-        btn.textContent = '✅ تکمیل شد';
-        btn.onclick = null;
+        btn.disabled = true;
+        btn.textContent = '⏸️ لغو';
+        btn.onclick = () => {
+          cancelRequested = true;
+          btn.textContent = '⏳ در حال لغو...';
+          btn.disabled = true;
+        };
 
-        // نمایش خلاصه موفقیت
-        const successSummary = progress.querySelector('.success-summary');
-        let summaryHtml = '<strong>✅ نتایج پردازش:</strong><br>';
-        summaryHtml += '🎯 ' + success + ' آدرس جدید اضافه شد<br>';
-        if (duplicates > 0) summaryHtml += '🔄 ' + duplicates + ' آدرس تکراری<br>';
-        if (failed > 0) summaryHtml += '❌ ' + failed + ' آدرس ناموفق<br>';
-        if (summary) summaryHtml += '<br><strong>📊 توزیع کشورها:</strong><br>' + summary;
-        successSummary.innerHTML = summaryHtml;
-        successSummary.style.display = 'block';
+        let processed = 0;
+        let success = 0;
+        let failed = 0;
+        const byCountry = {};
+        const errors = [];
 
-        if (summary) {
-          const duplicateMsg = duplicates > 0 ? '\\n🔄 ' + duplicates + ' آدرس تکراری نادیده گرفته شد' : '';
-          Toast.success('🎉 افزودن گروهی تکمیل شد!\\n' + summary + duplicateMsg, 10000);
+        // تنظیم دینامیک batch size بر اساس تعداد آدرس‌ها (افزایش برای سرعت بیشتر)
+        const BATCH_SIZE = addresses.length > 100 ? 15 : addresses.length > 50 ? 10 : 7;
+
+        // تابع بروزرسانی UI با requestAnimationFrame برای عملکرد بهتر
+        const updateUI = (currentIp = null) => {
+          requestAnimationFrame(() => {
+            const percent = Math.round((processed / addresses.length) * 100);
+            progressFill.style.width = percent + '%';
+            progress.querySelector('.progress-percent').textContent = percent + '%';
+
+            if (currentIp) {
+              currentIpText.textContent = '🔄 در حال پردازش: ' + currentIp;
+              currentIpText.style.display = 'block';
+            }
+
+            progressText.textContent = '📊 ' + processed + '/' + addresses.length + ' | ✅ ' + success + ' موفق | ❌ ' + failed + ' ناموفق';
+          });
+        };
+
+        // دریافت کشور دستی (اگر انتخاب شده باشد)
+        const manualCountry = document.getElementById('manual-country-select')?.value || '';
+
+        // شروع پردازش
+        const startTime = Date.now();
+
+        for (let i = 0; i < addresses.length; i += BATCH_SIZE) {
+          if (cancelRequested) {
+            Toast.warning('⏸️ عملیات لغو شد. ' + processed + ' از ' + addresses.length + ' آدرس پردازش شد.');
+            break;
+          }
+
+          const batch = addresses.slice(i, i + BATCH_SIZE);
+
+          // پردازش موازی batch
+          const promises = batch.map(async ip => {
+            updateUI(ip);
+
+            let attempt = 0;
+            while (attempt < 3) {
+              attempt++;
+              try {
+                const controller = new AbortController();
+                const t = setTimeout(() => controller.abort(), 10000);
+                const requestBody = { ip };
+                if (manualCountry) {
+                  requestBody.manual_country = manualCountry;
+                }
+                const res = await fetch('/api/admin/bulk-add-single', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(requestBody),
+                  signal: controller.signal
+                });
+                clearTimeout(t);
+                const result = await res.json();
+                if (result && result.success !== undefined) {
+                  return { ip, result };
+                }
+                return { ip, result: { success: false, error: 'پاسخ نامعتبر از سرور' } };
+              } catch (e) {
+                if (attempt >= 3) {
+                  return { ip, result: { success: false, error: e.name === 'AbortError' ? 'timeout' : e.message } };
+                }
+                await new Promise(r => setTimeout(r, 500 * attempt));
+              }
+            }
+            return { ip, result: { success: false, error: 'خطای نامشخص' } };
+          });
+
+          // پردازش نتایج
+          const results = await Promise.all(promises);
+          let duplicates = 0;
+          results.forEach(({ ip, result }) => {
+            if (result.success) {
+              if (result.action === 'duplicate') {
+                duplicates++;
+              } else {
+                success++;
+              }
+              if (result.country) {
+                byCountry[result.country] = (byCountry[result.country] || 0) + 1;
+              }
+            } else {
+              failed++;
+              errors.push({ ip, error: result.error || 'خطای نامشخص' });
+            }
+            processed++;
+          });
+
+          // بروزرسانی UI بعد از هر batch
+          updateUI();
+
+          // نمایش سرعت پردازش
+          const elapsed = (Date.now() - startTime) / 1000;
+          const speed = (processed / elapsed).toFixed(1);
+          const remaining = addresses.length - processed;
+          const eta = remaining > 0 ? Math.ceil(remaining / speed) : 0;
+
+          if (eta > 0 && !cancelRequested) {
+            const speedInfo = progress.querySelector('.speed-info');
+            speedInfo.textContent = '⚡ سرعت: ' + speed + ' IP/s | ⏱️ زمان تخمینی: ' + eta + 's';
+            speedInfo.style.display = 'block';
+          }
+
+          // تاخیر کوچک بین batch‌ها برای جلوگیری از rate limit (100ms)
+          if (i + BATCH_SIZE < addresses.length && !cancelRequested) {
+            await new Promise(r => setTimeout(r, 100));
+          }
+        }
+
+        // پایان پردازش
+        currentIpText.style.display = 'none';
+
+        if (!cancelRequested) {
+          const summary = Object.entries(byCountry)
+            .sort((a, b) => b[1] - a[1])
+            .map(([code, count]) => code + ': ' + count)
+            .join(', ');
+
+          const duplicateText = duplicates > 0 ? ' | 🔄 ' + duplicates + ' تکراری' : '';
+          progressText.textContent = '✅ تکمیل شد! ' + processed + ' آدرس | ✅ ' + success + ' جدید' + duplicateText + ' | ❌ ' + failed + ' ناموفق';
+          progress.querySelector('.speed-info').style.display = 'none';
+          btn.textContent = '✅ تکمیل شد';
+          btn.onclick = null;
+
+          // نمایش خلاصه موفقیت
+          const successSummary = progress.querySelector('.success-summary');
+          let summaryHtml = '<strong>✅ نتایج پردازش:</strong><br>';
+          summaryHtml += '🎯 ' + success + ' آدرس جدید اضافه شد<br>';
+          if (duplicates > 0) summaryHtml += '🔄 ' + duplicates + ' آدرس تکراری<br>';
+          if (failed > 0) summaryHtml += '❌ ' + failed + ' آدرس ناموفق<br>';
+          if (summary) summaryHtml += '<br><strong>📊 توزیع کشورها:</strong><br>' + summary;
+          successSummary.innerHTML = summaryHtml;
+          successSummary.style.display = 'block';
+
+          if (summary) {
+            const duplicateMsg = duplicates > 0 ? '\\n🔄 ' + duplicates + ' آدرس تکراری نادیده گرفته شد' : '';
+            Toast.success('🎉 افزودن گروهی تکمیل شد!\\n' + summary + duplicateMsg, 10000);
+          } else {
+            const duplicateMsg = duplicates > 0 ? ', ' + duplicates + ' تکراری' : '';
+            Toast.success('✅ تکمیل شد! ' + success + ' جدید' + duplicateMsg + ', ' + failed + ' ناموفق', 5000);
+          }
+
+          // نمایش خطاها در UI
+          if (errors.length > 0) {
+            errorList.style.display = 'block';
+            errorItems.innerHTML = errors.map(e =>
+              '<div class="error-item"><code>' + e.ip + '</code>: ' + e.error + '</div>'
+            ).join('');
+          }
+
+          // نمایش خلاصه با جزئیات بیشتر
+          let message = '✅ ' + success + ' آدرس جدید اضافه شد';
+          if (duplicates > 0) {
+            message += '\n🔄 ' + duplicates + ' آدرس تکراری';
+          }
+          if (failed > 0) {
+            message += '\n❌ ' + failed + ' آدرس ناموفق';
+          }
+          if (summary) {
+            message += '\n\n📊 توزیع کشورها:\n' + summary;
+          }
+
+          Toast.success(message, 8000);
+          setTimeout(() => window.location.href = '/', 3000);
         } else {
-          const duplicateMsg = duplicates > 0 ? ', ' + duplicates + ' تکراری' : '';
-          Toast.success('✅ تکمیل شد! ' + success + ' جدید' + duplicateMsg + ', ' + failed + ' ناموفق', 5000);
+          btn.textContent = '❌ لغو شد';
+          btn.disabled = false;
+          btn.onclick = null;
+          progressText.textContent = '⏸️ لغو شد | ' + processed + '/' + addresses.length + ' پردازش شد';
         }
 
-        // نمایش خطاها در UI
-        if (errors.length > 0) {
-          errorList.style.display = 'block';
-          errorItems.innerHTML = errors.map(e =>
-            '<div class="error-item"><code>' + e.ip + '</code>: ' + e.error + '</div>'
-          ).join('');
-        }
-
-        // نمایش خلاصه با جزئیات بیشتر
-        let message = '✅ ' + success + ' آدرس جدید اضافه شد';
-        if (duplicates > 0) {
-          message += '\n🔄 ' + duplicates + ' آدرس تکراری';
-        }
-        if (failed > 0) {
-          message += '\n❌ ' + failed + ' آدرس ناموفق';
-        }
-        if (summary) {
-          message += '\n\n📊 توزیع کشورها:\n' + summary;
-        }
-
-        Toast.success(message, 8000);
-        setTimeout(() => window.location.href = '/', 3000);
-      } else {
-        btn.textContent = '❌ لغو شد';
-        btn.disabled = false;
-        btn.onclick = null;
-        progressText.textContent = '⏸️ لغو شد | ' + processed + '/' + addresses.length + ' پردازش شد';
-      }
-
-      cancelRequested = false;
-    });
-  }
-});
+        cancelRequested = false;
+      });
+    }
+  });
 }
 
 function showTab(tabName) {
@@ -2481,21 +2443,21 @@ async function editCountry(code, currentName) {
   modal.innerHTML = '<div style="background:' + bgColor + ';border-radius:16px;padding:30px;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
     '<h2 style="margin:0 0 20px;color:' + textColor + ';font-size:24px;">✏️ ویرایش کشور</h2>' +
     '<form id="edit-form">' +
-      '<div style="margin-bottom:20px;">' +
-        '<label style="display:block;margin-bottom:8px;color:' + labelColor + ';font-weight:600;">🌍 نام کشور (فارسی)</label>' +
-        '<input type="text" id="edit-name" required style="width:100%;padding:12px;border:2px solid ' + borderColor + ';border-radius:8px;font-size:16px;font-family:inherit;background:' + inputBg + ';color:' + textColor + ';">' +
-      '</div>' +
-      '<div style="margin-bottom:20px;">' +
-        '<label style="display:block;margin-bottom:8px;color:' + labelColor + ';font-weight:600;">🔤 کد کشور (2 حرفی)</label>' +
-        '<input type="text" id="edit-code" maxlength="2" required style="width:100%;padding:12px;border:2px solid ' + borderColor + ';border-radius:8px;font-size:16px;text-transform:uppercase;font-family:monospace;background:' + inputBg + ';color:' + textColor + ';">' +
-        '<small style="color:' + labelColor + ';display:block;margin-top:5px;">⚠️ تغییر کد کشور ممکن است بر داده‌های مرتبط تأثیر بگذارد</small>' +
-      '</div>' +
-      '<div style="display:flex;gap:10px;">' +
-        '<button type="submit" style="flex:1;padding:12px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">💾 ذخیره</button>' +
-        '<button type="button" id="cancel-btn" style="flex:1;padding:12px;background:' + btnCancelBg + ';color:' + btnCancelColor + ';border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">❌ لغو</button>' +
-      '</div>' +
+    '<div style="margin-bottom:20px;">' +
+    '<label style="display:block;margin-bottom:8px;color:' + labelColor + ';font-weight:600;">🌍 نام کشور (فارسی)</label>' +
+    '<input type="text" id="edit-name" required style="width:100%;padding:12px;border:2px solid ' + borderColor + ';border-radius:8px;font-size:16px;font-family:inherit;background:' + inputBg + ';color:' + textColor + ';">' +
+    '</div>' +
+    '<div style="margin-bottom:20px;">' +
+    '<label style="display:block;margin-bottom:8px;color:' + labelColor + ';font-weight:600;">🔤 کد کشور (2 حرفی)</label>' +
+    '<input type="text" id="edit-code" maxlength="2" required style="width:100%;padding:12px;border:2px solid ' + borderColor + ';border-radius:8px;font-size:16px;text-transform:uppercase;font-family:monospace;background:' + inputBg + ';color:' + textColor + ';">' +
+    '<small style="color:' + labelColor + ';display:block;margin-top:5px;">⚠️ تغییر کد کشور ممکن است بر داده‌های مرتبط تأثیر بگذارد</small>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;">' +
+    '<button type="submit" style="flex:1;padding:12px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">💾 ذخیره</button>' +
+    '<button type="button" id="cancel-btn" style="flex:1;padding:12px;background:' + btnCancelBg + ';color:' + btnCancelColor + ';border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;">❌ لغو</button>' +
+    '</div>' +
     '</form>' +
-  '</div>';
+    '</div>';
 
   document.body.appendChild(modal);
 
@@ -2585,7 +2547,7 @@ async function deleteAddress(countryCode, address) {
 
     if (result.success) {
       Toast.success('✅ آدرس ' + address + ' با موفقیت حذف شد');
-      setTimeout(function() { window.location.reload(); }, 1000);
+      setTimeout(function () { window.location.reload(); }, 1000);
     } else {
       Toast.error('❌ خطا در حذف آدرس: ' + (result.error || 'خطای نامشخص'));
     }
@@ -2634,7 +2596,7 @@ async function bulkDeleteCountries() {
     return;
   }
 
-  const countryNames = codes.map(function(code) {
+  const countryNames = codes.map(function (code) {
     const card = document.querySelector('.dns-card[data-code="' + code + '"]');
     return card ? card.querySelector('.country-details h3').textContent : code;
   }).join('، ');
@@ -2654,7 +2616,7 @@ async function bulkDeleteCountries() {
 
     if (result.success) {
       Toast.success('✅ ' + result.deleted + ' کشور با موفقیت حذف شد!');
-      setTimeout(function() { window.location.reload(); }, 1500);
+      setTimeout(function () { window.location.reload(); }, 1500);
     } else {
       Toast.error('❌ خطا: ' + (result.error || 'خطای نامشخص'));
     }
@@ -2774,10 +2736,7 @@ async function loadCountryData(code) {
   }
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 🌐 IPv6 Page Renderer
-// ─────────────────────────────────────────────────────────────────────────────
 
 function renderIpv6Page(entries, userCount) {
   const rows = entries.map(e => {
@@ -3156,11 +3115,10 @@ function escapeHtml(s) {
   }[c]));
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 📡 Telegram API Communication
-// ─────────────────────────────────────────────────────────────────────────────
 
+
+// ========== TELEGRAM API COMMUNICATION ==========
 async function telegramApi(env, method, body = {}, timeoutMs = 8000) {
   try {
     const controller = new AbortController();
@@ -3200,13 +3158,9 @@ function invalidateDnsCache() {
 
 // ساخت کیبورد اصلی
 
-// ═════════════════════════════════════════════════════════════════════════════
 // 🤖 TELEGRAM BOT HANDLERS & KEYBOARDS
-// ═════════════════════════════════════════════════════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────────────────
 // ⌨️ Telegram Keyboard Builders
-// ─────────────────────────────────────────────────────────────────────────────
 
 function buildMainKeyboard(userId, adminId = 7240662021) {
   const rows = [];
@@ -3329,9 +3283,7 @@ function buildDnsKeyboard(entries, page = 0, sortOrder = 'default') {
 
 // نمایش یک DNS رندوم از کشور انتخابی
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 🎯 DNS & IPv6 Selection Handlers
-// ─────────────────────────────────────────────────────────────────────────────
 
 async function handleDnsSelection(chat, messageId, code, env, userId) {
   const entry = await getDnsEntry(env.DB, code);
@@ -3455,14 +3407,7 @@ function buildIpv6Keyboard(entries, page = 0) {
     const stock = e.stock ?? 0;
     const countryName = ensurePersianCountryName(e.country, e.code);
 
-    let stockEmoji = '🔴';
-    if (stock > 10) {
-      stockEmoji = '🟢';
-    } else if (stock > 5) {
-      stockEmoji = '🟡';
-    } else if (stock > 0) {
-      stockEmoji = '🟡';
-    }
+    const stockEmoji = stock > 10 ? '🟢' : stock > 0 ? '🟡' : '🔴';
 
     rows.push([
       {
@@ -3622,8 +3567,10 @@ async function handleIpv6Selection(chat, messageId, code, env, userId) {
 }
 
 // مدیریت آپدیت‌های تلگرام
-// ─────────────────────────────────────────────────────────────────────────────
+
 // 🔄 Main Update Handler (Telegram Webhook)
+
+// ========== TELEGRAM UPDATE HANDLER ==========
 export async function handleUpdate(update, env) {
   try {
     // پیام‌های عادی
@@ -3641,7 +3588,7 @@ export async function handleUpdate(update, env) {
         if (chatType && chatType !== 'private') {
           return; // هیچ پاسخی در گروه‌ها نده
         }
-      } catch {}
+      } catch { }
 
       if (Number(from.id) === Number(getAdminId(env))) {
         const state = await env.DB.get(`admin_state:${getAdminId(env)}`);
@@ -4100,7 +4047,7 @@ export async function handleUpdate(update, env) {
         if (chatType && chatType !== 'private') {
           return; // هیچ پاسخی به کال‌بک در گروه‌ها نده
         }
-      } catch {}
+      } catch { }
       const messageId = cb.message.message_id;
       const from = cb.from || {};
 
@@ -4687,11 +4634,10 @@ export async function handleUpdate(update, env) {
   }
 }
 
-
-// ═════════════════════════════════════════════════════════════════════════════
 // 🌐 CLOUDFLARE WORKER FETCH HANDLER
-// ═════════════════════════════════════════════════════════════════════════════
 
+
+// ========== CLOUDFLARE WORKER MAIN HANDLER ==========
 export default {
   async fetch(req, env) {
     try {
@@ -4919,7 +4865,6 @@ export default {
 </body>
 </html>`);
       }
-
 
       // ─────────────────────────────────────────────────────────────────────────────
       // 🔌 API Endpoints
@@ -5652,7 +5597,7 @@ export default {
 
           // حذف تکراری‌ها
           const uniqueAddresses = [...new Set(addresses)];
-          
+
           let added = 0;
           let duplicate = 0;
 
@@ -5660,7 +5605,7 @@ export default {
             // اضافه کردن به کشور موجود
             existing.addresses = [...new Set(existing.addresses)];
             const beforeCount = existing.addresses.length;
-            
+
             uniqueAddresses.forEach(ip => {
               if (!existing.addresses.includes(ip)) {
                 existing.addresses.push(ip);
@@ -5864,10 +5809,10 @@ export default {
     }
     h1 { font-size: 2em; margin-bottom: 20px; }
     .stat { font-size: 1.2em; margin: 10px 0; }
-    .summary { 
-      background: rgba(255,255,255,0.15); 
-      padding: 15px; 
-      border-radius: 10px; 
+    .summary {
+      background: rgba(255,255,255,0.15);
+      padding: 15px;
+      border-radius: 10px;
       margin: 20px 0;
       font-size: 0.95em;
     }
@@ -6078,7 +6023,6 @@ export default {
 </html>`);
       }
 
-
       // ─────────────────────────────────────────────────────────────────────────────
       // 📨 Telegram Webhook
       // ─────────────────────────────────────────────────────────────────────────────
@@ -6094,7 +6038,6 @@ export default {
           return json({ ok: false, error: e.message }, 500);
         }
       }
-
 
       // ─────────────────────────────────────────────────────────────────────────────
       // ⚙️ Webhook Management
@@ -6134,7 +6077,6 @@ export default {
         const result = await res.json();
         return json(result);
       }
-
 
       // ─────────────────────────────────────────────────────────────────────────────
       // 🛠️ Admin Utilities
@@ -6211,7 +6153,6 @@ export default {
           return json({ success: false, error: e.message }, 500);
         }
       }
-
 
       // ─────────────────────────────────────────────────────────────────────────────
       // ❌ 404 Handler
