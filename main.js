@@ -41,21 +41,52 @@ const COUNTRY_NAMES_FA = {
   LT: "لیتوانی", EE: "استونی", SK: "اسلواکی", SI: "اسلوونی", LU: "لوکزامبورگ"
 };
 
-// Country names in English (for config filenames)
+// Country names in English (for config filenames) - COMPLETE LIST
 const COUNTRY_NAMES_EN = {
   IR: "Iran", US: "USA", GB: "UK", DE: "Germany", FR: "France",
   NL: "Netherlands", SE: "Sweden", FI: "Finland", NO: "Norway", DK: "Denmark",
   CH: "Switzerland", AT: "Austria", BE: "Belgium", ES: "Spain", IT: "Italy",
-  PL: "Poland", RO: "Romania", CZ: "Czech", HU: "Hungary", BG: "Bulgaria",
+  PL: "Poland", RO: "Romania", CZ: "Czechia", HU: "Hungary", BG: "Bulgaria",
   UA: "Ukraine", RU: "Russia", TR: "Turkey", AE: "UAE", SA: "Saudi",
-  JP: "Japan", KR: "Korea", SG: "Singapore", HK: "HongKong", AU: "Australia",
+  JP: "Japan", KR: "SouthKorea", SG: "Singapore", HK: "HongKong", AU: "Australia",
   CA: "Canada", BR: "Brazil", MX: "Mexico", AR: "Argentina", CL: "Chile",
   IN: "India", ID: "Indonesia", TH: "Thailand", VN: "Vietnam", MY: "Malaysia",
   PH: "Philippines", ZA: "SouthAfrica", EG: "Egypt", NG: "Nigeria",
   IL: "Israel", GE: "Georgia", AM: "Armenia", AZ: "Azerbaijan",
   KZ: "Kazakhstan", UZ: "Uzbekistan", IS: "Iceland", IE: "Ireland",
   PT: "Portugal", GR: "Greece", HR: "Croatia", RS: "Serbia", LV: "Latvia",
-  LT: "Lithuania", EE: "Estonia", SK: "Slovakia", SI: "Slovenia", LU: "Luxembourg"
+  LT: "Lithuania", EE: "Estonia", SK: "Slovakia", SI: "Slovenia", LU: "Luxembourg",
+  AL: "Albania", BA: "Bosnia", BY: "Belarus", CY: "Cyprus", MC: "Monaco",
+  MD: "Moldova", ME: "Montenegro", MK: "Macedonia", MT: "Malta", SM: "SanMarino",
+  VA: "Vatican", AD: "Andorra", LI: "Liechtenstein", FO: "Faroe", GI: "Gibraltar",
+  JE: "Jersey", IM: "IsleOfMan", GG: "Guernsey", AX: "Aland", GL: "Greenland",
+  CN: "China", TW: "Taiwan", MO: "Macau", KP: "NorthKorea", MN: "Mongolia",
+  KH: "Cambodia", LA: "Laos", MM: "Myanmar", BD: "Bangladesh", BT: "Bhutan",
+  NP: "Nepal", LK: "SriLanka", MV: "Maldives", PK: "Pakistan", AF: "Afghanistan",
+  IQ: "Iraq", SY: "Syria", LB: "Lebanon", JO: "Jordan", PS: "Palestine",
+  YE: "Yemen", OM: "Oman", KW: "Kuwait", QA: "Qatar", BH: "Bahrain",
+  DZ: "Algeria", TN: "Tunisia", MA: "Morocco", LY: "Libya", SD: "Sudan",
+  SO: "Somalia", ET: "Ethiopia", KE: "Kenya", TZ: "Tanzania", UG: "Uganda",
+  RW: "Rwanda", BI: "Burundi", MW: "Malawi", ZM: "Zambia", ZW: "Zimbabwe",
+  MZ: "Mozambique", AO: "Angola", NA: "Namibia", BW: "Botswana", LS: "Lesotho",
+  SZ: "Eswatini", MG: "Madagascar", MU: "Mauritius", SC: "Seychelles",
+  KM: "Comoros", DJ: "Djibouti", ER: "Eritrea", SS: "SouthSudan",
+  CM: "Cameroon", CF: "CentralAfrican", TD: "Chad", CG: "Congo", CD: "DRCongo",
+  GA: "Gabon", GQ: "EquatorialGuinea", ST: "SaoTome", GH: "Ghana", CI: "IvoryCoast",
+  BF: "BurkinaFaso", ML: "Mali", NE: "Niger", SN: "Senegal", GM: "Gambia",
+  GW: "GuineaBissau", GN: "Guinea", SL: "SierraLeone", LR: "Liberia", TG: "Togo",
+  BJ: "Benin", MR: "Mauritania", CV: "CapeVerde",
+  NZ: "NewZealand", PG: "PapuaNewGuinea", FJ: "Fiji", NC: "NewCaledonia",
+  PF: "FrenchPolynesia", WS: "Samoa", TO: "Tonga", VU: "Vanuatu", SB: "SolomonIslands",
+  KI: "Kiribati", FM: "Micronesia", MH: "MarshallIslands", PW: "Palau",
+  NR: "Nauru", TV: "Tuvalu", TK: "Tokelau", NU: "Niue", CK: "CookIslands",
+  CO: "Colombia", VE: "Venezuela", EC: "Ecuador", PE: "Peru", BO: "Bolivia",
+  PY: "Paraguay", UY: "Uruguay", GY: "Guyana", SR: "Suriname", GF: "FrenchGuiana",
+  CR: "CostaRica", PA: "Panama", NI: "Nicaragua", HN: "Honduras", SV: "ElSalvador",
+  GT: "Guatemala", BZ: "Belize", CU: "Cuba", JM: "Jamaica", HT: "Haiti",
+  DO: "DominicanRepublic", PR: "PuertoRico", TT: "TrinidadTobago", BB: "Barbados",
+  BS: "Bahamas", LC: "SaintLucia", GD: "Grenada", VC: "SaintVincent",
+  AG: "AntiguaBarbuda", DM: "Dominica", KN: "SaintKitts"
 };
 
 // User-selectable operators with their address ranges
@@ -556,7 +587,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const code = data.slice(5);
         if (!user) { await sendMsg(token, chatId, "کاربر نامشخص"); return; }
         const q = await getQuota(env, user);
-        if (q.dnsLeft <= 0) {
+        const isAdmin = String(user) === adminId;
+        if (!isAdmin && q.dnsLeft <= 0) {
           await sendMsg(token, chatId, `محدودیت روزانه DNS شما به پایان رسیده است.\nباقی‌مانده: ${q.dnsLeft}`);
           return;
         }
@@ -599,7 +631,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
             ]
           }
         });
-        await incQuota(env, user, "dns");
+        if (!isAdmin) await incQuota(env, user, "dns");
         const histKey = `history:${user}`;
         try {
           const raw = await env.DB.get(histKey);
@@ -616,7 +648,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const code = data.slice(5);
         if (!user) { await sendMsg(token, chatId, "کاربر نامشخص"); return; }
         const q = await getQuota(env, user);
-        if (q.dnsLeft <= 0) {
+        const isAdmin = String(user) === adminId;
+        if (!isAdmin && q.dnsLeft <= 0) {
           await sendMsg(token, chatId, `محدودیت روزانه DNS شما به پایان رسیده است.\nباقی‌مانده: ${q.dnsLeft}`);
           return;
         }
@@ -647,7 +680,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
             ]
           }
         });
-        await incQuota(env, user, "dns");
+        if (!isAdmin) await incQuota(env, user, "dns");
         const histKey = `history:${user}`;
         try {
           const raw = await env.DB.get(histKey);
@@ -683,7 +716,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const dnsValue = parts.slice(3).join(":");
         if (!user) { await sendMsg(token, chatId, "کاربر نامشخص"); return; }
         const q = await getQuota(env, user);
-        if (q.wgLeft <= 0) {
+        const isAdmin = String(user) === adminId;
+        if (!isAdmin && q.wgLeft <= 0) {
           await sendMsg(token, chatId, `محدودیت روزانه WireGuard شما به پایان رسیده است.\nباقی‌مانده: ${q.wgLeft}`);
           return;
         }
@@ -701,8 +735,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const userDns = dnsValue || pickRandom(WG_FIXED_DNS);
         const priv = randBase64(32);
         
-        // DNS: use actual location address instead of placeholder
-        const combinedDns = locationDns ? `${userDns}, ${locationDns}` : userDns;
+        // DNS: location DNS first, then user selected DNS
+        const combinedDns = locationDns ? `${locationDns}, ${userDns}` : userDns;
         
         // Address: از اپراتور انتخابی
         const operatorData = OPERATORS[op];
@@ -731,7 +765,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
 📡 موجودی باقی‌مانده: ${rec?.stock || 0}`;
         
         await sendFile(token, chatId, filename, iface, caption);
-        await incQuota(env, user, "wg");
+        if (!isAdmin) await incQuota(env, user, "wg");
         try {
           const histKey = `history:${user}`;
           const raw = await env.DB.get(histKey);
@@ -821,74 +855,145 @@ const app = {
 <meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>پنل مدیریت ربات WireGuard</title>
 <style>
-:root{--bg:#0a0e27;--card:#141b2d;--muted:#8b9bb5;--accent:#00d9ff;--btn:#00b8d4;--text:#e8f4f8;--border:#1e2940;--success:#10b981;--danger:#ef4444}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+:root{
+  --primary:#6366f1;--primary-dark:#4f46e5;--primary-light:#818cf8;
+  --bg:#0f172a;--surface:#1e293b;--surface-light:#334155;
+  --text:#f1f5f9;--text-muted:#94a3b8;--text-dim:#64748b;
+  --success:#22c55e;--warning:#f59e0b;--danger:#ef4444;--info:#3b82f6;
+  --border:#475569;--shadow:rgba(0,0,0,.3);
+  --gradient-1:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+  --gradient-2:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);
+  --gradient-3:linear-gradient(135deg,#4facfe 0%,#00f2fe 100%);
+  --gradient-4:linear-gradient(135deg,#43e97b 0%,#38f9d7 100%);
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Tahoma,Arial;background:linear-gradient(135deg,#0a0e27 0%,#1a1f3a 100%);color:var(--text);padding:20px;min-height:100vh}
-.container{max-width:1400px;margin:0 auto}
-.header{text-align:center;margin-bottom:30px}
-.brand{font-size:28px;font-weight:700;color:var(--accent);margin-bottom:8px;text-shadow:0 2px 10px rgba(0,217,255,.3)}
-.subtitle{font-size:14px;color:var(--muted)}
-.tabs{display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);overflow-x:auto}
-.tab{padding:12px 24px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-weight:600;transition:all .3s;border-bottom:3px solid transparent;white-space:nowrap}
-.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+body{font-family:'Inter',Tahoma,sans-serif;background:var(--bg);color:var(--text);padding:0;min-height:100vh;overflow-x:hidden}
+.bg-pattern{position:fixed;top:0;left:0;width:100%;height:100%;opacity:.03;background-image:radial-gradient(circle at 25px 25px,var(--text) 2%,transparent 0),radial-gradient(circle at 75px 75px,var(--text) 2%,transparent 0);background-size:100px 100px;pointer-events:none;z-index:0}
+.container{max-width:1600px;margin:0 auto;padding:20px;position:relative;z-index:1}
+.header{text-align:center;margin-bottom:40px;padding:40px 20px;background:var(--gradient-1);border-radius:20px;box-shadow:0 20px 60px var(--shadow);position:relative;overflow:hidden}
+.header::before{content:'';position:absolute;top:-50%;right:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,255,255,.1) 0%,transparent 70%);animation:pulse 15s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.brand{font-size:36px;font-weight:700;color:#fff;margin-bottom:12px;text-shadow:0 4px 20px rgba(0,0,0,.3);letter-spacing:-0.5px;display:flex;align-items:center;justify-content:center;gap:12px}
+.brand-icon{font-size:42px;animation:rotate 20s linear infinite}
+@keyframes rotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.subtitle{font-size:16px;color:rgba(255,255,255,.9);font-weight:500}
+.stats-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:30px}
+.stat-card{background:var(--surface);border-radius:16px;padding:20px;text-align:center;border:1px solid var(--border);box-shadow:0 4px 15px var(--shadow);transition:all .3s}
+.stat-card:hover{transform:translateY(-5px);box-shadow:0 8px 25px var(--shadow)}
+.stat-value{font-size:32px;font-weight:700;background:var(--gradient-3);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+.stat-label{font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+.tabs{display:flex;gap:12px;margin-bottom:30px;background:var(--surface);padding:8px;border-radius:16px;box-shadow:0 4px 15px var(--shadow)}
+.tab{padding:14px 28px;background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-weight:600;transition:all .3s;border-radius:12px;font-size:15px;position:relative;overflow:hidden}
+.tab::before{content:'';position:absolute;top:0;left:0;width:100%;height:100%;background:var(--gradient-1);opacity:0;transition:opacity .3s}
+.tab.active{color:#fff}
+.tab.active::before{opacity:1}
+.tab span{position:relative;z-index:1}
 .tab:hover{color:var(--text)}
-.tab-content{display:none}
+.tab-content{display:none;animation:fadeIn .4s}
 .tab-content.active{display:block}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(450px,1fr));gap:20px}
-.card{background:var(--card);border-radius:16px;padding:24px;box-shadow:0 10px 40px rgba(0,0,0,.4);border:1px solid var(--border);transition:transform .2s}
-.card:hover{transform:translateY(-2px)}
-.card h3{color:var(--accent);margin-bottom:16px;font-size:18px;display:flex;align-items:center;gap:8px}
-input,textarea{background:#0a1120;border:1px solid var(--border);color:var(--text);padding:12px;border-radius:8px;width:100%;font-family:Tahoma;margin-bottom:10px;transition:border .3s;font-size:14px}
-input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,217,255,.1)}
-button{background:var(--btn);border:0;color:#fff;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:600;transition:all .3s;width:100%;font-size:14px}
-button:hover{background:#00a3b8;transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,184,212,.3)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(500px,1fr));gap:25px}
+.card{background:var(--surface);border-radius:20px;padding:28px;box-shadow:0 10px 40px var(--shadow);border:1px solid var(--border);transition:all .3s;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;width:100%;height:4px;background:var(--gradient-1);opacity:0;transition:opacity .3s}
+.card:hover{transform:translateY(-4px);box-shadow:0 15px 50px var(--shadow)}
+.card:hover::before{opacity:1}
+.card h3{color:var(--primary-light);margin-bottom:20px;font-size:20px;display:flex;align-items:center;gap:10px;font-weight:600}
+.form-group{margin-bottom:16px}
+.form-label{display:block;margin-bottom:8px;color:var(--text-muted);font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+input,textarea{background:var(--bg);border:2px solid var(--border);color:var(--text);padding:14px 16px;border-radius:12px;width:100%;font-family:'Inter',Tahoma;transition:all .3s;font-size:14px}
+input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 4px rgba(99,102,241,.1);background:var(--surface-light)}
+input::placeholder,textarea::placeholder{color:var(--text-dim)}
+button{background:var(--gradient-1);border:0;color:#fff;padding:14px 24px;border-radius:12px;cursor:pointer;font-weight:600;transition:all .3s;width:100%;font-size:15px;box-shadow:0 4px 15px rgba(99,102,241,.3);position:relative;overflow:hidden}
+button::before{content:'';position:absolute;top:50%;left:50%;width:0;height:0;border-radius:50%;background:rgba(255,255,255,.3);transition:width .6s,height .6s;transform:translate(-50%,-50%)}
+button:hover::before{width:300px;height:300px}
+button:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(99,102,241,.4)}
 button:active{transform:translateY(0)}
-table{width:100%;border-collapse:collapse;margin-top:12px}
-th,td{padding:12px 8px;text-align:right;border-bottom:1px solid var(--border);font-size:13px}
-th{color:var(--accent);font-weight:600;background:rgba(0,217,255,.05)}
-tr:hover{background:rgba(0,217,255,.03)}
-.flag{font-size:20px;margin-left:8px}
-.small{font-size:13px;color:var(--muted)}
-.del{width:auto;padding:6px 12px;background:var(--danger);font-size:12px;transition:all .2s}
-.del:hover{background:#dc2626;box-shadow:0 2px 8px rgba(239,68,68,.3)}
-.controls{display:grid;grid-template-columns:1fr 1fr 100px;gap:8px;margin-bottom:10px}
-.note{background:#1a2332;padding:12px;border-radius:8px;color:var(--muted);font-size:12px;margin-top:12px;border-right:3px solid var(--accent)}
-.badge{display:inline-block;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-left:8px}
-.badge-ipv4{background:rgba(16,185,129,.2);color:var(--success)}
-.badge-ipv6{background:rgba(59,130,246,.2);color:#3b82f6}
-@media(max-width:980px){.grid{grid-template-columns:1fr}.controls{grid-template-columns:1fr}}
+button span{position:relative;z-index:1}
+table{width:100%;border-collapse:separate;border-spacing:0;margin-top:16px;overflow:hidden;border-radius:12px}
+th,td{padding:14px 12px;text-align:right;border-bottom:1px solid var(--border);font-size:14px}
+th{color:var(--primary-light);font-weight:600;background:rgba(99,102,241,.1);position:sticky;top:0}
+tbody tr{transition:all .2s}
+tbody tr:hover{background:rgba(99,102,241,.05)}
+.flag{font-size:22px;margin-left:10px}
+.small{font-size:14px;color:var(--text-muted)}
+.del{width:auto;padding:8px 16px;background:var(--gradient-2);font-size:13px;transition:all .3s;box-shadow:0 4px 12px rgba(239,68,68,.3)}
+.del:hover{transform:scale(1.05);box-shadow:0 6px 20px rgba(239,68,68,.5)}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.note{background:rgba(99,102,241,.1);padding:14px;border-radius:12px;color:var(--text-muted);font-size:13px;margin-top:12px;border-right:4px solid var(--primary);line-height:1.6}
+.badge{display:inline-block;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;margin-left:8px}
+.badge-ipv4{background:rgba(34,197,94,.2);color:var(--success);border:1px solid var(--success)}
+.badge-ipv6{background:rgba(59,130,246,.2);color:var(--info);border:1px solid var(--info)}
+.empty-state{text-align:center;padding:60px 20px;color:var(--text-dim)}
+.empty-state-icon{font-size:64px;margin-bottom:16px;opacity:.5}
+.scroll-container{max-height:500px;overflow-y:auto;border-radius:12px}
+.scroll-container::-webkit-scrollbar{width:8px}
+.scroll-container::-webkit-scrollbar-track{background:var(--bg);border-radius:4px}
+.scroll-container::-webkit-scrollbar-thumb{background:var(--primary);border-radius:4px}
+.scroll-container::-webkit-scrollbar-thumb:hover{background:var(--primary-dark)}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}.controls{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+<div class='bg-pattern'></div>
 <div class='container'>
   <div class='header'>
-    <div class='brand'>🛡️ پنل مدیریت ربات WireGuard</div>
-    <div class='subtitle'>مدیریت کشورها، کاربران و تنظیمات ربات</div>
+    <div class='brand'><span class='brand-icon'>🛡️</span> پنل مدیریت ربات WireGuard</div>
+    <div class='subtitle'>مدیریت هوشمند کشورها، کاربران و تنظیمات پیشرفته</div>
+  </div>
+
+  <div class='stats-bar' id='stats-bar'>
+    <div class='stat-card'>
+      <div class='stat-value' id='total-countries'>-</div>
+      <div class='stat-label'>🌍 کل کشورها</div>
+    </div>
+    <div class='stat-card'>
+      <div class='stat-value' id='total-users'>-</div>
+      <div class='stat-label'>👥 کاربران فعال</div>
+    </div>
+    <div class='stat-card'>
+      <div class='stat-value' id='total-ipv4'>-</div>
+      <div class='stat-label'>📡 IPv4 موجود</div>
+    </div>
+    <div class='stat-card'>
+      <div class='stat-value' id='total-ipv6'>-</div>
+      <div class='stat-label'>📡 IPv6 موجود</div>
+    </div>
   </div>
 
   <div class='tabs'>
-    <button class='tab active' data-tab='ipv4'>🌐 IPv4 DNS</button>
-    <button class='tab' data-tab='ipv6'>🌐 IPv6 DNS</button>
-    <button class='tab' data-tab='users'>👥 کاربران</button>
+    <button class='tab active' data-tab='ipv4'><span>🌐 IPv4 DNS</span></button>
+    <button class='tab' data-tab='ipv6'><span>🌐 IPv6 DNS</span></button>
+    <button class='tab' data-tab='users'><span>👥 کاربران</span></button>
   </div>
 
   <div class='tab-content active' id='ipv4'>
     <div class='grid'>
       <div class='card'>
         <h3><span>📋</span> مدیریت کشورهای IPv4</h3>
-        <div id='dns4-list' class='small'>در حال بارگذاری...</div>
+        <div class='scroll-container'>
+          <div id='dns4-list' class='small'>در حال بارگذاری...</div>
+        </div>
       </div>
       <div class='card'>
         <h3><span>➕</span> افزودن کشور IPv4 جدید</h3>
         <form id='dns4-form'>
           <div class='controls'>
-            <input id='code4' placeholder='کد کشور (US)' required />
-            <input id='country4' placeholder='نام کشور (آمریکا)' required />
+            <div class='form-group'>
+              <label class='form-label'>کد کشور</label>
+              <input id='code4' placeholder='مثال: US' required />
+            </div>
+            <div class='form-group'>
+              <label class='form-label'>نام کشور</label>
+              <input id='country4' placeholder='مثال: آمریکا' required />
+            </div>
           </div>
-          <textarea id='addresses4' rows='4' placeholder='آدرس‌های IPv4 (هر خط یک آدرس)' required></textarea>
-          <textarea id='dns4' rows='2' placeholder='DNS سرورهای این لوکیشن (هر خط یک DNS) - اختیاری'></textarea>
+          <div class='form-group'>
+            <label class='form-label'>آدرس‌های IPv4</label>
+            <textarea id='addresses4' rows='5' placeholder='هر خط یک آدرس IP&#10;مثال:&#10;1.1.1.1&#10;8.8.8.8' required></textarea>
+          </div>
           <div class='note'>💡 موجودی به صورت خودکار از تعداد آدرس‌ها محاسبه می‌شود</div>
-          <button type='submit'>💾 ذخیره کشور IPv4</button>
+          <button type='submit'><span>💾 ذخیره کشور IPv4</span></button>
         </form>
       </div>
     </div>
@@ -898,19 +1003,30 @@ tr:hover{background:rgba(0,217,255,.03)}
     <div class='grid'>
       <div class='card'>
         <h3><span>📋</span> مدیریت کشورهای IPv6</h3>
-        <div id='dns6-list' class='small'>در حال بارگذاری...</div>
+        <div class='scroll-container'>
+          <div id='dns6-list' class='small'>در حال بارگذاری...</div>
+        </div>
       </div>
       <div class='card'>
         <h3><span>➕</span> افزودن کشور IPv6 جدید</h3>
         <form id='dns6-form'>
           <div class='controls'>
-            <input id='code6' placeholder='کد کشور (US)' required />
-            <input id='country6' placeholder='نام کشور (آمریکا)' required />
+            <div class='form-group'>
+              <label class='form-label'>کد کشور</label>
+              <input id='code6' placeholder='مثال: US' required />
+            </div>
+            <div class='form-group'>
+              <label class='form-label'>نام کشور</label>
+              <input id='country6' placeholder='مثال: آمریکا' required />
+            </div>
           </div>
-          <textarea id='addresses6' rows='5' placeholder='آدرس‌های IPv6 (هر خط یک آدرس)' required></textarea>
-          <div class='note'>💡 توجه: هر کاربر 2 آدرس IPv6 دریافت می‌کند</div>
+          <div class='form-group'>
+            <label class='form-label'>آدرس‌های IPv6</label>
+            <textarea id='addresses6' rows='6' placeholder='هر خط یک آدرس IPv6&#10;مثال:&#10;2001:4860:4860::8888&#10;2001:4860:4860::8844' required></textarea>
+          </div>
+          <div class='note'>⚡ توجه: هر کاربر 2 آدرس IPv6 دریافت می‌کند</div>
           <div class='note'>💡 موجودی به صورت خودکار از تعداد آدرس‌ها محاسبه می‌شود</div>
-          <button type='submit'>💾 ذخیره کشور IPv6</button>
+          <button type='submit'><span>💾 ذخیره کشور IPv6</span></button>
         </form>
       </div>
     </div>
@@ -919,13 +1035,18 @@ tr:hover{background:rgba(0,217,255,.03)}
   <div class='tab-content' id='users'>
     <div class='grid'>
       <div class='card'>
-        <h3><span>👥</span> آمار کاربران</h3>
-        <div id='users-stat' class='small'>در حال بارگذاری...</div>
+        <h3><span>👥</span> آمار و لیست کاربران</h3>
+        <div class='scroll-container'>
+          <div id='users-stat' class='small'>در حال بارگذاری...</div>
+        </div>
       </div>
       <div class='card'>
         <h3><span>📢</span> پیام همگانی</h3>
-        <textarea id='broadcast' rows='5' placeholder='متن پیام خود را برای ارسال به همه کاربران وارد کنید...'></textarea>
-        <button id='send-bc'>📤 ارسال پیام به همه کاربران</button>
+        <div class='form-group'>
+          <label class='form-label'>متن پیام</label>
+          <textarea id='broadcast' rows='6' placeholder='پیام خود را برای ارسال به همه کاربران وارد کنید...'></textarea>
+        </div>
+        <button id='send-bc'><span>📤 ارسال به همه کاربران</span></button>
       </div>
     </div>
   </div>
@@ -958,29 +1079,51 @@ async function fetchJson(path, opts = {}) {
   return res.json();
 }
 
+async function updateStats() {
+  try {
+    const [dns4, dns6, users] = await Promise.all([
+      fetchJson('/api/dns'),
+      fetchJson('/api/dns6'),
+      fetchJson('/api/users')
+    ]);
+    
+    const totalCountries = (dns4?.length || 0) + (dns6?.length || 0);
+    const totalIPv4 = (dns4 || []).reduce((sum, r) => sum + ((r.addresses?.length) || 0), 0);
+    const totalIPv6 = (dns6 || []).reduce((sum, r) => sum + ((r.addresses?.length) || 0), 0);
+    const totalUsers = users?.users?.length || 0;
+    
+    document.getElementById('total-countries').textContent = totalCountries;
+    document.getElementById('total-users').textContent = totalUsers;
+    document.getElementById('total-ipv4').textContent = totalIPv4;
+    document.getElementById('total-ipv6').textContent = totalIPv6;
+  } catch (e) {
+    console.error('Stats update error:', e);
+  }
+}
+
 async function loadDNS4() {
   try {
     const list = await fetchJson('/api/dns');
     if (!list || list.length === 0) {
-      document.getElementById('dns4-list').innerText = 'هیچ کشور IPv4 ثبت نشده';
+      document.getElementById('dns4-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div>هیچ کشور IPv4 ثبت نشده است</div></div>';
       return;
     }
     const rows = list.map(r => {
       const flag = (r.flag) ? r.flag : '';
       const country = r.country || r.code;
-      // Auto-calculate stock from actual addresses in KV
       const actualStock = (r.addresses && r.addresses.length) ? r.addresses.length : 0;
-      return '<tr><td>'+flag+' '+(r.code||'')+'</td><td>'+country+'</td><td>'+actualStock+'</td><td><button data-code="'+(r.code||'')+'" class="del del4">❌</button></td></tr>';
+      return '<tr><td>'+flag+' <strong>'+(r.code||'')+'</strong></td><td>'+country+'</td><td><span class="badge badge-ipv4">'+actualStock+'</span></td><td><button data-code="'+(r.code||'')+'" class="del del4">❌ حذف</button></td></tr>';
     }).join('');
-    document.getElementById('dns4-list').innerHTML = '<table><tr><th>کد</th><th>کشور</th><th>موجودی</th><th></th></tr>'+rows+'</table>';
+    document.getElementById('dns4-list').innerHTML = '<table><thead><tr><th>کد</th><th>کشور</th><th>موجودی</th><th>عملیات</th></tr></thead><tbody>'+rows+'</tbody></table>';
     document.querySelectorAll('.del4').forEach(b => b.onclick = async e => {
       const code = e.target.dataset.code;
-      if (!confirm('حذف '+code+' از IPv4?')) return;
+      if (!confirm('آیا از حذف کشور '+code+' از IPv4 اطمینان دارید؟')) return;
       await fetch('/api/dns/' + code, { method: 'DELETE', headers: authHeaders() });
       loadDNS4();
+      updateStats();
     });
   } catch (e) {
-    document.getElementById('dns4-list').innerText = 'خطا در بارگذاری';
+    document.getElementById('dns4-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>خطا در بارگذاری اطلاعات</div></div>';
   }
 }
 
@@ -988,25 +1131,25 @@ async function loadDNS6() {
   try {
     const list = await fetchJson('/api/dns6');
     if (!list || list.length === 0) {
-      document.getElementById('dns6-list').innerText = 'هیچ کشور IPv6 ثبت نشده';
+      document.getElementById('dns6-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div>هیچ کشور IPv6 ثبت نشده است</div></div>';
       return;
     }
     const rows = list.map(r => {
       const flag = (r.flag) ? r.flag : '';
       const country = r.country || r.code;
-      // Auto-calculate stock from actual addresses in KV
       const actualStock = (r.addresses && r.addresses.length) ? r.addresses.length : 0;
-      return '<tr><td>'+flag+' '+(r.code||'')+'</td><td>'+country+'</td><td>'+actualStock+'</td><td><button data-code="'+(r.code||'')+'" class="del del6">❌</button></td></tr>';
+      return '<tr><td>'+flag+' <strong>'+(r.code||'')+'</strong></td><td>'+country+'</td><td><span class="badge badge-ipv6">'+actualStock+'</span></td><td><button data-code="'+(r.code||'')+'" class="del del6">❌ حذف</button></td></tr>';
     }).join('');
-    document.getElementById('dns6-list').innerHTML = '<table><tr><th>کد</th><th>کشور</th><th>موجودی</th><th></th></tr>'+rows+'</table>';
+    document.getElementById('dns6-list').innerHTML = '<table><thead><tr><th>کد</th><th>کشور</th><th>موجودی</th><th>عملیات</th></tr></thead><tbody>'+rows+'</tbody></table>';
     document.querySelectorAll('.del6').forEach(b => b.onclick = async e => {
       const code = e.target.dataset.code;
-      if (!confirm('حذف '+code+' از IPv6?')) return;
+      if (!confirm('آیا از حذف کشور '+code+' از IPv6 اطمینان دارید؟')) return;
       await fetch('/api/dns6/' + code, { method: 'DELETE', headers: authHeaders() });
       loadDNS6();
+      updateStats();
     });
   } catch (e) {
-    document.getElementById('dns6-list').innerText = 'خطا در بارگذاری';
+    document.getElementById('dns6-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>خطا در بارگذاری اطلاعات</div></div>';
   }
 }
 
@@ -1014,17 +1157,19 @@ async function loadUsers() {
   try {
     const j = await fetchJson('/api/users');
     const users = j.users || [];
-    let html = '<div class="note">✅ تعداد کل کاربران: <strong>'+ users.length +' نفر</strong></div>';
-    if (users.length > 0) {
-      html += '<table><tr><th>شماره</th><th>شناسه کاربر</th></tr>';
-      users.forEach((uid, idx) => {
-        html += '<tr><td>'+(idx+1)+'</td><td>'+uid+'</td></tr>';
-      });
-      html += '</table>';
+    if (users.length === 0) {
+      document.getElementById('users-stat').innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><div>هنوز هیچ کاربری ثبت نشده است</div></div>';
+      return;
     }
+    let html = '<div class="note" style="margin-bottom:16px;">✅ تعداد کل کاربران فعال: <strong>'+ users.length +' نفر</strong></div>';
+    html += '<table><thead><tr><th>ردیف</th><th>شناسه کاربر</th></tr></thead><tbody>';
+    users.forEach((uid, idx) => {
+      html += '<tr><td><strong>'+(idx+1)+'</strong></td><td><code>'+uid+'</code></td></tr>';
+    });
+    html += '</tbody></table>';
     document.getElementById('users-stat').innerHTML = html;
   } catch (e) {
-    document.getElementById('users-stat').innerText = 'خطا در بارگذاری';
+    document.getElementById('users-stat').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>خطا در بارگذاری کاربران</div></div>';
   }
 }
 
@@ -1033,16 +1178,20 @@ document.getElementById('dns4-form').onsubmit = async ev => {
   const code = document.getElementById('code4').value.trim().toUpperCase();
   const country = document.getElementById('country4').value.trim();
   const addresses = document.getElementById('addresses4').value.split(/\n+/).map(s=>s.trim()).filter(Boolean);
-  const dns = document.getElementById('dns4').value.split(/\n+/).map(s=>s.trim()).filter(Boolean);
   
-  // Auto-detect stock from addresses count
+  if (!code || !country || addresses.length === 0) {
+    alert('⚠️ لطفا همه فیلدها را پر کنید');
+    return;
+  }
+  
   const stock = addresses.length;
+  const body = { code, country, stock, addresses, dns: [], flag: (code.length===2?String.fromCodePoint(...code.split('').map(c=>c.charCodeAt(0)+127397)): '') };
   
-  const body = { code, country, stock, addresses, dns, flag: (code.length===2?String.fromCodePoint(...code.split('').map(c=>c.charCodeAt(0)+127397)): '') };
   await fetch('/api/dns/' + code, { method: 'PUT', headers: Object.assign({'Content-Type':'application/json'}, authHeaders()), body: JSON.stringify(body) });
   document.getElementById('dns4-form').reset();
   loadDNS4();
-  alert('✅ کشور IPv4 ذخیره شد - موجودی: ' + stock);
+  updateStats();
+  alert('✅ کشور IPv4 با موفقیت ذخیره شد\\n\\nکد: ' + code + '\\nموجودی: ' + stock + ' آدرس');
 };
 
 document.getElementById('dns6-form').onsubmit = async ev => {
@@ -1051,32 +1200,41 @@ document.getElementById('dns6-form').onsubmit = async ev => {
   const country = document.getElementById('country6').value.trim();
   const addresses = document.getElementById('addresses6').value.split(/\n+/).map(s=>s.trim()).filter(Boolean);
   
-  // Auto-detect stock from addresses count
-  const stock = addresses.length;
+  if (!code || !country || addresses.length === 0) {
+    alert('⚠️ لطفا همه فیلدها را پر کنید');
+    return;
+  }
   
+  const stock = addresses.length;
   const body = { code, country, stock, addresses, flag: (code.length===2?String.fromCodePoint(...code.split('').map(c=>c.charCodeAt(0)+127397)): '') };
+  
   await fetch('/api/dns6/' + code, { method: 'PUT', headers: Object.assign({'Content-Type':'application/json'}, authHeaders()), body: JSON.stringify(body) });
   document.getElementById('dns6-form').reset();
   loadDNS6();
-  alert('✅ کشور IPv6 ذخیره شد - موجودی: ' + stock);
+  updateStats();
+  alert('✅ کشور IPv6 با موفقیت ذخیره شد\\n\\nکد: ' + code + '\\nموجودی: ' + stock + ' آدرس');
 };
 
 document.getElementById('send-bc').onclick = async () => {
   const text = document.getElementById('broadcast').value.trim();
-  if (!text) return alert('متن وارد کنید');
+  if (!text) {
+    alert('⚠️ لطفا متن پیام را وارد کنید');
+    return;
+  }
+  if (!confirm('آیا از ارسال این پیام به همه کاربران اطمینان دارید؟')) return;
+  
   await fetch('/api/broadcast', { method: 'POST', headers: Object.assign({'Content-Type':'application/json'}, authHeaders()), body: JSON.stringify({ text }) });
-  alert('✅ پیام به همه کاربران ارسال شد');
+  alert('✅ پیام با موفقیت به همه کاربران ارسال شد');
   document.getElementById('broadcast').value = '';
 };
 
 if (ADMIN) { 
   loadDNS4(); 
   loadDNS6(); 
-  loadUsers(); 
+  loadUsers();
+  updateStats();
 } else {
-  // Hide entire admin panel when not authenticated
-  const warningHTML = '<div class="header"><div class="brand">🛡️ پنل مدیریت ربات WireGuard</div><div class="subtitle">مدیریت کشورها، کاربران و تنظیمات ربات</div></div><div class="card" style="max-width:600px;margin:40px auto;text-align:center;"><h3 style="color:#f59e0b;margin-bottom:20px;">🔒 دسترسی محدود</h3><p style="font-size:15px;line-height:2;color:#94a3b8;">برای دسترسی به پنل مدیریت، لطفا پارامتر <code style="background:#1a2332;padding:4px 8px;border-radius:4px;color:#00d9ff;">?admin=ADMIN_ID</code> را به URL اضافه کنید.</p><div class="note" style="margin-top:20px;">مثال: <code>https://your-domain.com/?admin=YOUR_ADMIN_ID</code></div></div>';
-  document.querySelector('.container').innerHTML = warningHTML;
+  document.body.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);"><div style="background:#1e293b;padding:60px 40px;border-radius:24px;box-shadow:0 20px 60px rgba(0,0,0,.4);max-width:500px;text-align:center;"><div style="font-size:64px;margin-bottom:20px;">🔒</div><h2 style="color:#f1f5f9;margin-bottom:16px;font-size:28px;">دسترسی محدود</h2><p style="color:#94a3b8;line-height:1.8;margin-bottom:24px;">برای ورود به پنل مدیریت، پارامتر <code style="background:#0f172a;padding:6px 12px;border-radius:8px;color:#818cf8;font-weight:600;">?admin=ADMIN_ID</code> را به URL اضافه کنید.</p><div style="background:rgba(99,102,241,.1);padding:16px;border-radius:12px;border-right:4px solid #6366f1;"><code style="color:#c7d2fe;font-size:13px;">https://your-domain.com/?admin=YOUR_ID</code></div></div></div>';
 }
 </script>
 </body>
