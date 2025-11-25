@@ -24,6 +24,23 @@ const WG_FIXED_DNS = [
   "185.55.226.26", "185.55.225.25", "185.51.200.2"
 ];
 
+// Country names in Persian
+const COUNTRY_NAMES_FA = {
+  IR: "ایران", US: "آمریکا", GB: "انگلستان", DE: "آلمان", FR: "فرانسه",
+  NL: "هلند", SE: "سوئد", FI: "فنلاند", NO: "نروژ", DK: "دانمارک",
+  CH: "سوئیس", AT: "اتریش", BE: "بلژیک", ES: "اسپانیا", IT: "ایتالیا",
+  PL: "لهستان", RO: "رومانی", CZ: "چک", HU: "مجارستان", BG: "بلغارستان",
+  UA: "اوکراین", RU: "روسیه", TR: "ترکیه", AE: "امارات", SA: "عربستان",
+  JP: "ژاپن", KR: "کره جنوبی", SG: "سنگاپور", HK: "هنگ کنگ", AU: "استرالیا",
+  CA: "کانادا", BR: "برزیل", MX: "مکزیک", AR: "آرژانتین", CL: "شیلی",
+  IN: "هند", ID: "اندونزی", TH: "تایلند", VN: "ویتنام", MY: "مالزی",
+  PH: "فیلیپین", ZA: "آفریقای جنوبی", EG: "مصر", NG: "نیجریه",
+  IL: "اسرائیل", GE: "گرجستان", AM: "ارمنستان", AZ: "آذربایجان",
+  KZ: "قزاقستان", UZ: "ازبکستان", IS: "ایسلند", IE: "ایرلند",
+  PT: "پرتغال", GR: "یونان", HR: "کرواسی", RS: "صربستان", LV: "لتونی",
+  LT: "لیتوانی", EE: "استونی", SK: "اسلواکی", SI: "اسلوونی", LU: "لوکزامبورگ"
+};
+
 // User-selectable operators
 const OPERATORS = {
   irancell: { title: "ایرانسل" },
@@ -153,8 +170,8 @@ function stockEmoji(n) {
 
 function mainMenuKeyboard(isAdmin = false) {
   const rows = [
-    [ { text: "🛡️ WireGuard", callback_data: "menu_wg" }, { text: "🌐 DNS", callback_data: "menu_dns" } ],
-    [ { text: "👤 my Account", callback_data: "menu_account" } ]
+    [{ text: "🛡️ WireGuard", callback_data: "menu_wg" }, { text: "🌐 DNS", callback_data: "menu_dns" }],
+    [{ text: "👤 my Account", callback_data: "menu_account" }]
   ];
   if (isAdmin) {
     rows.push([
@@ -165,16 +182,35 @@ function mainMenuKeyboard(isAdmin = false) {
   return { inline_keyboard: rows };
 }
 
-function countriesKeyboard(list) {
+function countriesKeyboard(list, page = 0) {
+  const ITEMS_PER_PAGE = 8;
+  const start = page * ITEMS_PER_PAGE;
+  const end = start + ITEMS_PER_PAGE;
+  const pageItems = list.slice(start, end);
+
   const rows = [];
-  for (const r of list) {
+  for (const r of pageItems) {
     const code = (r.code || "").toUpperCase();
-    const countryName = r.country || code;
-    const flag = r.flag || flagFromCode(code);
-    const label = `${stockEmoji(r.stock)} ${r.stock ?? 0}  |  ${flag} ${countryName}`;
+    const countryNameFa = COUNTRY_NAMES_FA[code] || r.country || code;
+    const flag = flagFromCode(code);
+    const stockCount = r.stock ?? 0;
+    const label = `${stockEmoji(stockCount)} ${flag} ${countryNameFa} (${stockCount})`;
     rows.push([{ text: label, callback_data: `ct:${code}` }]);
   }
-  rows.push([{ text: "🔙 بازگشت", callback_data: "back" }]);
+
+  // Navigation buttons
+  const navButtons = [];
+  if (page > 0) {
+    navButtons.push({ text: "◀️ قبلی", callback_data: `page:${page - 1}` });
+  }
+  if (end < list.length) {
+    navButtons.push({ text: "بعدی ▶️", callback_data: `page:${page + 1}` });
+  }
+  if (navButtons.length > 0) {
+    rows.push(navButtons);
+  }
+
+  rows.push([{ text: "🔙 بازگشت به منو", callback_data: "back" }]);
   return { inline_keyboard: rows };
 }
 
@@ -247,7 +283,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         if (txt.length > 0) {
           const list = await allUsers(env);
           for (const u of list) {
-            sendMsg(token, u, txt).catch(() => {});
+            sendMsg(token, u, txt).catch(() => { });
           }
           await env.DB.delete(`awaitBroadcast:${adminId}`);
           await sendMsg(token, chatId, `✅ پیام برای ${list.length} کاربر ارسال شد.`, { reply_markup: mainMenuKeyboard(true) });
@@ -260,11 +296,36 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
     if (callback) {
       const data = callback.data || "";
       // answer callback to remove loading spinner
-      tg(token, "answerCallbackQuery", { callback_query_id: callback.id }).catch(() => {});
+      tg(token, "answerCallbackQuery", { callback_query_id: callback.id }).catch(() => { });
 
       // navigation
       if (data === "back") {
         await sendMsg(token, chatId, "منوی اصلی:", { reply_markup: mainMenuKeyboard(String(user) === adminId) });
+        return;
+      }
+
+      // Pagination handler
+      if (data.startsWith("page:")) {
+        const page = parseInt(data.split(":")[1]) || 0;
+        const list = await listDNS(env);
+        if (!list || list.length === 0) {
+          await sendMsg(token, chatId, "فعلاً رکوردی موجود نیست.");
+          return;
+        }
+        const mapped = list
+          .map(r => ({
+            code: (r.code || "").toUpperCase(),
+            country: r.country || r.code,
+            stock: r.stock || 0
+          }))
+          .sort((a, b) => b.stock - a.stock);
+
+        await tg(token, "editMessageText", {
+          chat_id: chatId,
+          message_id: callback.message.message_id,
+          text: `📡 لیست کشورها (صفحه ${page + 1} از ${Math.ceil(mapped.length / 8)}):\n\n🟢 موجود | 🟡 کم | 🔴 تمام`,
+          reply_markup: countriesKeyboard(mapped, page)
+        });
         return;
       }
 
@@ -274,8 +335,17 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           await sendMsg(token, chatId, "فعلاً رکوردی موجود نیست.");
           return;
         }
-        const mapped = list.map(r => ({ code: (r.code || "").toUpperCase(), country: r.country || r.code, flag: r.flag || flagFromCode(r.code || ""), stock: r.stock || 0 }));
-        await sendMsg(token, chatId, "کشور را انتخاب کنید:", { reply_markup: countriesKeyboard(mapped) });
+        const mapped = list
+          .map(r => ({
+            code: (r.code || "").toUpperCase(),
+            country: r.country || r.code,
+            stock: r.stock || 0
+          }))
+          .sort((a, b) => b.stock - a.stock);
+
+        await sendMsg(token, chatId, "📡 لیست کشورها:\n\n🟢 موجود | 🟡 کم | 🔴 تمام", {
+          reply_markup: countriesKeyboard(mapped, 0)
+        });
         return;
       }
 
@@ -285,8 +355,17 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           await sendMsg(token, chatId, "فعلاً رکوردی موجود نیست.");
           return;
         }
-        const mapped = list.map(r => ({ code: (r.code || "").toUpperCase(), country: r.country || r.code, flag: r.flag || flagFromCode(r.code || ""), stock: r.stock || 0 }));
-        await sendMsg(token, chatId, "کشور را انتخاب کنید:", { reply_markup: countriesKeyboard(mapped) });
+        const mapped = list
+          .map(r => ({
+            code: (r.code || "").toUpperCase(),
+            country: r.country || r.code,
+            stock: r.stock || 0
+          }))
+          .sort((a, b) => b.stock - a.stock);
+
+        await sendMsg(token, chatId, "🛡️ لیست کشورها:\n\n🟢 موجود | 🟡 کم | 🔴 تمام", {
+          reply_markup: countriesKeyboard(mapped, 0)
+        });
         return;
       }
 
@@ -297,7 +376,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const hist = rawHist ? JSON.parse(rawHist) : [];
         let text = `👤 حساب شما:\nDNS باقی‌مانده امروز: ${q.dnsLeft}\nWG باقی‌مانده امروز: ${q.wgLeft}\n\nتاریخچه اخیر:`;
         if (!hist.length) text += "\n(هیچ سابقه‌ای نیست)";
-        else text += "\n" + hist.slice(0, 10).map(h => `${h.at.slice(0,19).replace("T"," ")} — ${h.type} — ${h.country || ""}`).join("\n");
+        else text += "\n" + hist.slice(0, 10).map(h => `${h.at.slice(0, 19).replace("T", " ")} — ${h.type} — ${h.country || ""}`).join("\n");
         await sendMsg(token, chatId, text, { reply_markup: mainMenuKeyboard(String(user) === adminId) });
         return;
       }
@@ -321,7 +400,15 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       // country selected
       if (data.startsWith("ct:")) {
         const code = data.slice(3);
-        await sendMsg(token, chatId, `کشور انتخاب شد: <b>${code}</b>\nعملیات را انتخاب کنید:`, { reply_markup: actionKeyboard(code) });
+        const flag = flagFromCode(code);
+        const countryName = COUNTRY_NAMES_FA[code] || code;
+        const rec = await getDNS(env, code);
+        const stockInfo = rec ? `موجودی: ${rec.stock || 0} IP` : "موجودی: نامشخص";
+
+        await sendMsg(token, chatId,
+          `${flag} <b>${countryName}</b>\n${stockInfo}\n\nعملیات را انتخاب کنید:`,
+          { reply_markup: actionKeyboard(code) }
+        );
         return;
       }
 
@@ -672,11 +759,20 @@ if (ADMIN) { loadDNS(); loadUsers(); } else {
         const text = body.text || "";
         if (!text) return jsonResponse({ error: "missing text" }, 400);
         const us = await allUsers(env);
+        let successCount = 0;
         for (const u of us) {
-          sendMsg(env.BOT_TOKEN, u, text).catch(e => console.error("broadcast err", e));
+          try {
+            await sendMsg(env.BOT_TOKEN, u, text);
+            successCount++;
+          } catch (e) {
+            console.error("broadcast err for user", u, e);
+          }
         }
-        return jsonResponse({ ok: true, sent: us.length });
-      } catch (e) { return jsonResponse({ error: "invalid json" }, 400); }
+        return jsonResponse({ ok: true, sent: successCount, total: us.length });
+      } catch (e) {
+        console.error("broadcast error:", e);
+        return jsonResponse({ error: "invalid json" }, 400);
+      }
     }
 
     // public small endpoint to fetch DNS by code (optional)
@@ -691,15 +787,6 @@ if (ADMIN) { loadDNS(); loadUsers(); } else {
     return new Response("Not found", { status: 404 });
   }
 };
-
-/* ---------------------- Admin auth helper ---------------------- */
-function isAdminReq(request, env) {
-  const url = new URL(request.url);
-  const q = url.searchParams.get("admin");
-  const header = request.headers.get("x-admin-id");
-  const adminId = String(env.ADMIN_ID || ADMIN_FALLBACK);
-  return String(q) === adminId || String(header) === adminId;
-}
 
 /* ---------------------- Export default app ---------------------- */
 export default app;
