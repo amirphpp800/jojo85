@@ -1,7 +1,7 @@
 // main.js — Telegram WireGuard/DNS Bot + Responsive Web Panel for Cloudflare Pages
 // ---------------------------------------------------------------
 // - KV binding name: DB
-// - Required env vars: BOT_TOKEN, ADMIN_ID
+// - Required env vars: BOT_TOKEN, ADMIN_ID (fallback to numeric ADMIN_FALLBACK)
 // - Features: Inline keyboard UX, dynamic country list from KV, unique IP assignment,
 //   per-user daily quotas (3 DNS / 3 WG), responsive admin panel, admin broadcast.
 // ---------------------------------------------------------------
@@ -10,6 +10,9 @@
 const MAX_DNS_PER_DAY = 3;
 const MAX_WG_PER_DAY = 3;
 const DATE_YYYYMMDD = () => new Date().toISOString().slice(0, 10).replace(/-/g, "");
+
+// Fallback admin id (used if ENV ADMIN_ID is missing)
+const ADMIN_FALLBACK = '7240662021';
 
 // Random MTU selection list
 const WG_MTUS = [1280, 1320, 1360, 1380, 1400, 1420, 1440, 1480, 1500];
@@ -105,7 +108,6 @@ async function deleteDNS(env, code) {
 async function allocateAddress(env, code) {
   const rec = await getDNS(env, code);
   if (!rec || !Array.isArray(rec.addresses) || rec.addresses.length === 0) return null;
-  // Pop first address (FIFO). Could use shift for more fairness.
   const addr = rec.addresses.shift();
   rec.stock = rec.addresses.length;
   if (rec.stock < 0) rec.stock = 0;
@@ -149,17 +151,21 @@ function stockEmoji(n) {
   return "🟢";
 }
 
-function mainMenuKeyboard() {
-  return {
-    inline_keyboard: [
-      [{ text: "🌐 دریافت DNS", callback_data: "menu_dns" }, { text: "🛡️ WireGuard", callback_data: "menu_wg" }],
-      [{ text: "📊 وضعیت من", callback_data: "menu_status" }]
-    ]
-  };
+function mainMenuKeyboard(isAdmin = false) {
+  const rows = [
+    [ { text: "🛡️ WireGuard", callback_data: "menu_wg" }, { text: "🌐 DNS", callback_data: "menu_dns" } ],
+    [ { text: "👤 my Account", callback_data: "menu_account" } ]
+  ];
+  if (isAdmin) {
+    rows.push([
+      { text: "📢 پیام همگانی", callback_data: "menu_broadcast" },
+      { text: "📊 آمار ربات", callback_data: "menu_stats" }
+    ]);
+  }
+  return { inline_keyboard: rows };
 }
 
 function countriesKeyboard(list) {
-  // list: array of records with { code, country, flag?, stock }
   const rows = [];
   for (const r of list) {
     const code = (r.code || "").toUpperCase();
@@ -202,7 +208,6 @@ function pickRandom(arr) {
 }
 
 function buildInterfaceOnlyConfig({ privateKey, address = "10.66.66.2/32", mtu = 1420, dns = "1.1.1.1" }) {
-  // As requested, only Interface block (no Peer)
   return [
     "[Interface]",
     `PrivateKey = ${privateKey}`,
@@ -216,7 +221,8 @@ function buildInterfaceOnlyConfig({ privateKey, address = "10.66.66.2/32", mtu =
 /* ---------------------- Telegram webhook handler ---------------------- */
 export async function handleUpdate(update, env, { waitUntil } = {}) {
   const token = env.BOT_TOKEN;
-  const adminId = String(env.ADMIN_ID || "");
+  // prefer env ADMIN_ID, otherwise fallback to ADMIN_FALLBACK
+  const adminId = String(env.ADMIN_ID || ADMIN_FALLBACK);
   try {
     if (!update) return;
 
@@ -233,6 +239,23 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       if (waitUntil) waitUntil(p);
     }
 
+    // If admin is in awaiting-broadcast state and sends a plain text message -> broadcast
+    if (message && message.text && user && String(user) === adminId) {
+      const waiting = await env.DB.get(`awaitBroadcast:${adminId}`);
+      if (waiting) {
+        const txt = message.text.trim();
+        if (txt.length > 0) {
+          const list = await allUsers(env);
+          for (const u of list) {
+            sendMsg(token, u, txt).catch(() => {});
+          }
+          await env.DB.delete(`awaitBroadcast:${adminId}`);
+          await sendMsg(token, chatId, `✅ پیام برای ${list.length} کاربر ارسال شد.`, { reply_markup: mainMenuKeyboard(true) });
+          return;
+        }
+      }
+    }
+
     // handle callback_query first (button-based UX)
     if (callback) {
       const data = callback.data || "";
@@ -241,7 +264,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
 
       // navigation
       if (data === "back") {
-        await sendMsg(token, chatId, "منوی اصلی:", { reply_markup: mainMenuKeyboard() });
+        await sendMsg(token, chatId, "منوی اصلی:", { reply_markup: mainMenuKeyboard(String(user) === adminId) });
         return;
       }
 
@@ -251,7 +274,6 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           await sendMsg(token, chatId, "فعلاً رکوردی موجود نیست.");
           return;
         }
-        // ensure minimal fields
         const mapped = list.map(r => ({ code: (r.code || "").toUpperCase(), country: r.country || r.code, flag: r.flag || flagFromCode(r.code || ""), stock: r.stock || 0 }));
         await sendMsg(token, chatId, "کشور را انتخاب کنید:", { reply_markup: countriesKeyboard(mapped) });
         return;
@@ -268,13 +290,31 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         return;
       }
 
-      if (data === "menu_status") {
+      if (data === "menu_account") {
         if (!user) { await sendMsg(token, chatId, "مشخصات کاربری پیدا نشد."); return; }
         const q = await getQuota(env, user);
-        const d = new Date();
-        const tomorrow = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()+1));
-        const resetAt = tomorrow.toISOString();
-        await sendMsg(token, chatId, `📊 وضعیت شما:\nDNS باقی‌مانده امروز: ${q.dnsLeft}\nWG باقی‌مانده امروز: ${q.wgLeft}\nریست در: ${resetAt}`);
+        const rawHist = await env.DB.get(`history:${user}`);
+        const hist = rawHist ? JSON.parse(rawHist) : [];
+        let text = `👤 حساب شما:\nDNS باقی‌مانده امروز: ${q.dnsLeft}\nWG باقی‌مانده امروز: ${q.wgLeft}\n\nتاریخچه اخیر:`;
+        if (!hist.length) text += "\n(هیچ سابقه‌ای نیست)";
+        else text += "\n" + hist.slice(0, 10).map(h => `${h.at.slice(0,19).replace("T"," ")} — ${h.type} — ${h.country || ""}`).join("\n");
+        await sendMsg(token, chatId, text, { reply_markup: mainMenuKeyboard(String(user) === adminId) });
+        return;
+      }
+
+      if (data === "menu_broadcast") {
+        if (String(user) !== adminId) return;
+        await env.DB.put(`awaitBroadcast:${adminId}`, "1");
+        await sendMsg(token, chatId, "لطفا متن پیام همگانی را ارسال کنید:");
+        return;
+      }
+
+      if (data === "menu_stats") {
+        if (String(user) !== adminId) return;
+        const us = await allUsers(env);
+        const dns = await listDNS(env);
+        const totalStock = dns.reduce((s, r) => s + (r.stock || 0), 0);
+        await sendMsg(token, chatId, `📊 آمار ربات:\n👥 کاربران: ${us.length}\n🌍 کشورها: ${dns.length}\n📡 مجموع موجودی IP: ${totalStock}`, { reply_markup: mainMenuKeyboard(true) });
         return;
       }
 
@@ -294,16 +334,14 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           await sendMsg(token, chatId, `محدودیت روزانه DNS شما به پایان رسیده است.\nباقی‌مانده: ${q.dnsLeft}`);
           return;
         }
-        // allocate one address and send it
         const addr = await allocateAddress(env, code);
         if (!addr) {
           await sendMsg(token, chatId, `برای ${code} آدرسی موجود نیست.`);
           return;
         }
-        // send address and decrement quota
         await sendMsg(token, chatId, `📡 آدرس DNS برای ${code}:\n<code>${addr}</code>`);
         await incQuota(env, user, "dns");
-        // record history
+        // save history
         const histKey = `history:${user}`;
         try {
           const raw = await env.DB.get(histKey);
@@ -333,11 +371,9 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
 
       // wg final: choose:CODE:OP:DNS -> allocate IP, build config, send file
       if (data.startsWith("choose:")) {
-        // format choose:CODE:OP:DNSVALUE
         const parts = data.split(":");
         const code = parts[1];
         const op = parts[2];
-        // DNS may contain ":" if colon present; join rest
         const dnsValue = parts.slice(3).join(":");
         if (!user) { await sendMsg(token, chatId, "کاربر نامشخص"); return; }
         const q = await getQuota(env, user);
@@ -345,19 +381,14 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           await sendMsg(token, chatId, `محدودیت روزانه WireGuard شما به پایان رسیده است.\nباقی‌مانده: ${q.wgLeft}`);
           return;
         }
-        // allocate endpoint IP
         const endpoint = await allocateAddress(env, code);
         if (!endpoint) {
           await sendMsg(token, chatId, `برای ${code} آدرسی موجود نیست.`);
           return;
         }
-        // pick random MTU and user DNS
         const mtu = pickRandom(WG_MTUS);
         const userDns = dnsValue || pickRandom(WG_FIXED_DNS);
-        // prepare keys (note: not real WG keypair derivation; uses base64 random)
         const priv = randBase64(32);
-        // we don't include Peer block as requested. But include the selected DNS (user-chosen) and also a location DNS prefixed:
-        // "selected global DNS + location DNS" — build a DNS list where the chosen DNS appears first, then if rec has dns array, append first.
         const rec = await getDNS(env, code);
         const locationDns = (rec && rec.dns && rec.dns.length) ? rec.dns[0] : null;
         const combinedDns = locationDns ? `${userDns}, ${locationDns}` : userDns;
@@ -365,7 +396,6 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const filename = `wg-${code}-${Date.now()}.conf`;
         const caption = `WireGuard — ${code} — اپراتور: ${OPERATORS[op] ? OPERATORS[op].title : op}`;
         await sendFile(token, chatId, filename, iface, caption);
-        // increment quota and save history
         await incQuota(env, user, "wg");
         try {
           const histKey = `history:${user}`;
@@ -385,12 +415,12 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
     const text = (message && message.text) ? message.text.trim() : "";
 
     if (text === "/start") {
-      await sendMsg(token, chatId, "سلام 👋\nاز دکمه‌ها استفاده کنید:", { reply_markup: mainMenuKeyboard() });
+      await sendMsg(token, chatId, "سلام 👋\nاز دکمه‌ها استفاده کنید:", { reply_markup: mainMenuKeyboard(String(user) === adminId) });
       return;
     }
 
+    // support /broadcast for admin as fallback
     if (text && text.startsWith("/broadcast")) {
-      // admin only
       const fromId = message && message.from && message.from.id;
       if (String(fromId) !== String(adminId)) {
         await sendMsg(token, chatId, "این دستور مخصوص ادمین است.");
@@ -419,7 +449,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
     }
 
     // default: show menu
-    await sendMsg(token, chatId, "لطفاً از منوی دکمه‌ای استفاده کنید:", { reply_markup: mainMenuKeyboard() });
+    await sendMsg(token, chatId, "لطفاً از منوی دکمه‌ای استفاده کنید:", { reply_markup: mainMenuKeyboard(String(user) === adminId) });
 
   } catch (err) {
     console.error("handleUpdate error:", err);
@@ -436,7 +466,7 @@ function isAdminReq(request, env) {
   const url = new URL(request.url);
   const q = url.searchParams.get("admin");
   const header = request.headers.get("x-admin-id");
-  const adminId = String(env.ADMIN_ID || "");
+  const adminId = String(env.ADMIN_ID || ADMIN_FALLBACK);
   return String(q) === adminId || String(header) === adminId;
 }
 
@@ -448,66 +478,71 @@ const app = {
 
     // Root: admin panel (responsive, modern)
     if (path === "/" && method === "GET") {
+      const adminQuery = url.searchParams.get('admin') || '';
       const html = `<!doctype html>
-<html lang="fa">
+<html lang='fa'>
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>WireGuard Bot — Panel</title>
 <style>
 :root{--bg:#071027;--card:#0b1220;--muted:#9fb6c6;--accent:#06b6d4;--btn:#0ea5a5;--text:#e6eef8}
+*{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:linear-gradient(180deg,#041022 0%,#071227 100%);color:var(--text);padding:20px}
 .container{max-width:1100px;margin:0 auto}
 .header{display:flex;gap:12px;align-items:center;justify-content:space-between}
-.brand{font-size:20px;font-weight:600}
-.grid{display:grid;grid-template-columns:1fr 360px;gap:18px;margin-top:18px}
-.card{background:var(--card);border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(2,6,23,.6)}
+.brand{font-size:20px;font-weight:700}
+.grid{display:grid;grid-template-columns:1fr 380px;gap:18px;margin-top:18px}
+.card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 8px 30px rgba(2,6,23,.6)}
 .row{display:flex;gap:8px;align-items:center}
-input,textarea,select{background:#071226;border:1px solid #18324a;color:var(--text);padding:8px;border-radius:8px;min-width:0}
-button{background:var(--btn);border:0;color:#042026;padding:8px 12px;border-radius:8px;cursor:pointer}
-table{width:100%;border-collapse:collapse;margin-top:8px}
+input,textarea,select{background:#071226;border:1px solid #18324a;color:var(--text);padding:10px;border-radius:10px;min-width:0}
+button{background:var(--btn);border:0;color:#042026;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600}
+table{width:100%;border-collapse:collapse;margin-top:12px}
 th,td{padding:10px;text-align:left;border-bottom:1px solid #0f2430;font-size:14px}
 .flag{font-size:18px;margin-right:6px}
+.small{font-size:13px;color:var(--muted)}
 .footer{color:var(--muted);font-size:13px;margin-top:12px}
-@media(max-width:880px){.grid{grid-template-columns:1fr;}}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:980px){.grid{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
-<div class="container">
-  <div class="header">
-    <div class="brand">WireGuard Bot — پنل مدیریت</div>
-    <div class="muted">برای عملیات ادمین ?admin=ADMIN_ID یا هدر x-admin-id را قرار دهید</div>
+<div class='container'>
+  <div class='header'>
+    <div class='brand'>WireGuard Bot — پنل مدیریت</div>
+    <div class='small'>برای عملیات ادمین روی آدرس این صفحه ?admin=ADMIN_ID اضافه کنید یا هدر x-admin-id قرار دهید</div>
   </div>
 
-  <div class="grid">
-    <div class="card" id="main-card">
+  <div class='grid'>
+    <div class='card' id='main-card'>
       <h3>DNS‌ها</h3>
-      <div id="dns-list">در حال بارگذاری…</div>
+      <div id='dns-list' class='small'>در حال بارگذاری…</div>
       <hr/>
       <h4>افزودن / ویرایش DNS</h4>
-      <form id="dns-form">
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input id="code" placeholder="کد (مثال: GE)" required />
-          <input id="country" placeholder="نام کشور" />
-          <input id="stock" placeholder="stock" type="number" value="1" style="width:100px" />
+      <form id='dns-form'>
+        <div class='controls'>
+          <input id='code' placeholder='کد (مثال: GE)' required />
+          <input id='country' placeholder='نام کشور' />
+          <input id='stock' placeholder='stock' type='number' value='1' style='width:120px' />
         </div>
-        <div style="margin-top:8px">
-          <textarea id="addresses" rows="4" placeholder="آدرس‌ها هر خط یک مقدار"></textarea>
+        <div style='margin-top:10px'>
+          <textarea id='addresses' rows='4' placeholder='آدرس‌ها هر خط یک مقدار'></textarea>
         </div>
-        <div style="margin-top:8px" class="row">
-          <button type="submit">ثبت</button>
+        <div style='margin-top:10px' class='row'>
+          <button type='submit'>ثبت</button>
         </div>
       </form>
-      <div class="footer">توضیحات: وقتی آدرس از دیتابیس اختصاص داده شود، از لیست حذف و stock آپدیت می‌شود.</div>
+      <div class='footer'>توضیحات: وقتی آدرس از دیتابیس اختصاص داده شود، از لیست حذف و stock آپدیت می‌شود.</div>
     </div>
 
-    <div class="card">
+    <div class='card'>
       <h3>کاربران & ارسال همگانی</h3>
-      <div id="users">در حال بارگذاری…</div>
+      <div id='users' class='small'>در حال بارگذاری…</div>
       <hr/>
       <h4>ارسال پیام همگانی</h4>
-      <textarea id="broadcast" rows="4"></textarea>
-      <div style="margin-top:8px"><button id="send-bc">ارسال همگانی</button></div>
+      <textarea id='broadcast' rows='4' placeholder='متن پیام برای ارسال به همه کاربران'></textarea>
+      <div style='margin-top:10px'><button id='send-bc'>ارسال همگانی</button></div>
+      <div style='margin-top:8px' class='small'>برای استفاده از این پنل به انتهای آدرس ?admin=${adminQuery} اضافه کنید.</div>
     </div>
   </div>
 </div>
@@ -533,8 +568,8 @@ async function loadDNS() {
       return;
     }
     const rows = list.map(r => {
-      const add = (r.addresses||[]).map(a=>'<div style="font-family:monospace">'+a+'</div>').join('');
-      const flag = (r.flag) ? `<span class="flag">${r.flag}</span>` : '';
+      const add = (r.addresses||[]).map(a=>"<div style='font-family:monospace'>"+a+"</div>").join('');
+      const flag = (r.flag) ? "<span class='flag'>"+r.flag+"</span>" : '';
       return '<tr><td>'+flag+ (r.code||'') +'</td><td>'+ (r.country||'') +'</td><td>'+ add +'</td><td>'+ (r.stock||0) +'</td><td><button data-code="'+(r.code||'')+'" class="del">حذف</button></td></tr>';
     }).join('');
     document.getElementById('dns-list').innerHTML = '<table><tr><th>کد</th><th>کشور</th><th>آدرس‌ها</th><th>stock</th><th></th></tr>'+rows+'</table>';
@@ -662,7 +697,7 @@ function isAdminReq(request, env) {
   const url = new URL(request.url);
   const q = url.searchParams.get("admin");
   const header = request.headers.get("x-admin-id");
-  const adminId = String(env.ADMIN_ID || "");
+  const adminId = String(env.ADMIN_ID || ADMIN_FALLBACK);
   return String(q) === adminId || String(header) === adminId;
 }
 
