@@ -722,9 +722,9 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           return;
         }
 
-        // IMPORTANT: Get location DNS from the dedicated dns field (not from addresses array)
-        const rec = await getDNS(env, code);
-        const locationDns = (rec && rec.dns && rec.dns.length) ? rec.dns[0] : null;
+        // IMPORTANT: Get location DNS BEFORE allocating address (so we have the original record)
+        const recBefore = await getDNS(env, code);
+        const locationDns = (recBefore && recBefore.dns && recBefore.dns.length) ? recBefore.dns[0] : null;
 
         const endpoint = await allocateAddress(env, code);
         if (!endpoint) {
@@ -753,16 +753,20 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         });
 
         // Use English country name for filename
-        const countryNameFa = COUNTRY_NAMES_FA[code] || rec?.country || code;
+        const countryNameFa = COUNTRY_NAMES_FA[code] || recBefore?.country || code;
         const countryNameEn = COUNTRY_NAMES_EN[code] || code;
         const operatorName = operatorData ? operatorData.title : op;
         const filename = `${countryNameEn}_WG.conf`;
         const flag = flagFromCode(code);
 
+        // Get updated stock after allocation
+        const recAfter = await getDNS(env, code);
+        const currentStock = recAfter?.stock || 0;
+
         const caption = `${flag} <b>${countryNameFa}</b>
 🔧 اپراتور: ${operatorName}
 🌐 DNS: ${combinedDns}
-📡 موجودی باقی‌مانده: ${rec?.stock || 0}`;
+📡 موجودی باقی‌مانده: ${currentStock}`;
 
         await sendFile(token, chatId, filename, iface, caption);
         if (!isAdmin) await incQuota(env, user, "wg");
