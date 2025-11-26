@@ -352,6 +352,23 @@ function sendMsg(token, chat_id, text, extra = {}) {
   });
 }
 
+function editMsg(token, chat_id, message_id, text, extra = {}) {
+  return tg(token, "editMessageText", {
+    chat_id,
+    message_id,
+    text,
+    parse_mode: "HTML",
+    ...extra,
+  });
+}
+
+function deleteMsg(token, chat_id, message_id) {
+  return tg(token, "deleteMessage", {
+    chat_id,
+    message_id,
+  });
+}
+
 function sendFile(token, chat_id, filename, contents, caption = "") {
   const f = new FormData();
   f.append("chat_id", String(chat_id));
@@ -740,7 +757,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
 
       // navigation
       if (data === "back") {
-        await sendMsg(token, chatId, "منوی اصلی:", {
+        // ادیت پیام قبلی به جای ارسال پیام جدید
+        await editMsg(token, chatId, callback.message.message_id, "منوی اصلی:", {
           reply_markup: mainMenuKeyboard(String(user) === adminId),
         });
         return;
@@ -786,9 +804,11 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       }
 
       if (data === "menu_dns_proto") {
-        await sendMsg(
+        // ادیت پیام به جای ارسال جدید
+        await editMsg(
           token,
           chatId,
+          callback.message.message_id,
           "🌐 DNS - پروتکل مورد نظر را انتخاب کنید:",
           {
             reply_markup: protocolSelectionKeyboard(),
@@ -802,7 +822,9 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         if (protocol === "ipv4") {
           const list = await listDNS(env);
           if (!list || list.length === 0) {
-            await sendMsg(token, chatId, "فعلاً رکوردی موجود نیست.");
+            await editMsg(token, chatId, callback.message.message_id, "فعلاً رکوردی موجود نیست.", {
+              reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: "back" }]] }
+            });
             return;
           }
           const mapped = list
@@ -817,9 +839,11 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
             })
             .sort((a, b) => b.stock - a.stock);
 
-          await sendMsg(
+          // ادیت پیام به جای ارسال جدید
+          await editMsg(
             token,
             chatId,
+            callback.message.message_id,
             "🌐 دریافت DNS IPv4 - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام",
             {
               reply_markup: countriesKeyboard(mapped, 0, "dns4"),
@@ -828,7 +852,9 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         } else if (protocol === "ipv6") {
           const list = await listDNS6(env);
           if (!list || list.length === 0) {
-            await sendMsg(token, chatId, "فعلاً رکوردی IPv6 موجود نیست.");
+            await editMsg(token, chatId, callback.message.message_id, "فعلاً رکوردی IPv6 موجود نیست.", {
+              reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: "back" }]] }
+            });
             return;
           }
           const mapped = list
@@ -843,9 +869,11 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
             })
             .sort((a, b) => b.stock - a.stock);
 
-          await sendMsg(
+          // ادیت پیام به جای ارسال جدید
+          await editMsg(
             token,
             chatId,
+            callback.message.message_id,
             "🌐 دریافت DNS IPv6 - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام",
             {
               reply_markup: countriesKeyboard(mapped, 0, "dns6"),
@@ -858,7 +886,9 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       if (data === "menu_wg") {
         const list = await listDNS(env);
         if (!list || list.length === 0) {
-          await sendMsg(token, chatId, "فعلاً رکوردی موجود نیست.");
+          await editMsg(token, chatId, callback.message.message_id, "فعلاً رکوردی موجود نیست.", {
+            reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: "back" }]] }
+          });
           return;
         }
         const mapped = list
@@ -867,11 +897,13 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
             country: r.country || r.code,
             stock: r.stock || 0,
           }))
-          .sort((a, b) => b.stock - a.stock);
+          .sort((a, b) => b.stock - a.sort);
 
-        await sendMsg(
+        // ادیت پیام به جای ارسال جدید
+        await editMsg(
           token,
           chatId,
+          callback.message.message_id,
           "🛡️ دریافت WireGuard - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام",
           {
             reply_markup: countriesKeyboard(mapped, 0, "wg"),
@@ -882,7 +914,9 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
 
       if (data === "menu_account") {
         if (!user) {
-          await sendMsg(token, chatId, "مشخصات کاربری پیدا نشد.");
+          await editMsg(token, chatId, callback.message.message_id, "مشخصات کاربری پیدا نشد.", {
+            reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: "back" }]] }
+          });
           return;
         }
         const q = await getQuota(env, user);
@@ -955,7 +989,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
 
         text += "\n━━━━━━━━━━━━━━━━━━━━";
 
-        await sendMsg(token, chatId, text, {
+        // ادیت پیام به جای ارسال جدید
+        await editMsg(token, chatId, callback.message.message_id, text, {
           reply_markup: mainMenuKeyboard(String(user) === adminId),
         });
         return;
@@ -973,9 +1008,11 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const us = await allUsers(env);
         const dns = await listDNS(env);
         const totalStock = dns.reduce((s, r) => s + (r.stock || 0), 0);
-        await sendMsg(
+        // ادیت پیام به جای ارسال جدید
+        await editMsg(
           token,
           chatId,
+          callback.message.message_id,
           `📊 آمار ربات:\n👥 کاربران: ${us.length}\n🌍 کشورها: ${dns.length}\n📡 مجموع موجودی IP: ${totalStock}`,
           { reply_markup: mainMenuKeyboard(true) },
         );
@@ -984,9 +1021,11 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
 
       if (data === "menu_reset_quota") {
         if (String(user) !== adminId) return;
-        await sendMsg(
+        // ادیت پیام به جای ارسال جدید
+        await editMsg(
           token,
           chatId,
+          callback.message.message_id,
           "⚠️ آیا از ریست کردن محدودیت تمام کاربران اطمینان دارید؟\n\nبا تایید، محدودیت روزانه همه کاربران صفر شده و به آن‌ها اطلاع داده می‌شود.",
           {
             reply_markup: {
@@ -1047,9 +1086,11 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           ? `موجودی: ${rec.stock || 0} IP`
           : "موجودی: نامشخص";
 
-        await sendMsg(
+        // ادیت پیام به جای ارسال جدید
+        await editMsg(
           token,
           chatId,
+          callback.message.message_id,
           `${flag} <b>${countryName}</b>\n${stockInfo}\n\nعملیات را انتخاب کنید:`,
           { reply_markup: actionKeyboard(code) },
         );
@@ -1183,10 +1224,14 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       // wg flow step 1: user clicked wg:CODE -> choose operator
       if (data.startsWith("wg:")) {
         const code = data.slice(3);
-        await sendMsg(
+        const flag = flagFromCode(code);
+        const countryName = COUNTRY_NAMES_FA[code] || code;
+        // ادیت پیام به جای ارسال جدید
+        await editMsg(
           token,
           chatId,
-          `برای ${code} اپراتور مورد نظر را انتخاب کنید:`,
+          callback.message.message_id,
+          `${flag} <b>${countryName}</b>\n\nاپراتور مورد نظر را انتخاب کنید:`,
           { reply_markup: operatorKeyboard(code) },
         );
         return;
@@ -1197,10 +1242,15 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const parts = data.split(":");
         const code = parts[1];
         const op = parts[2];
-        await sendMsg(
+        const flag = flagFromCode(code);
+        const countryName = COUNTRY_NAMES_FA[code] || code;
+        const operatorName = OPERATORS[op] ? OPERATORS[op].title : op;
+        // ادیت پیام به جای ارسال جدید
+        await editMsg(
           token,
           chatId,
-          `DNS مورد نظر برای اپراتور انتخابی را انتخاب کنید:`,
+          callback.message.message_id,
+          `${flag} <b>${countryName}</b> - ${operatorName}\n\nDNS مورد نظر را انتخاب کنید:`,
           { reply_markup: dnsChoiceKeyboard(code, op) },
         );
         return;
