@@ -659,6 +659,109 @@
             background: var(--text-muted);
         }
 
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .modal-close {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: var(--text-secondary);
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: var(--danger-light);
+            color: var(--danger);
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .modal-footer {
+            padding: 20px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            width: auto;
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
         .countries-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -800,6 +903,41 @@
         <span>☰</span>
     </button>
     <div class="overlay" id="overlay"></div>
+
+    <div class="modal-overlay" id="add-address-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>افزودن آدرس به کشور <strong id="modal-country-name"></strong></span>
+                </div>
+                <button class="modal-close" id="close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="note">
+                    <i class="fas fa-info-circle"></i>
+                    هر خط یک آدرس - آدرس‌های تکراری به صورت خودکار حذف می‌شوند
+                </div>
+                <div class="form-group">
+                    <label class="form-label">آدرس‌های جدید</label>
+                    <textarea id="modal-addresses" rows="8"
+                        placeholder="1.2.3.4&#10;5.6.7.8&#10;2001:db8::1&#10;..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-modal">
+                    <i class="fas fa-times"></i>
+                    <span>انصراف</span>
+                </button>
+                <button class="btn btn-primary" id="submit-modal">
+                    <i class="fas fa-check"></i>
+                    <span>افزودن آدرس‌ها</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <div class="layout">
         <aside class="sidebar" id="sidebar">
@@ -1401,54 +1539,105 @@
                         });
                     });
 
-                    document.querySelectorAll('.btn-add-addresses').forEach(function (btn) {
-                        btn.addEventListener('click', async function () {
-                            var countryCode = this.getAttribute('data-code');
-                            var addressesText = prompt('آدرس‌های جدید را برای کشور ' + countryCode + ' وارد کنید (هر خط یک آدرس):');
-                            if (!addressesText) return;
+                    var currentCountryCode = '';
+                    var modal = document.getElementById('add-address-modal');
+                    var modalCountryName = document.getElementById('modal-country-name');
+                    var modalAddresses = document.getElementById('modal-addresses');
 
-                            var newAddresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
-                            if (newAddresses.length === 0) return;
+                    document.getElementById('close-modal').addEventListener('click', function () {
+                        modal.classList.remove('active');
+                        modalAddresses.value = '';
+                    });
 
-                            try {
-                                var rec4 = await fetchJson('/api/dns/' + countryCode).catch(() => null);
-                                var rec6 = await fetchJson('/api/dns6/' + countryCode).catch(() => null);
+                    document.getElementById('cancel-modal').addEventListener('click', function () {
+                        modal.classList.remove('active');
+                        modalAddresses.value = '';
+                    });
 
-                                var updated = false;
-                                if (rec4 && rec4.addresses) {
-                                    rec4.addresses = rec4.addresses.concat(newAddresses);
-                                    rec4.stock = rec4.addresses.length;
-                                    await fetch('/api/dns/' + countryCode, {
-                                        method: 'PUT',
-                                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-                                        body: JSON.stringify(rec4)
-                                    });
-                                    updated = true;
-                                }
-                                if (rec6 && rec6.addresses) {
-                                    rec6.addresses = rec6.addresses.concat(newAddresses);
-                                    rec6.stock = rec6.addresses.length;
-                                    await fetch('/api/dns6/' + countryCode, {
-                                        method: 'PUT',
-                                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-                                        body: JSON.stringify(rec6)
-                                    });
-                                    updated = true;
-                                }
+                    modal.addEventListener('click', function (e) {
+                        if (e.target === modal) {
+                            modal.classList.remove('active');
+                            modalAddresses.value = '';
+                        }
+                    });
 
-                                if (updated) {
-                                    loadCountries();
-                                    loadDNS4();
-                                    loadDNS6();
-                                    updateStats();
-                                    alert('آدرس‌ها با موفقیت اضافه شدند.');
-                                } else {
-                                    alert('خطا: هیچ رکورد IPv4 یا IPv6 برای این کشور یافت نشد.');
-                                }
-                            } catch (err) {
-                                alert('خطا در افزودن آدرس');
-                                console.error(err);
+                    document.getElementById('submit-modal').addEventListener('click', async function () {
+                        var addressesText = modalAddresses.value.trim();
+                        if (!addressesText) {
+                            alert('لطفا آدرس‌ها را وارد کنید');
+                            return;
+                        }
+
+                        var newAddresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+                        if (newAddresses.length === 0) return;
+
+                        try {
+                            var rec4 = await fetchJson('/api/dns/' + currentCountryCode).catch(() => null);
+                            var rec6 = await fetchJson('/api/dns6/' + currentCountryCode).catch(() => null);
+
+                            var updated = false;
+                            var addedCount = 0;
+                            var duplicateCount = 0;
+
+                            if (rec4 && rec4.addresses) {
+                                var oldCount = rec4.addresses.length;
+                                var combined = rec4.addresses.concat(newAddresses);
+                                rec4.addresses = Array.from(new Set(combined));
+                                rec4.stock = rec4.addresses.length;
+                                addedCount += (rec4.addresses.length - oldCount);
+                                duplicateCount += (combined.length - rec4.addresses.length);
+                                await fetch('/api/dns/' + currentCountryCode, {
+                                    method: 'PUT',
+                                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                                    body: JSON.stringify(rec4)
+                                });
+                                updated = true;
                             }
+                            if (rec6 && rec6.addresses) {
+                                var oldCount = rec6.addresses.length;
+                                var combined = rec6.addresses.concat(newAddresses);
+                                rec6.addresses = Array.from(new Set(combined));
+                                rec6.stock = rec6.addresses.length;
+                                addedCount += (rec6.addresses.length - oldCount);
+                                duplicateCount += (combined.length - rec6.addresses.length);
+                                await fetch('/api/dns6/' + currentCountryCode, {
+                                    method: 'PUT',
+                                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                                    body: JSON.stringify(rec6)
+                                });
+                                updated = true;
+                            }
+
+                            if (updated) {
+                                modal.classList.remove('active');
+                                modalAddresses.value = '';
+                                loadCountries();
+                                loadDNS4();
+                                loadDNS6();
+                                updateStats();
+
+                                var successMsg = '✅ آدرس‌ها با موفقیت اضافه شدند!\n\n';
+                                successMsg += '📊 آمار:\n';
+                                successMsg += '• آدرس‌های جدید: ' + addedCount + '\n';
+                                if (duplicateCount > 0) {
+                                    successMsg += '• تکراری‌های حذف شده: ' + duplicateCount;
+                                }
+                                alert(successMsg);
+                            } else {
+                                alert('خطا: هیچ رکورد IPv4 یا IPv6 برای این کشور یافت نشد.');
+                            }
+                        } catch (err) {
+                            alert('خطا در افزودن آدرس');
+                            console.error(err);
+                        }
+                    });
+
+                    document.querySelectorAll('.btn-add-addresses').forEach(function (btn) {
+                        btn.addEventListener('click', function () {
+                            currentCountryCode = this.getAttribute('data-code');
+                            modalCountryName.textContent = currentCountryCode;
+                            modalAddresses.value = '';
+                            modal.classList.add('active');
                         });
                     });
 
