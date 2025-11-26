@@ -769,6 +769,29 @@
             background: #dc2626;
             transform: scale(1.05);
         }
+
+        .btn-add-addresses {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-add-addresses:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
     </style>
 </head>
 
@@ -1335,6 +1358,12 @@
                         html += '<div class="country-card-body">';
                         html += '<div class="address-list">';
 
+                        html += '<div style="margin-bottom: 12px;">';
+                        html += '<button class="btn-add-addresses" data-code="' + c.code + '">';
+                        html += '<i class="fas fa-plus"></i> افزودن آدرس به این کشور';
+                        html += '</button>';
+                        html += '</div>';
+
                         if (c.ipv4.length > 0) {
                             html += '<div style="font-weight: 600; margin-bottom: 8px; color: var(--primary);"><i class="fas fa-globe"></i> IPv4 (' + c.ipv4.length + ')</div>';
                             c.ipv4.forEach(function (addr) {
@@ -1369,6 +1398,57 @@
                         header.addEventListener('click', function () {
                             var card = this.closest('.country-card');
                             card.classList.toggle('expanded');
+                        });
+                    });
+
+                    document.querySelectorAll('.btn-add-addresses').forEach(function (btn) {
+                        btn.addEventListener('click', async function () {
+                            var countryCode = this.getAttribute('data-code');
+                            var addressesText = prompt('آدرس‌های جدید را برای کشور ' + countryCode + ' وارد کنید (هر خط یک آدرس):');
+                            if (!addressesText) return;
+
+                            var newAddresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+                            if (newAddresses.length === 0) return;
+
+                            try {
+                                var rec4 = await fetchJson('/api/dns/' + countryCode).catch(() => null);
+                                var rec6 = await fetchJson('/api/dns6/' + countryCode).catch(() => null);
+
+                                var updated = false;
+                                if (rec4 && rec4.addresses) {
+                                    rec4.addresses = rec4.addresses.concat(newAddresses);
+                                    rec4.stock = rec4.addresses.length;
+                                    await fetch('/api/dns/' + countryCode, {
+                                        method: 'PUT',
+                                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                                        body: JSON.stringify(rec4)
+                                    });
+                                    updated = true;
+                                }
+                                if (rec6 && rec6.addresses) {
+                                    rec6.addresses = rec6.addresses.concat(newAddresses);
+                                    rec6.stock = rec6.addresses.length;
+                                    await fetch('/api/dns6/' + countryCode, {
+                                        method: 'PUT',
+                                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                                        body: JSON.stringify(rec6)
+                                    });
+                                    updated = true;
+                                }
+
+                                if (updated) {
+                                    loadCountries();
+                                    loadDNS4();
+                                    loadDNS6();
+                                    updateStats();
+                                    alert('آدرس‌ها با موفقیت اضافه شدند.');
+                                } else {
+                                    alert('خطا: هیچ رکورد IPv4 یا IPv6 برای این کشور یافت نشد.');
+                                }
+                            } catch (err) {
+                                alert('خطا در افزودن آدرس');
+                                console.error(err);
+                            }
                         });
                     });
 
