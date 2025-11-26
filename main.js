@@ -1,8 +1,7 @@
-// main.js — Telegram WireGuard/DNS Bot + Responsive Web Panel for Cloudflare Pages
+// main.js — Telegram WireGuard/DNS Bot + Responsive Web Panel --> index.html for Cloudflare Pages
 // ---------------------------------------------------------------
 // - KV binding name: DB
 // - Required env vars: BOT_TOKEN, ADMIN_ID (fallback to numeric ADMIN_FALLBACK)
-// - Features: Inline keyboard UX, dynamic country list from KV, unique IP assignment,
 //   per-user daily quotas (3 DNS / 3 WG), responsive admin panel, admin broadcast.
 // ---------------------------------------------------------------
 
@@ -770,9 +769,14 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const currentStock = recAfter?.stock || 0;
 
         const caption = `${flag} <b>${countryNameFa}</b>
-🔧 اپراتور: ${operatorName}
-🌐 DNS: ${combinedDns}
-📡 موجودی باقی‌مانده: ${currentStock}`;
+
+━━━━━━━━━━━━━━━━━━━━
+📱 <b>اپراتور:</b> ${operatorName}
+🌐 <b>DNS:</b> <code>${combinedDns}</code>
+📡 <b>موجودی باقی‌مانده:</b> ${currentStock}
+━━━━━━━━━━━━━━━━━━━━
+
+✅ کانفیگ شما آماده است!`;
 
         await sendFile(token, chatId, filename, iface, caption);
         if (!isAdmin) await incQuota(env, user, "wg");
