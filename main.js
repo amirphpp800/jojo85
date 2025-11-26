@@ -249,6 +249,24 @@ async function incQuota(env, id, type) {
   await env.DB.put(key, String(v + 1));
 }
 
+async function resetAllQuotas(env) {
+  const d = DATE_YYYYMMDD();
+  const users = await allUsers(env);
+  let count = 0;
+
+  for (const userId of users) {
+    try {
+      await env.DB.delete(`q:dns:${userId}:${d}`);
+      await env.DB.delete(`q:wg:${userId}:${d}`);
+      count++;
+    } catch (e) {
+      console.error(`Error resetting quota for user ${userId}:`, e);
+    }
+  }
+
+  return count;
+}
+
 /* ---------------------- UI Elements (inline keyboards) ---------------------- */
 function stockEmoji(n) {
   if (!n || n <= 0) return "🔴";
@@ -265,6 +283,9 @@ function mainMenuKeyboard(isAdmin = false) {
     rows.push([
       { text: "📢 پیام همگانی", callback_data: "menu_broadcast" },
       { text: "📊 آمار ربات", callback_data: "menu_stats" }
+    ]);
+    rows.push([
+      { text: "🎁 ریست محدودیت", callback_data: "menu_reset_quota" }
     ]);
   }
   return { inline_keyboard: rows };
@@ -563,6 +584,48 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const dns = await listDNS(env);
         const totalStock = dns.reduce((s, r) => s + (r.stock || 0), 0);
         await sendMsg(token, chatId, `📊 آمار ربات:\n👥 کاربران: ${us.length}\n🌍 کشورها: ${dns.length}\n📡 مجموع موجودی IP: ${totalStock}`, { reply_markup: mainMenuKeyboard(true) });
+        return;
+      }
+
+      if (data === "menu_reset_quota") {
+        if (String(user) !== adminId) return;
+        await sendMsg(token, chatId, "⚠️ آیا از ریست کردن محدودیت تمام کاربران اطمینان دارید؟\n\nبا تایید، محدودیت روزانه همه کاربران صفر شده و به آن‌ها اطلاع داده می‌شود.", {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "✅ بله، ریست کن", callback_data: "confirm_reset_quota" },
+                { text: "❌ انصراف", callback_data: "back" }
+              ]
+            ]
+          }
+        });
+        return;
+      }
+
+      if (data === "confirm_reset_quota") {
+        if (String(user) !== adminId) return;
+
+        await sendMsg(token, chatId, "⏳ در حال ریست کردن محدودیت کاربران...");
+
+        const resetCount = await resetAllQuotas(env);
+        const users = await allUsers(env);
+
+        const giftMessage = `🎁 خبر خوش!\n\n✨ محدودیت روزانه شما به عنوان هدیه ریست شد!\n\n🔄 می‌توانید مجدداً از سرویس‌های زیر استفاده کنید:\n🌐 DNS: ${MAX_DNS_PER_DAY} بار\n🛡️ WireGuard: ${MAX_WG_PER_DAY} بار\n\n💚 از استفاده شما متشکریم!`;
+
+        let sentCount = 0;
+        for (const u of users) {
+          try {
+            await sendMsg(token, u, giftMessage);
+            sentCount++;
+          } catch (e) {
+            console.error(`Error sending gift message to user ${u}:`, e);
+          }
+        }
+
+        await sendMsg(token, chatId, `✅ عملیات با موفقیت انجام شد!\n\n📊 گزارش:\n👥 تعداد کاربران: ${users.length}\n🔄 محدودیت ریست شده: ${resetCount}\n📢 پیام ارسال شده: ${sentCount}`, {
+          reply_markup: mainMenuKeyboard(true)
+        });
+
         return;
       }
 
