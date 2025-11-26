@@ -970,7 +970,7 @@
             const ADMIN = new URL(location).searchParams.get('admin') || '';
 
             if (!ADMIN) {
-                document.body.innerHTML = '<div class="access-denied"><div class="access-card"><div class="access-icon">🔒</div><h2 class="access-title">دسترسی محدود</h2><p class="access-text">برای ورود به پنل مدیریت، پارامتر <code class="access-code">?admin=ADMIN_ID</code> را به URL اضافه کنید.</p><div class="access-example"><code>https://your-domain.com/?admin=YOUR_ID</code></div></div></div>';
+                document.body.innerHTML = '<div class="access-denied"><div class="access-card"><div class="access-icon">🔒</div><h2 class="access-title">دسترسی محدود</h2><p class="access-text">پارامتر های ورودی را ب درستی تنظیم کنید</p></div></div>';
                 return;
             }
 
@@ -1061,6 +1061,11 @@
                         document.getElementById('dns4-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div class="empty-state-text">هیچ کشور IPv4 ثبت نشده است</div></div>';
                         return;
                     }
+                    list.sort(function (a, b) {
+                        var stockA = (a.addresses && a.addresses.length) ? a.addresses.length : 0;
+                        var stockB = (b.addresses && b.addresses.length) ? b.addresses.length : 0;
+                        return stockB - stockA;
+                    });
                     var rows = list.map(function (r) {
                         var flag = r.flag || '';
                         var country = r.country || r.code;
@@ -1089,6 +1094,11 @@
                         document.getElementById('dns6-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div class="empty-state-text">هیچ کشور IPv6 ثبت نشده است</div></div>';
                         return;
                     }
+                    list.sort(function (a, b) {
+                        var stockA = (a.addresses && a.addresses.length) ? a.addresses.length : 0;
+                        var stockB = (b.addresses && b.addresses.length) ? b.addresses.length : 0;
+                        return stockB - stockA;
+                    });
                     var rows = list.map(function (r) {
                         var flag = r.flag || '';
                         var country = r.country || r.code;
