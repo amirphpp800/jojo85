@@ -399,6 +399,16 @@
             border-bottom: 1px solid var(--border);
         }
 
+        th.sortable-header {
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+
+        th.sortable-header:hover {
+            background: var(--border);
+            color: var(--primary);
+        }
+
         tbody tr {
             border-bottom: 1px solid var(--border-light);
             transition: background 0.15s ease;
@@ -1054,6 +1064,8 @@
                 }
             }
 
+            var dns4SortOrder = 'desc'; // desc = بیشترین به کمترین, asc = کمترین به بیشترین
+
             async function loadDNS4() {
                 try {
                     var list = await fetchJson('/api/dns');
@@ -1064,15 +1076,26 @@
                     list.sort(function (a, b) {
                         var stockA = (a.addresses && a.addresses.length) ? a.addresses.length : 0;
                         var stockB = (b.addresses && b.addresses.length) ? b.addresses.length : 0;
-                        return stockB - stockA;
+                        if (dns4SortOrder === 'desc') {
+                            return stockB - stockA;
+                        } else {
+                            return stockA - stockB;
+                        }
                     });
+                    var sortIcon = dns4SortOrder === 'desc' ? '▼' : '▲';
                     var rows = list.map(function (r) {
                         var flag = r.flag || '';
                         var country = r.country || r.code;
                         var actualStock = (r.addresses && r.addresses.length) ? r.addresses.length : 0;
                         return '<tr><td><span class="country-flag">' + flag + '</span> <strong>' + (r.code || '') + '</strong></td><td>' + country + '</td><td><span class="badge badge-success">' + actualStock + '</span></td><td><button data-code="' + (r.code || '') + '" class="btn btn-danger del4">حذف</button></td></tr>';
                     }).join('');
-                    document.getElementById('dns4-list').innerHTML = '<table><thead><tr><th>کد</th><th>کشور</th><th>موجودی</th><th>عملیات</th></tr></thead><tbody>' + rows + '</tbody></table>';
+                    document.getElementById('dns4-list').innerHTML = '<table><thead><tr><th>کد</th><th>کشور</th><th class="sortable-header" id="dns4-stock-header" style="cursor: pointer;">موجودی ' + sortIcon + '</th><th>عملیات</th></tr></thead><tbody>' + rows + '</tbody></table>';
+
+                    document.getElementById('dns4-stock-header').addEventListener('click', function () {
+                        dns4SortOrder = dns4SortOrder === 'desc' ? 'asc' : 'desc';
+                        loadDNS4();
+                    });
+
                     document.querySelectorAll('.del4').forEach(function (b) {
                         b.addEventListener('click', async function (e) {
                             var code = e.target.getAttribute('data-code');
@@ -1088,6 +1111,8 @@
                 }
             }
 
+            var dns6SortOrder = 'desc'; // desc = بیشترین به کمترین, asc = کمترین به بیشترین
+
             async function loadDNS6() {
                 try {
                     var list = await fetchJson('/api/dns6');
@@ -1098,15 +1123,26 @@
                     list.sort(function (a, b) {
                         var stockA = (a.addresses && a.addresses.length) ? a.addresses.length : 0;
                         var stockB = (b.addresses && b.addresses.length) ? b.addresses.length : 0;
-                        return stockB - stockA;
+                        if (dns6SortOrder === 'desc') {
+                            return stockB - stockA;
+                        } else {
+                            return stockA - stockB;
+                        }
                     });
+                    var sortIcon = dns6SortOrder === 'desc' ? '▼' : '▲';
                     var rows = list.map(function (r) {
                         var flag = r.flag || '';
                         var country = r.country || r.code;
                         var actualStock = (r.addresses && r.addresses.length) ? r.addresses.length : 0;
                         return '<tr><td><span class="country-flag">' + flag + '</span> <strong>' + (r.code || '') + '</strong></td><td>' + country + '</td><td><span class="badge badge-info">' + actualStock + '</span></td><td><button data-code="' + (r.code || '') + '" class="btn btn-danger del6">حذف</button></td></tr>';
                     }).join('');
-                    document.getElementById('dns6-list').innerHTML = '<table><thead><tr><th>کد</th><th>کشور</th><th>موجودی</th><th>عملیات</th></tr></thead><tbody>' + rows + '</tbody></table>';
+                    document.getElementById('dns6-list').innerHTML = '<table><thead><tr><th>کد</th><th>کشور</th><th class="sortable-header" id="dns6-stock-header" style="cursor: pointer;">موجودی ' + sortIcon + '</th><th>عملیات</th></tr></thead><tbody>' + rows + '</tbody></table>';
+
+                    document.getElementById('dns6-stock-header').addEventListener('click', function () {
+                        dns6SortOrder = dns6SortOrder === 'desc' ? 'asc' : 'desc';
+                        loadDNS6();
+                    });
+
                     document.querySelectorAll('.del6').forEach(function (b) {
                         b.addEventListener('click', async function (e) {
                             var code = e.target.getAttribute('data-code');
