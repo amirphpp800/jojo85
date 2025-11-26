@@ -259,8 +259,8 @@ function stockEmoji(n) {
 
 function mainMenuKeyboard(isAdmin = false) {
   const rows = [
-    [ { text: "🛡️ WireGuard", callback_data: "menu_wg" }, { text: "🌐 DNS", callback_data: "menu_dns_proto" } ],
-    [ { text: "👤 حساب من", callback_data: "menu_account" } ]
+    [{ text: "🛡️ WireGuard", callback_data: "menu_wg" }, { text: "🌐 DNS", callback_data: "menu_dns_proto" }],
+    [{ text: "👤 حساب من", callback_data: "menu_account" }]
   ];
   if (isAdmin) {
     rows.push([
@@ -275,8 +275,8 @@ function protocolSelectionKeyboard() {
   return {
     inline_keyboard: [
       [
-        { text: "IPv4 🌐", callback_data: "proto:ipv4" },
-        { text: "IPv6 🌐", callback_data: "proto:ipv6" }
+        { text: "IPv6 🌐", callback_data: "proto:ipv6" },
+        { text: "IPv4 🌐", callback_data: "proto:ipv4" }
       ],
       [{ text: "🔙 بازگشت به منو", callback_data: "back" }]
     ]
@@ -412,7 +412,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         if (txt.length > 0) {
           const list = await allUsers(env);
           for (const u of list) {
-            sendMsg(token, u, txt).catch(() => {});
+            sendMsg(token, u, txt).catch(() => { });
           }
           await env.DB.delete(`awaitBroadcast:${adminId}`);
           await sendMsg(token, chatId, `✅ پیام برای ${list.length} کاربر ارسال شد.`, { reply_markup: mainMenuKeyboard(true) });
@@ -425,7 +425,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
     if (callback) {
       const data = callback.data || "";
       // answer callback to remove loading spinner
-      tg(token, "answerCallbackQuery", { callback_query_id: callback.id }).catch(() => {});
+      tg(token, "answerCallbackQuery", { callback_query_id: callback.id }).catch(() => { });
 
       // navigation
       if (data === "back") {
@@ -445,10 +445,10 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           return;
         }
         const mapped = list
-          .map(r => ({ 
-            code: (r.code || "").toUpperCase(), 
-            country: r.country || r.code, 
-            stock: r.stock || 0 
+          .map(r => ({
+            code: (r.code || "").toUpperCase(),
+            country: r.country || r.code,
+            stock: r.stock || 0
           }))
           .sort((a, b) => b.stock - a.stock);
 
@@ -473,8 +473,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       }
 
       if (data === "menu_dns_proto") {
-        await sendMsg(token, chatId, "🌐 DNS - پروتکل مورد نظر را انتخاب کنید:", { 
-          reply_markup: protocolSelectionKeyboard() 
+        await sendMsg(token, chatId, "🌐 DNS - پروتکل مورد نظر را انتخاب کنید:", {
+          reply_markup: protocolSelectionKeyboard()
         });
         return;
       }
@@ -488,15 +488,15 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
             return;
           }
           const mapped = list
-            .map(r => ({ 
-              code: (r.code || "").toUpperCase(), 
-              country: r.country || r.code, 
-              stock: r.stock || 0 
+            .map(r => ({
+              code: (r.code || "").toUpperCase(),
+              country: r.country || r.code,
+              stock: r.stock || 0
             }))
             .sort((a, b) => b.stock - a.stock);
 
-          await sendMsg(token, chatId, "🌐 دریافت DNS IPv4 - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام", { 
-            reply_markup: countriesKeyboard(mapped, 0, 'dns4') 
+          await sendMsg(token, chatId, "🌐 دریافت DNS IPv4 - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام", {
+            reply_markup: countriesKeyboard(mapped, 0, 'dns4')
           });
         } else if (protocol === "ipv6") {
           const list = await listDNS6(env);
@@ -505,15 +505,15 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
             return;
           }
           const mapped = list
-            .map(r => ({ 
-              code: (r.code || "").toUpperCase(), 
-              country: r.country || r.code, 
-              stock: r.stock || 0 
+            .map(r => ({
+              code: (r.code || "").toUpperCase(),
+              country: r.country || r.code,
+              stock: r.stock || 0
             }))
             .sort((a, b) => b.stock - a.stock);
 
-          await sendMsg(token, chatId, "🌐 دریافت DNS IPv6 - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام", { 
-            reply_markup: countriesKeyboard(mapped, 0, 'dns6') 
+          await sendMsg(token, chatId, "🌐 دریافت DNS IPv6 - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام", {
+            reply_markup: countriesKeyboard(mapped, 0, 'dns6')
           });
         }
         return;
@@ -526,15 +526,15 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           return;
         }
         const mapped = list
-          .map(r => ({ 
-            code: (r.code || "").toUpperCase(), 
-            country: r.country || r.code, 
-            stock: r.stock || 0 
+          .map(r => ({
+            code: (r.code || "").toUpperCase(),
+            country: r.country || r.code,
+            stock: r.stock || 0
           }))
           .sort((a, b) => b.stock - a.stock);
 
-        await sendMsg(token, chatId, "🛡️ دریافت WireGuard - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام", { 
-          reply_markup: countriesKeyboard(mapped, 0, 'wg') 
+        await sendMsg(token, chatId, "🛡️ دریافت WireGuard - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام", {
+          reply_markup: countriesKeyboard(mapped, 0, 'wg')
         });
         return;
       }
@@ -546,7 +546,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const hist = rawHist ? JSON.parse(rawHist) : [];
         let text = `👤 حساب شما:\nDNS باقی‌مانده امروز: ${q.dnsLeft}\nWG باقی‌مانده امروز: ${q.wgLeft}\n\nتاریخچه اخیر:`;
         if (!hist.length) text += "\n(هیچ سابقه‌ای نیست)";
-        else text += "\n" + hist.slice(0, 10).map(h => `${h.at.slice(0,19).replace("T"," ")} — ${h.type} — ${h.country || ""}`).join("\n");
+        else text += "\n" + hist.slice(0, 10).map(h => `${h.at.slice(0, 19).replace("T", " ")} — ${h.type} — ${h.country || ""}`).join("\n");
         await sendMsg(token, chatId, text, { reply_markup: mainMenuKeyboard(String(user) === adminId) });
         return;
       }
@@ -575,8 +575,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const rec = await getDNS(env, code);
         const stockInfo = rec ? `موجودی: ${rec.stock || 0} IP` : "موجودی: نامشخص";
 
-        await sendMsg(token, chatId, 
-          `${flag} <b>${countryName}</b>\n${stockInfo}\n\nعملیات را انتخاب کنید:`, 
+        await sendMsg(token, chatId,
+          `${flag} <b>${countryName}</b>\n${stockInfo}\n\nعملیات را انتخاب کنید:`,
           { reply_markup: actionKeyboard(code) }
         );
         return;
@@ -722,15 +722,21 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           return;
         }
 
-        // IMPORTANT: Get location DNS BEFORE allocating address (so we have the original record)
+        // IMPORTANT: Get location DNS BEFORE allocating address
         const recBefore = await getDNS(env, code);
-        const locationDns = (recBefore && recBefore.dns && recBefore.dns.length) ? recBefore.dns[0] : null;
 
+        // Get DNS location (first available address from country)
+        const locationDns = (recBefore && recBefore.addresses && recBefore.addresses.length > 0)
+          ? recBefore.addresses[0]
+          : null;
+
+        // Now allocate the address (which removes it from the list)
         const endpoint = await allocateAddress(env, code);
         if (!endpoint) {
           await sendMsg(token, chatId, `برای ${code} آدرسی موجود نیست.`);
           return;
         }
+
         const mtu = pickRandom(WG_MTUS);
         const userDns = dnsValue || pickRandom(WG_FIXED_DNS);
         const priv = randBase64(32);
@@ -740,16 +746,16 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
 
         // Address: از اپراتور انتخابی
         const operatorData = OPERATORS[op];
-        const operatorAddress = operatorData && operatorData.addresses && operatorData.addresses.length 
-          ? pickRandom(operatorData.addresses) 
+        const operatorAddress = operatorData && operatorData.addresses && operatorData.addresses.length
+          ? pickRandom(operatorData.addresses)
           : "10.66.66.2/32";
 
-        const iface = buildInterfaceOnlyConfig({ 
-          privateKey: priv, 
-          address: "10.66.66.2/32", 
-          mtu, 
+        const iface = buildInterfaceOnlyConfig({
+          privateKey: priv,
+          address: "10.66.66.2/32",
+          mtu,
           dns: combinedDns,
-          operatorAddress 
+          operatorAddress
         });
 
         // Use English country name for filename
@@ -774,7 +780,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           const histKey = `history:${user}`;
           const raw = await env.DB.get(histKey);
           const h = raw ? JSON.parse(raw) : [];
-          h.unshift({ type: "wg", country: code, at: new Date().toISOString(), endpoint, operator: op, dns: userDns });
+          h.unshift({ type: "wg", country: code, at: new Date().toISOString(), endpoint, operator: op, dns: combinedDns });
           if (h.length > 20) h.splice(20);
           await env.DB.put(histKey, JSON.stringify(h));
         } catch (e) { console.error("history save err", e); }
@@ -852,9 +858,21 @@ const app = {
     // Root: serve index.html
     if (path === "/" && method === "GET") {
       try {
-        const htmlFile = await env.ASSETS.fetch(new URL('/index.html', request.url));
-        return htmlFile;
+        if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+          const htmlFile = await env.ASSETS.fetch(new Request(request.url));
+          return htmlFile;
+        }
+        // Fallback: read index.html directly (for Node.js environment)
+        const fs = await import('fs/promises');
+        const content = await fs.readFile('index.html', 'utf-8');
+        return new Response(content, {
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
       } catch (e) {
+        console.error('Error serving index.html:', e);
         return new Response("index.html not found", { status: 404 });
       }
     }
@@ -958,9 +976,9 @@ const app = {
           }
         }
         return jsonResponse({ ok: true, sent: successCount, total: us.length });
-      } catch (e) { 
+      } catch (e) {
         console.error("broadcast error:", e);
-        return jsonResponse({ error: "invalid json" }, 400); 
+        return jsonResponse({ error: "invalid json" }, 400);
       }
     }
 
