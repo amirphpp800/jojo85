@@ -708,7 +708,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         if (txt.length > 0) {
           const list = await allUsers(env);
           for (const u of list) {
-            sendMsg(token, u, txt).catch(() => { });
+            sendMsg(token, u, txt).catch(() => {});
           }
           await env.DB.delete(`awaitBroadcast:${adminId}`);
           await sendMsg(
@@ -728,7 +728,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       // answer callback to remove loading spinner
       tg(token, "answerCallbackQuery", {
         callback_query_id: callback.id,
-      }).catch(() => { });
+      }).catch(() => {});
 
       // navigation
       if (data === "back") {
@@ -1118,67 +1118,49 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       // IPv6 DNS request flow (gives 2 addresses, no filter check)
       if (data.startsWith("dns6:")) {
         const code = data.slice(5);
-        if (!user) {
-          await sendMsg(token, chatId, "کاربر نامشخص");
-          return;
-        }
+        if (!user) { await sendMsg(token, chatId, "کاربر نامشخص"); return; }
         const q = await getQuota(env, user);
         const isAdmin = String(user) === adminId;
         if (!isAdmin && q.dnsLeft <= 0) {
-          await sendMsg(
-            token,
-            chatId,
-            `محدودیت روزانه DNS شما به پایان رسیده است.\nباقی‌مانده: ${q.dnsLeft}`,
-          );
+          await sendMsg(token, chatId, `محدودیت روزانه DNS شما به پایان رسیده است.\nباقی‌مانده: ${q.dnsLeft}`);
           return;
         }
         const addresses = await allocateAddress6(env, code);
         if (!addresses || addresses.length < 2) {
-          await sendMsg(
-            token,
-            chatId,
-            `برای ${code} آدرس IPv6 کافی موجود نیست.`,
-          );
+          await sendMsg(token, chatId, `برای ${code} آدرس IPv6 کافی موجود نیست.`);
           return;
         }
 
         const rec = await getDNS6(env, code);
         const flag = flagFromCode(code);
-        const countryName = COUNTRY_NAMES_FA[code] || rec?.country || code;
+        const countryNameFa = COUNTRY_NAMES_FA[code] || rec?.country || code;
         const stock = rec?.stock || 0;
 
-        const message = `${flag} <b>${countryName}</b> - IPv6
+        const message = `${flag} <b>${countryNameFa}</b> - IPv6
 
 🌐 آدرس‌های اختصاصی شما:
 <code>${addresses[0]}</code>
 <code>${addresses[1]}</code>
 
-📊 موجودی باقی‌مانده ${countryName}: ${stock} عدد
+📊 موجودی باقی‌مانده ${countryNameFa}: ${stock} عدد
 📈 سهمیه امروز شما: ${q.dnsUsed + 1}/${MAX_DNS_PER_DAY}`;
 
         await sendMsg(token, chatId, message, {
           reply_markup: {
             inline_keyboard: [
-              [{ text: "🔙 بازگشت به منو", callback_data: "back" }],
-            ],
-          },
+              [{ text: "🔙 بازگشت به منو", callback_data: "back" }]
+            ]
+          }
         });
         if (!isAdmin) await incQuota(env, user, "dns");
         const histKey = `history:${user}`;
         try {
           const raw = await env.DB.get(histKey);
           const h = raw ? JSON.parse(raw) : [];
-          h.unshift({
-            type: "dns-ipv6",
-            country: code,
-            at: new Date().toISOString(),
-            value: addresses.join(", "),
-          });
+          h.unshift({ type: "dns-ipv6", country: code, at: new Date().toISOString(), value: addresses.join(", ") });
           if (h.length > 20) h.splice(20);
           await env.DB.put(histKey, JSON.stringify(h));
-        } catch (e) {
-          console.error("history save err", e);
-        }
+        } catch (e) { console.error("history save err", e); }
         return;
       }
 
@@ -1258,8 +1240,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const operatorData = OPERATORS[op];
         const operatorAddress =
           operatorData &&
-            operatorData.addresses &&
-            operatorData.addresses.length
+          operatorData.addresses &&
+          operatorData.addresses.length
             ? pickRandom(operatorData.addresses)
             : "10.66.66.2/32";
 
