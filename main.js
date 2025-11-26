@@ -556,6 +556,31 @@ function mainMenuKeyboard(isAdmin = false) {
   return { inline_keyboard: rows };
 }
 
+function accountMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "📊 سهمیه امروز", callback_data: "account_quota" },
+        { text: "📜 تاریخچه", callback_data: "account_history" },
+      ],
+      [
+        { text: "🌐 آدرس‌های DNS من", callback_data: "account_dns" },
+        { text: "🛡️ کانفیگ‌های WG", callback_data: "account_wg" },
+      ],
+      [{ text: "🔙 بازگشت به منو", callback_data: "back" }],
+    ],
+  };
+}
+
+function accountBackKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "🔙 بازگشت به حساب", callback_data: "menu_account" }],
+      [{ text: "🏠 منوی اصلی", callback_data: "back" }],
+    ],
+  };
+}
+
 function protocolSelectionKeyboard() {
   return {
     inline_keyboard: [
@@ -712,7 +737,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
     if (!chatId) return;
 
     // فقط به پیام‌های خصوصی پاسخ بده (نه گروه/کانال)
-    const chatType = 
+    const chatType =
       (message && message.chat && message.chat.type) ||
       (callback && callback.message && callback.message.chat && callback.message.chat.type);
     if (chatType && chatType !== 'private') {
@@ -733,7 +758,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         if (txt.length > 0) {
           const list = await allUsers(env);
           for (const u of list) {
-            sendMsg(token, u, txt).catch(() => {});
+            sendMsg(token, u, txt).catch(() => { });
           }
           await env.DB.delete(`awaitBroadcast:${adminId}`);
           await sendMsg(
@@ -753,7 +778,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       // answer callback to remove loading spinner
       tg(token, "answerCallbackQuery", {
         callback_query_id: callback.id,
-      }).catch(() => {});
+      }).catch(() => { });
 
       // navigation
       if (data === "back") {
@@ -923,20 +948,74 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const rawHist = await env.DB.get(`history:${user}`);
         const hist = rawHist ? JSON.parse(rawHist) : [];
 
-        let text = `👤 <b>حساب کاربری شما</b>
+        const dnsCount = hist.filter(h => h.type === "dns-ipv4" || h.type === "dns-ipv6").length;
+        const wgCount = hist.filter(h => h.type === "wg").length;
+
+        const text = `👤 <b>حساب کاربری شما</b>
 
 ━━━━━━━━━━━━━━━━━━━━
+
 📊 <b>سهمیه امروز:</b>
+┌ 🌐 DNS: <b>${q.dnsLeft}</b> از ${MAX_DNS_PER_DAY}
+└ 🛡️ WireGuard: <b>${q.wgLeft}</b> از ${MAX_WG_PER_DAY}
 
-🌐 DNS باقی‌مانده: <b>${q.dnsLeft}/${MAX_DNS_PER_DAY}</b>
-🛡️ WireGuard باقی‌مانده: <b>${q.wgLeft}/${MAX_WG_PER_DAY}</b>
+📁 <b>آمار کلی:</b>
+┌ 🌐 آدرس‌های دریافتی: <b>${dnsCount}</b>
+└ 🛡️ کانفیگ‌های ساخته شده: <b>${wgCount}</b>
 
 ━━━━━━━━━━━━━━━━━━━━
-📁 <b>تاریخچه درخواست‌ها:</b>
+
+💡 از دکمه‌های زیر برای مشاهده جزئیات استفاده کنید:`;
+
+        await editMsg(token, chatId, callback.message.message_id, text, {
+          reply_markup: accountMenuKeyboard(),
+        });
+        return;
+      }
+
+      if (data === "account_quota") {
+        if (!user) return;
+        const q = await getQuota(env, user);
+
+        const dnsBar = "█".repeat(q.dnsLeft) + "░".repeat(MAX_DNS_PER_DAY - q.dnsLeft);
+        const wgBar = "█".repeat(q.wgLeft) + "░".repeat(MAX_WG_PER_DAY - q.wgLeft);
+
+        const text = `📊 <b>سهمیه امروز شما</b>
+
+━━━━━━━━━━━━━━━━━━━━
+
+🌐 <b>DNS</b>
+${dnsBar}
+باقی‌مانده: <b>${q.dnsLeft}</b> از ${MAX_DNS_PER_DAY}
+مصرف شده: <b>${q.dnsUsed}</b>
+
+🛡️ <b>WireGuard</b>
+${wgBar}
+باقی‌مانده: <b>${q.wgLeft}</b> از ${MAX_WG_PER_DAY}
+مصرف شده: <b>${q.wgUsed}</b>
+
+━━━━━━━━━━━━━━━━━━━━
+
+⏰ سهمیه شما هر ۲۴ ساعت ریست می‌شود.`;
+
+        await editMsg(token, chatId, callback.message.message_id, text, {
+          reply_markup: accountBackKeyboard(),
+        });
+        return;
+      }
+
+      if (data === "account_history") {
+        if (!user) return;
+        const rawHist = await env.DB.get(`history:${user}`);
+        const hist = rawHist ? JSON.parse(rawHist) : [];
+
+        let text = `📜 <b>تاریخچه درخواست‌ها</b>
+
+━━━━━━━━━━━━━━━━━━━━
 `;
 
         if (!hist.length) {
-          text += "\n📭 هنوز هیچ درخواستی ثبت نشده است";
+          text += "\n📭 هنوز هیچ درخواستی ثبت نشده است.";
         } else {
           const recentHist = hist.slice(0, 10);
           recentHist.forEach((h, idx) => {
@@ -944,54 +1023,122 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
             const date = dateTime.slice(0, 10);
             const time = dateTime.slice(11, 16);
             const flag = h.country ? flagFromCode(h.country) : "🌍";
-            const countryName =
-              COUNTRY_NAMES_FA[h.country] || h.country || "نامشخص";
+            const countryName = COUNTRY_NAMES_FA[h.country] || h.country || "نامشخص";
 
             let typeIcon = "📦";
             let typeName = h.type;
             if (h.type === "dns-ipv4") {
               typeIcon = "🌐";
-              typeName = "DNS IPv4";
+              typeName = "IPv4";
             } else if (h.type === "dns-ipv6") {
               typeIcon = "🌐";
-              typeName = "DNS IPv6";
+              typeName = "IPv6";
             } else if (h.type === "wg") {
               typeIcon = "🛡️";
-              typeName = "WireGuard";
+              typeName = "WG";
             }
 
-            text += `\n${idx + 1}. ${flag} <b>${countryName}</b>`;
-            text += `\n   ${typeIcon} ${typeName}`;
-            text += `\n   📅 ${date} ⏰ ${time}`;
+            text += `\n<b>${idx + 1}.</b> ${flag} ${countryName} • ${typeIcon} ${typeName}`;
+            text += `\n    📅 ${date} • ⏰ ${time}`;
+          });
+
+          text += "\n\n━━━━━━━━━━━━━━━━━━━━";
+
+          if (hist.length > 10) {
+            text += `\n\n📋 مجموع: ${hist.length} درخواست`;
+          }
+        }
+
+        await editMsg(token, chatId, callback.message.message_id, text, {
+          reply_markup: accountBackKeyboard(),
+        });
+        return;
+      }
+
+      if (data === "account_dns") {
+        if (!user) return;
+        const rawHist = await env.DB.get(`history:${user}`);
+        const hist = rawHist ? JSON.parse(rawHist) : [];
+        const dnsHist = hist.filter(h => h.type === "dns-ipv4" || h.type === "dns-ipv6");
+
+        let text = `🌐 <b>آدرس‌های DNS دریافتی شما</b>
+
+━━━━━━━━━━━━━━━━━━━━
+`;
+
+        if (!dnsHist.length) {
+          text += "\n📭 هنوز آدرس DNS دریافت نکرده‌اید.\n\nاز منوی اصلی گزینه DNS را انتخاب کنید.";
+        } else {
+          const recentDns = dnsHist.slice(0, 8);
+          recentDns.forEach((h, idx) => {
+            const flag = h.country ? flagFromCode(h.country) : "🌍";
+            const countryName = COUNTRY_NAMES_FA[h.country] || h.country || "نامشخص";
+            const ipType = h.type === "dns-ipv6" ? "IPv6" : "IPv4";
+            const date = h.at.slice(0, 10);
+
+            text += `\n<b>${idx + 1}. ${flag} ${countryName}</b> (${ipType})`;
+            text += `\n   📅 ${date}`;
             if (h.value) {
-              const val =
-                String(h.value).length > 40
-                  ? String(h.value).slice(0, 37) + "..."
-                  : h.value;
-              text += `\n   📍 <code>${val}</code>`;
-            }
-            if (h.dns) {
-              text += `\n   🌐 DNS: <code>${h.dns}</code>`;
-            }
-            if (h.operator) {
-              const opName = OPERATORS[h.operator]
-                ? OPERATORS[h.operator].title
-                : h.operator;
-              text += `\n   📱 ${opName}`;
+              text += `\n   📍 <code>${h.value}</code>`;
             }
             text += "\n";
           });
 
-          if (hist.length > 10) {
-            text += `\n... و ${hist.length - 10} درخواست دیگر`;
+          if (dnsHist.length > 8) {
+            text += `\n... و ${dnsHist.length - 8} آدرس دیگر`;
           }
         }
 
         text += "\n━━━━━━━━━━━━━━━━━━━━";
 
-        // ادیت پیام به جای ارسال جدید
         await editMsg(token, chatId, callback.message.message_id, text, {
-          reply_markup: mainMenuKeyboard(String(user) === adminId),
+          reply_markup: accountBackKeyboard(),
+        });
+        return;
+      }
+
+      if (data === "account_wg") {
+        if (!user) return;
+        const rawHist = await env.DB.get(`history:${user}`);
+        const hist = rawHist ? JSON.parse(rawHist) : [];
+        const wgHist = hist.filter(h => h.type === "wg");
+
+        let text = `🛡️ <b>کانفیگ‌های WireGuard شما</b>
+
+━━━━━━━━━━━━━━━━━━━━
+`;
+
+        if (!wgHist.length) {
+          text += "\n📭 هنوز کانفیگ WireGuard دریافت نکرده‌اید.\n\nاز منوی اصلی گزینه WireGuard را انتخاب کنید.";
+        } else {
+          const recentWg = wgHist.slice(0, 6);
+          recentWg.forEach((h, idx) => {
+            const flag = h.country ? flagFromCode(h.country) : "🌍";
+            const countryName = COUNTRY_NAMES_FA[h.country] || h.country || "نامشخص";
+            const date = h.at.slice(0, 10);
+            const opName = h.operator && OPERATORS[h.operator] ? OPERATORS[h.operator].title : h.operator || "-";
+
+            text += `\n<b>${idx + 1}. ${flag} ${countryName}</b>`;
+            text += `\n   📅 ${date}`;
+            text += `\n   📱 اپراتور: ${opName}`;
+            if (h.dns) {
+              const dnsShort = h.dns.length > 25 ? h.dns.slice(0, 22) + "..." : h.dns;
+              text += `\n   🌐 DNS: <code>${dnsShort}</code>`;
+            }
+            text += "\n";
+          });
+
+          if (wgHist.length > 6) {
+            text += `\n... و ${wgHist.length - 6} کانفیگ دیگر`;
+          }
+
+          text += "\n\n💡 برای دریافت مجدد کانفیگ، از منوی اصلی استفاده کنید.";
+        }
+
+        text += "\n━━━━━━━━━━━━━━━━━━━━";
+
+        await editMsg(token, chatId, callback.message.message_id, text, {
+          reply_markup: accountBackKeyboard(),
         });
         return;
       }
@@ -1306,8 +1453,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const operatorData = OPERATORS[op];
         const operatorAddress =
           operatorData &&
-          operatorData.addresses &&
-          operatorData.addresses.length
+            operatorData.addresses &&
+            operatorData.addresses.length
             ? pickRandom(operatorData.addresses)
             : "10.66.66.2/32";
 
@@ -1507,7 +1654,7 @@ const app = {
       if (!isAdminReq(request, env))
         return new Response("forbidden", { status: 403 });
       const parts = path.split("/");
-      const code = parts[2] || parts[3];
+      const code = parts[3];
       if (!code) return new Response("bad request", { status: 400 });
 
       if (method === "GET") {
@@ -1543,7 +1690,7 @@ const app = {
       if (!isAdminReq(request, env))
         return new Response("forbidden", { status: 403 });
       const parts = path.split("/");
-      const code = parts[2] || parts[3];
+      const code = parts[3];
       if (!code) return new Response("bad request", { status: 400 });
 
       if (method === "GET") {
