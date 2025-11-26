@@ -1079,6 +1079,7 @@
                             if (!confirm('آیا از حذف کشور ' + code + ' از IPv4 اطمینان دارید؟')) return;
                             await fetch('/api/dns/' + code, { method: 'DELETE', headers: authHeaders() });
                             loadDNS4();
+                            loadCountries();
                             updateStats();
                         });
                     });
@@ -1112,6 +1113,7 @@
                             if (!confirm('آیا از حذف کشور ' + code + ' از IPv6 اطمینان دارید؟')) return;
                             await fetch('/api/dns6/' + code, { method: 'DELETE', headers: authHeaders() });
                             loadDNS6();
+                            loadCountries();
                             updateStats();
                         });
                     });
@@ -1145,32 +1147,41 @@
                 var code = document.getElementById('code4').value.trim().toUpperCase();
                 var country = document.getElementById('country4').value.trim();
                 var addressesText = document.getElementById('addresses4').value;
-                var addresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+                var newAddresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
 
-                if (!code || !country || addresses.length === 0) {
+                if (!code || !country || newAddresses.length === 0) {
                     alert('لطفا همه فیلدها را پر کنید');
                     return;
                 }
 
-                var stock = addresses.length;
                 var flag = '';
                 if (code.length === 2) {
                     flag = String.fromCodePoint.apply(null, code.split('').map(function (c) {
                         return c.charCodeAt(0) + 127397;
                     }));
                 }
-                var body = { code: code, country: country, stock: stock, addresses: addresses, flag: flag };
 
-                await fetch('/api/dns/' + code, {
-                    method: 'PUT',
-                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-                    body: JSON.stringify(body)
-                });
-                document.getElementById('dns4-form').reset();
-                loadDNS4();
-                loadCountries();
-                updateStats();
-                alert('کشور IPv4 با موفقیت ذخیره شد\n\nکد: ' + code + '\nموجودی: ' + stock + ' آدرس');
+                try {
+                    var existingRec = await fetchJson('/api/dns/' + code).catch(() => null);
+                    var previousAddresses = (existingRec && existingRec.addresses) ? existingRec.addresses : [];
+                    var addresses = previousAddresses.concat(newAddresses);
+                    var stock = addresses.length;
+                    var body = { code: code, country: country, stock: stock, addresses: addresses, flag: flag };
+
+                    await fetch('/api/dns/' + code, {
+                        method: 'PUT',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                        body: JSON.stringify(body)
+                    });
+                    document.getElementById('dns4-form').reset();
+                    loadDNS4();
+                    loadCountries();
+                    updateStats();
+                    alert('کشور IPv4 با موفقیت ذخیره شد\n\nکد: ' + code + '\nآدرس‌های جدید: ' + newAddresses.length + '\nموجودی قبلی: ' + previousAddresses.length + '\nموجودی کل: ' + stock);
+                } catch (e) {
+                    alert('خطا در ذخیره کشور IPv4');
+                    console.error(e);
+                }
             });
 
             document.getElementById('dns6-form').addEventListener('submit', async function (ev) {
@@ -1178,31 +1189,41 @@
                 var code = document.getElementById('code6').value.trim().toUpperCase();
                 var country = document.getElementById('country6').value.trim();
                 var addressesText = document.getElementById('addresses6').value;
-                var addresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+                var newAddresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
 
-                if (!code || !country || addresses.length === 0) {
+                if (!code || !country || newAddresses.length === 0) {
                     alert('لطفا همه فیلدها را پر کنید');
                     return;
                 }
 
-                var stock = addresses.length;
                 var flag = '';
                 if (code.length === 2) {
                     flag = String.fromCodePoint.apply(null, code.split('').map(function (c) {
                         return c.charCodeAt(0) + 127397;
                     }));
                 }
-                var body = { code: code, country: country, stock: stock, addresses: addresses, flag: flag };
 
-                await fetch('/api/dns6/' + code, {
-                    method: 'PUT',
-                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-                    body: JSON.stringify(body)
-                });
-                document.getElementById('dns6-form').reset();
-                loadDNS6();
-                updateStats();
-                alert('کشور IPv6 با موفقیت ذخیره شد\n\nکد: ' + code + '\nموجودی: ' + stock + ' آدرس');
+                try {
+                    var existingRec = await fetchJson('/api/dns6/' + code).catch(() => null);
+                    var previousAddresses = (existingRec && existingRec.addresses) ? existingRec.addresses : [];
+                    var addresses = previousAddresses.concat(newAddresses);
+                    var stock = addresses.length;
+                    var body = { code: code, country: country, stock: stock, addresses: addresses, flag: flag };
+
+                    await fetch('/api/dns6/' + code, {
+                        method: 'PUT',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                        body: JSON.stringify(body)
+                    });
+                    document.getElementById('dns6-form').reset();
+                    loadDNS6();
+                    loadCountries();
+                    updateStats();
+                    alert('کشور IPv6 با موفقیت ذخیره شد\n\nکد: ' + code + '\nآدرس‌های جدید: ' + newAddresses.length + '\nموجودی قبلی: ' + previousAddresses.length + '\nموجودی کل: ' + stock);
+                } catch (e) {
+                    alert('خطا در ذخیره کشور IPv6');
+                    console.error(e);
+                }
             });
 
             document.getElementById('send-bc').addEventListener('click', async function () {
