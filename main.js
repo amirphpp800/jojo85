@@ -253,7 +253,7 @@ async function resetAllQuotas(env) {
   const d = DATE_YYYYMMDD();
   const users = await allUsers(env);
   let count = 0;
-
+  
   for (const userId of users) {
     try {
       await env.DB.delete(`q:dns:${userId}:${d}`);
@@ -263,7 +263,7 @@ async function resetAllQuotas(env) {
       console.error(`Error resetting quota for user ${userId}:`, e);
     }
   }
-
+  
   return count;
 }
 
@@ -564,9 +564,67 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const q = await getQuota(env, user);
         const rawHist = await env.DB.get(`history:${user}`);
         const hist = rawHist ? JSON.parse(rawHist) : [];
-        let text = `👤 حساب شما:\nDNS باقی‌مانده امروز: ${q.dnsLeft}\nWG باقی‌مانده امروز: ${q.wgLeft}\n\nتاریخچه اخیر:`;
-        if (!hist.length) text += "\n(هیچ سابقه‌ای نیست)";
-        else text += "\n" + hist.slice(0, 10).map(h => `${h.at.slice(0, 19).replace("T", " ")} — ${h.type} — ${h.country || ""}`).join("\n");
+        
+        let text = `👤 <b>حساب کاربری شما</b>
+
+━━━━━━━━━━━━━━━━━━━━
+📊 <b>سهمیه امروز:</b>
+
+🌐 DNS باقی‌مانده: <b>${q.dnsLeft}/${MAX_DNS_PER_DAY}</b>
+🛡️ WireGuard باقی‌مانده: <b>${q.wgLeft}/${MAX_WG_PER_DAY}</b>
+
+━━━━━━━━━━━━━━━━━━━━
+📁 <b>تاریخچه درخواست‌ها:</b>
+`;
+        
+        if (!hist.length) {
+          text += "\n📭 هنوز هیچ درخواستی ثبت نشده است";
+        } else {
+          const recentHist = hist.slice(0, 10);
+          recentHist.forEach((h, idx) => {
+            const dateTime = h.at.slice(0, 19).replace("T", " ");
+            const date = dateTime.slice(0, 10);
+            const time = dateTime.slice(11, 16);
+            const flag = h.country ? flagFromCode(h.country) : "🌍";
+            const countryName = COUNTRY_NAMES_FA[h.country] || h.country || "نامشخص";
+            
+            let typeIcon = "📦";
+            let typeName = h.type;
+            if (h.type === "dns-ipv4") {
+              typeIcon = "🌐";
+              typeName = "DNS IPv4";
+            } else if (h.type === "dns-ipv6") {
+              typeIcon = "🌐";
+              typeName = "DNS IPv6";
+            } else if (h.type === "wg") {
+              typeIcon = "🛡️";
+              typeName = "WireGuard";
+            }
+            
+            text += `\n${idx + 1}. ${flag} <b>${countryName}</b>`;
+            text += `\n   ${typeIcon} ${typeName}`;
+            text += `\n   📅 ${date} ⏰ ${time}`;
+            if (h.value) {
+              const val = String(h.value).length > 40 ? String(h.value).slice(0, 37) + "..." : h.value;
+              text += `\n   📍 <code>${val}</code>`;
+            }
+            if (h.dns) {
+              text += `\n   🌐 DNS: <code>${h.dns}</code>`;
+            }
+            if (h.operator) {
+              const opName = OPERATORS[h.operator] ? OPERATORS[h.operator].title : h.operator;
+              text += `\n   📱 ${opName}`;
+            }
+            text += "\n";
+          });
+          
+          if (hist.length > 10) {
+            text += `\n... و ${hist.length - 10} درخواست دیگر`;
+          }
+        }
+        
+        text += "\n━━━━━━━━━━━━━━━━━━━━";
+        
         await sendMsg(token, chatId, text, { reply_markup: mainMenuKeyboard(String(user) === adminId) });
         return;
       }
@@ -604,14 +662,14 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
 
       if (data === "confirm_reset_quota") {
         if (String(user) !== adminId) return;
-
+        
         await sendMsg(token, chatId, "⏳ در حال ریست کردن محدودیت کاربران...");
-
+        
         const resetCount = await resetAllQuotas(env);
         const users = await allUsers(env);
-
+        
         const giftMessage = `🎁 خبر خوش!\n\n✨ محدودیت روزانه شما به عنوان هدیه ریست شد!\n\n🔄 می‌توانید مجدداً از سرویس‌های زیر استفاده کنید:\n🌐 DNS: ${MAX_DNS_PER_DAY} بار\n🛡️ WireGuard: ${MAX_WG_PER_DAY} بار\n\n💚 از استفاده شما متشکریم!`;
-
+        
         let sentCount = 0;
         for (const u of users) {
           try {
@@ -621,11 +679,11 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
             console.error(`Error sending gift message to user ${u}:`, e);
           }
         }
-
+        
         await sendMsg(token, chatId, `✅ عملیات با موفقیت انجام شد!\n\n📊 گزارش:\n👥 تعداد کاربران: ${users.length}\n🔄 محدودیت ریست شده: ${resetCount}\n📢 پیام ارسال شده: ${sentCount}`, {
           reply_markup: mainMenuKeyboard(true)
         });
-
+        
         return;
       }
 
@@ -834,9 +892,9 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const caption = `${flag} <b>${countryNameFa}</b>
 
 ━━━━━━━━━━━━━━━━━━━━
-📱 <b>اپراتور:</b> ${operatorName}
-🌐 <b>DNS:</b> <code>${combinedDns}</code>
-📡 <b>موجودی باقی‌مانده:</b> ${currentStock}
+📱 اپراتور: <b>${operatorName}</b>
+🌐 DNS: <code>${combinedDns}</code>
+📡 موجودی باقی‌مانده: <b>${currentStock}</b>
 ━━━━━━━━━━━━━━━━━━━━
 
 ✅ کانفیگ شما آماده است!`;
