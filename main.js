@@ -1721,6 +1721,37 @@ const app = {
       return jsonResponse({ users: us });
     }
 
+    // Add endpoint to fetch user info
+    if (path.startsWith("/api/user/") && method === "GET") {
+      if (!isAdminReq(request, env)) {
+        return new Response("forbidden", { status: 403 });
+      }
+      const parts = path.split("/");
+      const userId = parts[2];
+      if (!userId) {
+        return new Response("Bad Request: User ID is required", { status: 400 });
+      }
+
+      // Fetch user info from Telegram API (or a cached version if available)
+      // For simplicity, let's assume we have a way to get basic user info.
+      // In a real scenario, you'd likely store this when the user first interacts.
+      // For now, we'll return a placeholder or mock data.
+      // You would replace this with actual logic to retrieve user data.
+      const userInfo = {
+        id: userId,
+        username: `user_${userId.slice(-4)}`, // Placeholder username
+        first_name: "نام", // Placeholder first name
+        last_name: "کاربر", // Placeholder last name
+        last_seen: new Date().toISOString(), // Placeholder last seen
+      };
+
+      // Mock fetching from a hypothetical KV store or cache if available
+      // Example: const cachedInfo = await env.DB.get(`user_info:${userId}`);
+      // if (cachedInfo) { userInfo = JSON.parse(cachedInfo); }
+
+      return jsonResponse(userInfo);
+    }
+
     if (path === "/api/broadcast" && method === "POST") {
       if (!isAdminReq(request, env))
         return new Response("forbidden", { status: 403 });
