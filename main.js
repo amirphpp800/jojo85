@@ -312,13 +312,25 @@ const COUNTRY_NAMES_EN = {
 
 // User-selectable operators with their address ranges
 const OPERATORS = {
-  irancell: { title: "ایرانسل", addresses: ["2.144.0.0/16"] },
-  mci: { title: "همراه اول", addresses: ["5.52.0.0/16"] },
-  tci: { title: "مخابرات", addresses: ["2.176.0.0/15", "2.190.0.0/15"] },
-  rightel: { title: "رایتل", addresses: ["37.137.128.0/17", "95.162.0.0/17"] },
+  irancell: {
+    title: "ایرانسل",
+    addresses: ["2.144.0.0/16"],
+  },
+  mci: {
+    title: "همراه اول",
+    addresses: ["5.52.0.0/16"],
+  },
+  rightel: {
+    title: "رایتل",
+    addresses: ["37.137.128.0/17", "95.162.0.0/17"],
+  },
   shatel: {
     title: "شاتل موبایل",
     addresses: ["94.182.0.0/16", "37.148.0.0/18"],
+  },
+  tci: {
+    title: "مخابرات",
+    addresses: ["2.176.0.0/15", "2.190.0.0/15"],
   },
 };
 
@@ -708,7 +720,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         if (txt.length > 0) {
           const list = await allUsers(env);
           for (const u of list) {
-            sendMsg(token, u, txt).catch(() => {});
+            sendMsg(token, u, txt).catch(() => { });
           }
           await env.DB.delete(`awaitBroadcast:${adminId}`);
           await sendMsg(
@@ -728,7 +740,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       // answer callback to remove loading spinner
       tg(token, "answerCallbackQuery", {
         callback_query_id: callback.id,
-      }).catch(() => {});
+      }).catch(() => { });
 
       // navigation
       if (data === "back") {
@@ -1240,8 +1252,8 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const operatorData = OPERATORS[op];
         const operatorAddress =
           operatorData &&
-          operatorData.addresses &&
-          operatorData.addresses.length
+            operatorData.addresses &&
+            operatorData.addresses.length
             ? pickRandom(operatorData.addresses)
             : "10.66.66.2/32";
 
