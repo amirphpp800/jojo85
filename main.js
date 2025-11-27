@@ -5,7 +5,7 @@
 //   per-user daily quotas (3 DNS / 3 WG), responsive admin panel, admin broadcast.
 // ---------------------------------------------------------------
 
-import { isVIPUser, getAllVIPUsers, getAllVIPUsersWithDetails, addVIPUser, removeVIPUser, getVIPUserData, updateVIPUsage, updateVIPExpiration, updateVIPNotes, getVIPStats, calculateVIPExpiry, buildVIPWireGuardConfig } from './vip.js';
+import { isVIPUser, getAllVIPUsersWithDetails, addVIPUser, removeVIPUser, getVIPUserData, updateVIPUsage, updateVIPExpiration, updateVIPNotes, getVIPStats, calculateVIPExpiry, buildVIPWireGuardConfig } from './vip.js';
 
 /* ---------------------- Config ---------------------- */
 const MAX_DNS_PER_DAY = 3;
@@ -879,7 +879,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         if (txt.length > 0) {
           const list = await allUsers(env);
           for (const u of list) {
-            sendMsg(token, u, txt).catch(() => {});
+            sendMsg(token, u, txt).catch(() => { });
           }
           await env.DB.delete(`awaitBroadcast:${adminId}`);
           const adminVIP = await isVIPUser(env, user);
@@ -900,7 +900,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       // answer callback to remove loading spinner
       tg(token, "answerCallbackQuery", {
         callback_query_id: callback.id,
-      }).catch(() => {});
+      }).catch(() => { });
 
       // navigation
       if (data === "back") {
@@ -916,7 +916,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       if (data === "menu_vip") {
         const userIsVIP = await isVIPUser(env, user);
         if (!userIsVIP) {
-          await editMsg(token, chatId, callback.message.message_id, 
+          await editMsg(token, chatId, callback.message.message_id,
             "⛔️ شما به بخش VIP دسترسی ندارید.\n\n💎 <b>خرید اشتراک VIP</b>\n\n💰 قیمت: <b>45,000 تومان</b>\n\n✨ مزایای VIP:\n• سهمیه روزانه 10 عددی (DNS و WireGuard)\n• دسترسی به سرورهای اختصاصی VIP\n• کیفیت و سرعت بالاتر\n• پشتیبانی ویژه\n\n📩 برای خرید و اطلاعات بیشتر با ادمین در ارتباط باشید:", {
             reply_markup: {
               inline_keyboard: [
@@ -937,7 +937,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           expiryText = daysLeft > 0 ? `${daysLeft} روز باقی‌مانده` : "منقضی شده";
         }
 
-        await editMsg(token, chatId, callback.message.message_id, 
+        await editMsg(token, chatId, callback.message.message_id,
           `👑 <b>پنل VIP</b>\n\n🌟 به بخش ویژه خوش آمدید!\n\n⏰ اعتبار: ${expiryText}\n\n💎 سهمیه روزانه: <b>10 DNS</b> + <b>10 WireGuard</b>\n🚀 دسترسی به سرورهای اختصاصی VIP\n⚡️ کیفیت و سرعت بالاتر\n\nیک گزینه را انتخاب کنید:`, {
           reply_markup: vipMenuKeyboard(),
         });
@@ -1621,7 +1621,7 @@ ${wgBar}
           h.unshift({ type: "dns-ipv4-vip", country: code, at: new Date().toISOString(), value: addr });
           if (h.length > 20) h.splice(20);
           await env.DB.put(histKey, JSON.stringify(h));
-        } catch (e) {}
+        } catch (e) { }
         return;
       }
 
@@ -1665,7 +1665,7 @@ ${wgBar}
           h.unshift({ type: "dns-ipv6-vip", country: code, at: new Date().toISOString(), value: addresses.join(", ") });
           if (h.length > 20) h.splice(20);
           await env.DB.put(histKey, JSON.stringify(h));
-        } catch (e) {}
+        } catch (e) { }
         return;
       }
 
@@ -1741,9 +1741,13 @@ ${wgBar}
         const operatorData = OPERATORS[op];
         const operatorAddress = operatorData && operatorData.addresses && operatorData.addresses.length ? pickRandom(operatorData.addresses) : "10.66.66.2/32";
 
-        // استفاده از تابع مخصوص VIP
+        // استفاده از تابع مخصوص VIP از vip.js
+        const privateKey = randBase64(32);
+        const mtu = pickRandom(WG_MTUS);
         const iface = buildVIPWireGuardConfig({
+          privateKey,
           address: "10.66.66.2/32",
+          mtu,
           dns: combinedDns,
           operatorAddress,
         });
@@ -1769,7 +1773,7 @@ ${wgBar}
           h.unshift({ type: "wg-vip", country: code, at: new Date().toISOString(), endpoint, operator: op, dns: combinedDns });
           if (h.length > 20) h.splice(20);
           await env.DB.put(histKey, JSON.stringify(h));
-        } catch (e) {}
+        } catch (e) { }
         return;
       }
 
@@ -1986,8 +1990,8 @@ ${wgBar}
         const operatorData = OPERATORS[op];
         const operatorAddress =
           operatorData &&
-          operatorData.addresses &&
-          operatorData.addresses.length
+            operatorData.addresses &&
+            operatorData.addresses.length
             ? pickRandom(operatorData.addresses)
             : "10.66.66.2/32";
 
@@ -2092,7 +2096,7 @@ ${wgBar}
       }
       const userIsVIP = await isVIPUser(env, user);
       if (!userIsVIP) {
-        await sendMsg(token, chatId, 
+        await sendMsg(token, chatId,
           "⛔️ شما به بخش VIP دسترسی ندارید.\n\n💎 <b>خرید اشتراک VIP</b>\n\n💰 قیمت: <b>45,000 تومان</b>\n\n✨ مزایای VIP:\n• سهمیه روزانه 10 عددی (DNS و WireGuard)\n• دسترسی به سرورهای اختصاصی VIP\n• کیفیت و سرعت بالاتر\n• پشتیبانی ویژه\n\n📩 برای خرید و اطلاعات بیشتر با ادمین در ارتباط باشید:", {
           reply_markup: {
             inline_keyboard: [
