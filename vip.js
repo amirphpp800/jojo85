@@ -204,3 +204,84 @@ export async function getVIPStats(env) {
         totalWgUsed: totalWg
     };
 }
+
+/**
+ * Calculate VIP expiration date based on days
+ * @param {number} days - Number of days from now (0 or null for permanent)
+ * @returns {string|null} ISO date string or null for permanent
+ */
+export function calculateVIPExpiry(days) {
+    if (!days || days <= 0 || isNaN(days)) return null; // Permanent VIP
+
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + parseInt(days));
+    expiryDate.setHours(23, 59, 59, 999); // End of day
+    return expiryDate.toISOString();
+}
+
+/**
+ * VIP-specific WireGuard configuration settings
+ */
+export const VIP_WG_CONFIG = {
+    // MTU range for VIP configs (higher values for better performance)
+    MTU_OPTIONS: [1420, 1440, 1480, 1500],
+
+    // Recommended DNS servers for VIP (faster and more reliable)
+    PREMIUM_DNS: [
+        "1.1.1.1",      // Cloudflare Primary
+        "1.0.0.1",      // Cloudflare Secondary
+        "8.8.8.8",      // Google Primary
+        "8.8.4.4",      // Google Secondary
+        "9.9.9.9",      // Quad9
+    ],
+
+    // VIP-specific AllowedIPs (full tunnel by default for VIP users)
+    ALLOWED_IPS: "0.0.0.0/0, ::/0",
+
+    // PersistentKeepalive for better connection stability
+    KEEPALIVE: 25,
+};
+
+/**
+ * Generate random value from array
+ */
+function pickRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/**
+ * Generate random base64 string
+ */
+function randBase64(len = 32) {
+    const arr = new Uint8Array(len);
+    crypto.getRandomValues(arr);
+    return btoa(String.fromCharCode(...arr));
+}
+
+/**
+ * Build VIP WireGuard configuration
+ * VIP configs have optimized settings for better performance
+ */
+export function buildVIPWireGuardConfig({
+    privateKey = null,
+    address = "10.66.66.2/32",
+    dns = null,
+    operatorAddress = null,
+}) {
+    const priv = privateKey || randBase64(32);
+    const mtu = pickRandom(VIP_WG_CONFIG.MTU_OPTIONS);
+    const finalDns = dns || pickRandom(VIP_WG_CONFIG.PREMIUM_DNS);
+    const finalAddress = operatorAddress || address;
+
+    return [
+        "[Interface]",
+        `PrivateKey = ${priv}`,
+        `Address = ${finalAddress}`,
+        `DNS = ${finalDns}`,
+        `MTU = ${mtu}`,
+        "",
+        "# VIP Configuration - Optimized for Performance",
+        "# تنظیمات VIP - بهینه‌سازی شده برای عملکرد بهتر",
+        "",
+    ].join("\n");
+}

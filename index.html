@@ -1924,7 +1924,7 @@
                         var flag = r.flag || '';
                         var country = r.country || r.code;
                         var actualStock = (r.addresses && r.addresses.length) ? r.addresses.length : 0;
-                        return '<tr><td><span class="country-flag">' + flag + '</span> <strong>' + (r.code || '') + '</strong></td><td>' + country + '</td><td><span class="badge" style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); color: #000;">' + actualStock + '</span></td><td><button data-code="' + (r.code || '') + '" class="btn btn-danger vipd el4">حذف</button></td></tr>';
+                        return '<tr><td><span class="country-flag">' + flag + '</span> <strong>' + (r.code || '') + '</strong></td><td>' + country + '</td><td><span class="badge" style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); color: #000;">' + actualStock + '</span></td><td><button data-code="' + (r.code || '') + '" class="btn btn-danger vipdel4">حذف</button></td></tr>';
                     }).join('');
                     document.getElementById('vipdns4-list').innerHTML = '<table><thead><tr><th>کد</th><th>کشور</th><th>موجودی</th><th>عملیات</th></tr></thead><tbody>' + rows + '</tbody></table>';
 
@@ -2144,58 +2144,54 @@
 
             document.getElementById('add-vip-btn').addEventListener('click', async function () {
                 var userId = document.getElementById('vip-user-id').value.trim();
+                var vipType = document.getElementById('vip-type').value;
+                var notes = document.getElementById('vip-notes').value.trim();
+
                 if (!userId) {
                     alert('لطفا شناسه کاربر را وارد کنید');
                     return;
                 }
 
-                var vipType = document.getElementById('vip-type').value;
-                var notes = document.getElementById('vip-notes').value.trim();
-                var expiresAt = null;
-
-                if (vipType === 'custom') {
-                    var customDate = document.getElementById('vip-expiry-date').value;
-                    if (!customDate) {
-                        alert('لطفا تاریخ انقضا را انتخاب کنید');
-                        return;
-                    }
-                    expiresAt = new Date(customDate).toISOString();
-                } else if (vipType !== 'permanent') {
-                    var days = parseInt(vipType);
-                    var expiry = new Date();
-                    expiry.setDate(expiry.getDate() + days);
-                    expiresAt = expiry.toISOString();
-                }
-
                 try {
-                    var body = { userId: userId };
-                    if (expiresAt) body.expiresAt = expiresAt;
-                    if (notes) body.notes = notes;
+                    var requestBody = { userId: userId };
 
-                    var result = await fetch('/api/vip/add', {
+                    if (notes) {
+                        requestBody.notes = notes;
+                    }
+
+                    if (vipType === 'permanent') {
+                        // بدون تاریخ انقضا - دائمی
+                        requestBody.days = 0;
+                    } else if (vipType === 'custom') {
+                        var customDate = document.getElementById('vip-expiry-date').value;
+                        if (!customDate) {
+                            alert('لطفا تاریخ انقضا را انتخاب کنید');
+                            return;
+                        }
+                        var selectedDate = new Date(customDate);
+                        selectedDate.setHours(23, 59, 59, 999);
+                        requestBody.expiresAt = selectedDate.toISOString();
+                    } else {
+                        // تبدیل به عدد صحیح
+                        requestBody.days = parseInt(vipType);
+                    }
+
+                    await fetch('/api/vip/add', {
                         method: 'POST',
                         headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-                        body: JSON.stringify(body)
+                        body: JSON.stringify(requestBody)
                     });
-                    var data = await result.json();
-
-                    var typeText = vipType === 'permanent' ? 'دائمی' : vipType + ' روزه';
-                    if (vipType === 'custom') typeText = 'تا تاریخ انتخابی';
-
-                    if (data.added) {
-                        alert('✅ کاربر با موفقیت به لیست VIP اضافه شد!\n\nشناسه: ' + userId + '\nنوع اشتراک: ' + typeText + '\n\nاین کاربر اکنون دسترسی نامحدود به تمام خدمات دارد.');
-                    } else {
-                        alert('⚠️ این کاربر قبلاً در لیست VIP وجود دارد.\nاطلاعات اشتراک به‌روزرسانی شد.');
-                    }
 
                     document.getElementById('vip-user-id').value = '';
-                    document.getElementById('vip-notes').value = '';
                     document.getElementById('vip-type').value = 'permanent';
+                    document.getElementById('vip-notes').value = '';
                     document.getElementById('custom-date-group').style.display = 'none';
+
                     loadVIPUsers();
                     updateStats();
+                    alert('کاربر با موفقیت به لیست VIP اضافه شد');
                 } catch (e) {
-                    alert('خطا در افزودن کاربر به VIP');
+                    alert('خطا در افزودن کاربر VIP');
                     console.error(e);
                 }
             });
