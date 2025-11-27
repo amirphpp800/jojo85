@@ -5,9 +5,13 @@
 //   per-user daily quotas (3 DNS / 3 WG), responsive admin panel, admin broadcast.
 // ---------------------------------------------------------------
 
+import { isVIPUser, getAllVIPUsers, getAllVIPUsersWithDetails, addVIPUser, removeVIPUser, getVIPUserData, updateVIPUsage, updateVIPExpiration, updateVIPNotes, getVIPStats } from './vip.js';
+
 /* ---------------------- Config ---------------------- */
 const MAX_DNS_PER_DAY = 3;
 const MAX_WG_PER_DAY = 3;
+const VIP_DNS_PER_DAY = 10;
+const VIP_WG_PER_DAY = 10;
 const DATE_YYYYMMDD = () =>
   new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
@@ -420,6 +424,87 @@ async function deleteDNS(env, code) {
   await env.DB.delete(`dns:${code.toUpperCase()}`);
 }
 
+/* ---------------------- VIP DNS KV Helpers ---------------------- */
+async function getVIPDNS(env, code) {
+  if (!code) return null;
+  const raw = await env.DB.get(`vipdns:${code.toUpperCase()}`);
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function listVIPDNS(env) {
+  const res = await env.DB.list({ prefix: "vipdns:", limit: 1000 });
+  const out = [];
+  for (const k of res.keys || []) {
+    try {
+      const raw = await env.DB.get(k.name);
+      if (raw) out.push(JSON.parse(raw));
+    } catch (e) {
+      /* skip */
+    }
+  }
+  return out;
+}
+
+async function updateVIPDNS(env, code, obj) {
+  await env.DB.put(`vipdns:${code.toUpperCase()}`, JSON.stringify(obj));
+}
+
+async function deleteVIPDNS(env, code) {
+  await env.DB.delete(`vipdns:${code.toUpperCase()}`);
+}
+
+async function allocateVIPAddress(env, code) {
+  const rec = await getVIPDNS(env, code);
+  if (!rec || !Array.isArray(rec.addresses) || rec.addresses.length === 0)
+    return null;
+  const addr = rec.addresses.shift();
+  rec.stock = rec.addresses.length;
+  if (rec.stock < 0) rec.stock = 0;
+  await updateVIPDNS(env, code, rec);
+  return addr;
+}
+
+/* ---------------------- VIP IPv6 KV Helpers ---------------------- */
+async function getVIPDNS6(env, code) {
+  if (!code) return null;
+  const raw = await env.DB.get(`vipdns6:${code.toUpperCase()}`);
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function listVIPDNS6(env) {
+  const res = await env.DB.list({ prefix: "vipdns6:", limit: 1000 });
+  const out = [];
+  for (const k of res.keys || []) {
+    try {
+      const raw = await env.DB.get(k.name);
+      if (raw) out.push(JSON.parse(raw));
+    } catch (e) {
+      /* skip */
+    }
+  }
+  return out;
+}
+
+async function updateVIPDNS6(env, code, obj) {
+  await env.DB.put(`vipdns6:${code.toUpperCase()}`, JSON.stringify(obj));
+}
+
+async function deleteVIPDNS6(env, code) {
+  await env.DB.delete(`vipdns6:${code.toUpperCase()}`);
+}
+
+async function allocateVIPAddress6(env, code) {
+  const rec = await getVIPDNS6(env, code);
+  if (!rec || !Array.isArray(rec.addresses) || rec.addresses.length < 2)
+    return null;
+  const addr1 = rec.addresses.shift();
+  const addr2 = rec.addresses.shift();
+  rec.stock = rec.addresses.length;
+  if (rec.stock < 0) rec.stock = 0;
+  await updateVIPDNS6(env, code, rec);
+  return [addr1, addr2];
+}
+
 /**
  * Remove one address from dns:{code}.addresses and return it.
  * Decrements stock accordingly. Returns null if none available.
@@ -495,14 +580,16 @@ async function allUsers(env) {
 
 /* ---------------------- Quota System ---------------------- */
 async function getQuota(env, id) {
+  const isVIP = await isVIPUser(env, id);
   const d = DATE_YYYYMMDD();
   const dns = parseInt(await env.DB.get(`q:dns:${id}:${d}`)) || 0;
   const wg = parseInt(await env.DB.get(`q:wg:${id}:${d}`)) || 0;
   return {
     dnsUsed: dns,
     wgUsed: wg,
-    dnsLeft: Math.max(0, MAX_DNS_PER_DAY - dns),
-    wgLeft: Math.max(0, MAX_WG_PER_DAY - wg),
+    dnsLeft: isVIP ? Math.max(0, VIP_DNS_PER_DAY - dns) : Math.max(0, MAX_DNS_PER_DAY - dns),
+    wgLeft: isVIP ? Math.max(0, VIP_WG_PER_DAY - wg) : Math.max(0, MAX_WG_PER_DAY - wg),
+    isVIP: isVIP,
   };
 }
 
@@ -538,7 +625,7 @@ function stockEmoji(n) {
   return "🟢";
 }
 
-function mainMenuKeyboard(isAdmin = false) {
+function mainMenuKeyboard(isAdmin = false, isVIP = false) {
   const rows = [
     [
       { text: "🛡️ WireGuard", callback_data: "menu_wg" },
@@ -546,6 +633,9 @@ function mainMenuKeyboard(isAdmin = false) {
     ],
     [{ text: "👤 حساب من", callback_data: "menu_account" }],
   ];
+  if (isVIP) {
+    rows.push([{ text: "👑 بخش VIP", callback_data: "menu_vip" }]);
+  }
   if (isAdmin) {
     rows.push([
       { text: "📢 پیام همگانی", callback_data: "menu_broadcast" },
@@ -576,6 +666,34 @@ function accountBackKeyboard() {
   return {
     inline_keyboard: [
       [{ text: "🔙 بازگشت به حساب", callback_data: "menu_account" }],
+      [{ text: "🏠 منوی اصلی", callback_data: "back" }],
+    ],
+  };
+}
+
+function vipMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "🛡️ WireGuard نامحدود", callback_data: "vip_wg" },
+        { text: "🌐 DNS نامحدود", callback_data: "vip_dns" },
+      ],
+      [
+        { text: "📊 آمار VIP من", callback_data: "vip_stats" },
+        { text: "⏰ اعتبار اشتراک", callback_data: "vip_expiry" },
+      ],
+      [
+        { text: "🎁 مزایای VIP", callback_data: "vip_benefits" },
+      ],
+      [{ text: "🔙 بازگشت به منو", callback_data: "back" }],
+    ],
+  };
+}
+
+function vipBackKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "🔙 بازگشت به منوی VIP", callback_data: "menu_vip" }],
       [{ text: "🏠 منوی اصلی", callback_data: "back" }],
     ],
   };
@@ -761,11 +879,12 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
             sendMsg(token, u, txt).catch(() => { });
           }
           await env.DB.delete(`awaitBroadcast:${adminId}`);
+          const adminVIP = await isVIPUser(env, user);
           await sendMsg(
             token,
             chatId,
             `✅ پیام برای ${list.length} کاربر ارسال شد.`,
-            { reply_markup: mainMenuKeyboard(true) },
+            { reply_markup: mainMenuKeyboard(true, adminVIP) },
           );
           return;
         }
@@ -783,8 +902,158 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
       // navigation
       if (data === "back") {
         // ادیت پیام قبلی به جای ارسال پیام جدید
+        const userIsVIP = await isVIPUser(env, user);
         await editMsg(token, chatId, callback.message.message_id, "منوی اصلی:", {
-          reply_markup: mainMenuKeyboard(String(user) === adminId),
+          reply_markup: mainMenuKeyboard(String(user) === adminId, userIsVIP),
+        });
+        return;
+      }
+
+      // VIP Menu Handler
+      if (data === "menu_vip") {
+        const userIsVIP = await isVIPUser(env, user);
+        if (!userIsVIP) {
+          await editMsg(token, chatId, callback.message.message_id,
+            "⛔️ شما به بخش VIP دسترسی ندارید.\n\n💎 <b>خرید اشتراک VIP</b>\n\n💰 قیمت: <b>45,000 تومان</b>\n\n✨ مزایای VIP:\n• دسترسی نامحدود به DNS\n• دسترسی نامحدود به WireGuard\n• پشتیبانی ویژه\n\n📩 برای خرید و اطلاعات بیشتر با ادمین در ارتباط باشید:", {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "📩 ارتباط با ادمین", url: "https://t.me/Minimalcraft" }],
+                [{ text: "🔙 بازگشت به منو", callback_data: "back" }]
+              ]
+            }
+          });
+          return;
+        }
+
+        const vipData = await getVIPUserData(env, user);
+        let expiryText = "♾️ دائمی";
+        if (vipData && vipData.expiresAt) {
+          const expiryDate = new Date(vipData.expiresAt);
+          const now = new Date();
+          const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+          expiryText = daysLeft > 0 ? `${daysLeft} روز باقی‌مانده` : "منقضی شده";
+        }
+
+        await editMsg(token, chatId, callback.message.message_id,
+          `👑 <b>پنل VIP</b>\n\n🌟 به بخش ویژه خوش آمدید!\n\n⏰ اعتبار: ${expiryText}\n\n💎 شما به عنوان کاربر VIP دسترسی <b>نامحدود</b> به تمام خدمات دارید.\n\nیک گزینه را انتخاب کنید:`, {
+          reply_markup: vipMenuKeyboard(),
+        });
+        return;
+      }
+
+      // VIP WireGuard - Direct access to VIP WG countries
+      if (data === "vip_wg") {
+        const userIsVIP = await isVIPUser(env, user);
+        if (!userIsVIP) return;
+
+        const list = await listVIPDNS(env);
+        if (!list || list.length === 0) {
+          await editMsg(token, chatId, callback.message.message_id, "فعلاً سرور VIP موجود نیست.", {
+            reply_markup: vipBackKeyboard()
+          });
+          return;
+        }
+        const mapped = list
+          .map((r) => ({
+            code: (r.code || "").toUpperCase(),
+            country: r.country || r.code,
+            stock: r.stock || 0,
+          }))
+          .sort((a, b) => b.stock - a.stock);
+
+        const q = await getQuota(env, user);
+        await editMsg(token, chatId, callback.message.message_id,
+          `👑 <b>WireGuard VIP</b>\n\n🛡️ کشور مورد نظر را انتخاب کنید:\n(سهمیه امروز: ${q.wgLeft}/${VIP_WG_PER_DAY})\n\n🟢 موجود | 🟡 کم | 🔴 تمام`, {
+          reply_markup: countriesKeyboard(mapped, 0, "vipwg"),
+        });
+        return;
+      }
+
+      // VIP DNS - Direct access with protocol selection
+      if (data === "vip_dns") {
+        const userIsVIP = await isVIPUser(env, user);
+        if (!userIsVIP) return;
+
+        const q = await getQuota(env, user);
+        await editMsg(token, chatId, callback.message.message_id,
+          `👑 <b>DNS VIP</b>\n\n🌐 نوع پروتکل را انتخاب کنید:\n(سهمیه امروز: ${q.dnsLeft}/${VIP_DNS_PER_DAY})`, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "IPv6 🌐", callback_data: "vipdns:ipv6" },
+                { text: "IPv4 🌐", callback_data: "vipdns:ipv4" },
+              ],
+              [{ text: "🔙 بازگشت به منوی VIP", callback_data: "menu_vip" }],
+            ],
+          },
+        });
+        return;
+      }
+
+      // VIP Stats - Show usage statistics
+      if (data === "vip_stats") {
+        const userIsVIP = await isVIPUser(env, user);
+        if (!userIsVIP) return;
+
+        const vipData = await getVIPUserData(env, user);
+        const totalDns = vipData?.totalDnsUsed || 0;
+        const totalWg = vipData?.totalWgUsed || 0;
+        const lastActivity = vipData?.lastActivity ? new Date(vipData.lastActivity).toLocaleDateString('fa-IR') : 'نامشخص';
+        const memberSince = vipData?.addedAt ? new Date(vipData.addedAt).toLocaleDateString('fa-IR') : 'نامشخص';
+
+        await editMsg(token, chatId, callback.message.message_id,
+          `👑 <b>آمار VIP شما</b>\n\n━━━━━━━━━━━━━━━━━━━━\n📊 <b>مصرف کل</b>\n🌐 DNS دریافت شده: <b>${totalDns}</b>\n🛡️ WireGuard دریافت شده: <b>${totalWg}</b>\n\n━━━━━━━━━━━━━━━━━━━━\n📅 <b>تاریخچه</b>\n🗓 عضویت VIP از: <b>${memberSince}</b>\n⏰ آخرین فعالیت: <b>${lastActivity}</b>\n━━━━━━━━━━━━━━━━━━━━`, {
+          reply_markup: vipBackKeyboard(),
+        });
+        return;
+      }
+
+      // VIP Expiry - Show subscription expiry
+      if (data === "vip_expiry") {
+        const userIsVIP = await isVIPUser(env, user);
+        if (!userIsVIP) return;
+
+        const vipData = await getVIPUserData(env, user);
+        let expiryInfo = "";
+
+        if (!vipData || !vipData.expiresAt) {
+          expiryInfo = "♾️ <b>اشتراک دائمی</b>\n\n🎉 شما دارای اشتراک VIP دائمی هستید!\nنیازی به تمدید نیست.";
+        } else {
+          const expiryDate = new Date(vipData.expiresAt);
+          const now = new Date();
+          const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+          const expiryDateStr = expiryDate.toLocaleDateString('fa-IR');
+
+          if (daysLeft > 0) {
+            let statusEmoji = "🟢";
+            if (daysLeft <= 7) statusEmoji = "🟡";
+            if (daysLeft <= 3) statusEmoji = "🔴";
+
+            expiryInfo = `${statusEmoji} <b>اشتراک فعال</b>\n\n📅 تاریخ انقضا: <b>${expiryDateStr}</b>\n⏳ روزهای باقی‌مانده: <b>${daysLeft} روز</b>`;
+
+            if (daysLeft <= 7) {
+              expiryInfo += "\n\n⚠️ اشتراک شما به زودی منقضی می‌شود!\nبرای تمدید با ادمین تماس بگیرید.";
+            }
+          } else {
+            expiryInfo = "🔴 <b>اشتراک منقضی شده</b>\n\n❌ اشتراک VIP شما منقضی شده است.\nبرای تمدید با ادمین تماس بگیرید.";
+          }
+        }
+
+        await editMsg(token, chatId, callback.message.message_id,
+          `👑 <b>وضعیت اشتراک VIP</b>\n\n━━━━━━━━━━━━━━━━━━━━\n${expiryInfo}\n━━━━━━━━━━━━━━━━━━━━`, {
+          reply_markup: vipBackKeyboard(),
+        });
+        return;
+      }
+
+      // VIP Benefits - Show VIP benefits
+      if (data === "vip_benefits") {
+        const userIsVIP = await isVIPUser(env, user);
+        if (!userIsVIP) return;
+
+        await editMsg(token, chatId, callback.message.message_id,
+          `👑 <b>مزایای اشتراک VIP</b>\n\n━━━━━━━━━━━━━━━━━━━━\n✨ <b>امکانات ویژه شما:</b>\n\n♾️ دسترسی <b>نامحدود</b> به DNS\n♾️ دسترسی <b>نامحدود</b> به WireGuard\n🚀 اولویت در پشتیبانی\n🔔 دریافت سرورهای جدید زودتر\n🎁 تخفیف ویژه تمدید\n📊 مشاهده آمار مصرف\n\n━━━━━━━━━━━━━━━━━━━━\n💎 از اعتماد شما متشکریم!`, {
+          reply_markup: vipBackKeyboard(),
         });
         return;
       }
@@ -951,13 +1220,15 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const dnsCount = hist.filter(h => h.type === "dns-ipv4" || h.type === "dns-ipv6").length;
         const wgCount = hist.filter(h => h.type === "wg").length;
 
-        const text = `👤 <b>حساب کاربری شما</b>
+        const vipBadge = q.isVIP ? '\n\n👑 <b>کاربر VIP</b> - سهمیه روزانه 10 عدد' : '';
+
+        const text = `👤 <b>حساب کاربری شما</b>${vipBadge}
 
 ━━━━━━━━━━━━━━━━━━━━
 
 📊 <b>سهمیه امروز:</b>
-┌ 🌐 DNS: <b>${q.dnsLeft}</b> از ${MAX_DNS_PER_DAY}
-└ 🛡️ WireGuard: <b>${q.wgLeft}</b> از ${MAX_WG_PER_DAY}
+┌ 🌐 DNS: <b>${q.isVIP ? q.dnsLeft + ' از ' + VIP_DNS_PER_DAY : q.dnsLeft + ' از ' + MAX_DNS_PER_DAY}</b>
+└ 🛡️ WireGuard: <b>${q.isVIP ? q.wgLeft + ' از ' + VIP_WG_PER_DAY : q.wgLeft + ' از ' + MAX_WG_PER_DAY}</b>
 
 📁 <b>آمار کلی:</b>
 ┌ 🌐 آدرس‌های دریافتی: <b>${dnsCount}</b>
@@ -1155,13 +1426,15 @@ ${wgBar}
         const us = await allUsers(env);
         const dns = await listDNS(env);
         const totalStock = dns.reduce((s, r) => s + (r.stock || 0), 0);
+        const vipStats = await getVIPStats(env);
+        const adminVIP = await isVIPUser(env, user);
         // ادیت پیام به جای ارسال جدید
         await editMsg(
           token,
           chatId,
           callback.message.message_id,
-          `📊 آمار ربات:\n👥 کاربران: ${us.length}\n🌍 کشورها: ${dns.length}\n📡 مجموع موجودی IP: ${totalStock}`,
-          { reply_markup: mainMenuKeyboard(true) },
+          `📊 آمار ربات:\n👥 کاربران: ${us.length}\n🌍 کشورها: ${dns.length}\n📡 مجموع موجودی IP: ${totalStock}\n👑 کاربران VIP: ${vipStats.total}`,
+          { reply_markup: mainMenuKeyboard(true, adminVIP) },
         );
         return;
       }
@@ -1211,12 +1484,13 @@ ${wgBar}
           }
         }
 
+        const adminVIP = await isVIPUser(env, user);
         await sendMsg(
           token,
           chatId,
           `✅ عملیات با موفقیت انجام شد!\n\n📊 گزارش:\n👥 تعداد کاربران: ${users.length}\n🔄 محدودیت ریست شده: ${resetCount}\n📢 پیام ارسال شده: ${sentCount}`,
           {
-            reply_markup: mainMenuKeyboard(true),
+            reply_markup: mainMenuKeyboard(true, adminVIP),
           },
         );
 
@@ -1241,6 +1515,261 @@ ${wgBar}
           `${flag} <b>${countryName}</b>\n${stockInfo}\n\nعملیات را انتخاب کنید:`,
           { reply_markup: actionKeyboard(code) },
         );
+        return;
+      }
+
+      // VIP DNS IPv4 selection
+      if (data.startsWith("vipdns:ipv4")) {
+        const userIsVIP = await isVIPUser(env, user);
+        if (!userIsVIP) return;
+
+        const list = await listVIPDNS(env);
+        if (!list || list.length === 0) {
+          await editMsg(token, chatId, callback.message.message_id, "فعلاً کشور VIP موجود نیست.", {
+            reply_markup: vipBackKeyboard()
+          });
+          return;
+        }
+        const mapped = list
+          .map((r) => ({
+            code: (r.code || "").toUpperCase(),
+            country: r.country || r.code,
+            stock: r.stock || 0,
+          }))
+          .sort((a, b) => b.stock - a.stock);
+
+        const q = await getQuota(env, user);
+        await editMsg(token, chatId, callback.message.message_id,
+          `👑 <b>DNS IPv4 VIP</b>\n\nکشور مورد نظر را انتخاب کنید:\n(سهمیه امروز: ${q.dnsLeft}/${VIP_DNS_PER_DAY})\n\n🟢 موجود | 🟡 کم | 🔴 تمام`, {
+          reply_markup: countriesKeyboard(mapped, 0, "vipdns4"),
+        });
+        return;
+      }
+
+      // VIP DNS IPv6 selection
+      if (data.startsWith("vipdns:ipv6")) {
+        const userIsVIP = await isVIPUser(env, user);
+        if (!userIsVIP) return;
+
+        const list = await listVIPDNS6(env);
+        if (!list || list.length === 0) {
+          await editMsg(token, chatId, callback.message.message_id, "فعلاً کشور VIP IPv6 موجود نیست.", {
+            reply_markup: vipBackKeyboard()
+          });
+          return;
+        }
+        const mapped = list
+          .map((r) => ({
+            code: (r.code || "").toUpperCase(),
+            country: r.country || r.code,
+            stock: r.stock || 0,
+          }))
+          .sort((a, b) => b.stock - a.stock);
+
+        const q = await getQuota(env, user);
+        await editMsg(token, chatId, callback.message.message_id,
+          `👑 <b>DNS IPv6 VIP</b>\n\nکشور مورد نظر را انتخاب کنید:\n(سهمیه امروز: ${q.dnsLeft}/${VIP_DNS_PER_DAY})\n\n🟢 موجود | 🟡 کم | 🔴 تمام`, {
+          reply_markup: countriesKeyboard(mapped, 0, "vipdns6"),
+        });
+        return;
+      }
+
+      // VIP DNS IPv4 request
+      if (data.startsWith("vipdns4:")) {
+        const code = data.slice(8);
+        if (!user) return;
+        const userIsVIP = await isVIPUser(env, user);
+        if (!userIsVIP) return;
+
+        const q = await getQuota(env, user);
+        if (q.dnsLeft <= 0) {
+          await sendMsg(token, chatId, `محدودیت روزانه DNS VIP شما به پایان رسیده است.\nباقی‌مانده: ${q.dnsLeft}/${VIP_DNS_PER_DAY}`);
+          return;
+        }
+
+        const addr = await allocateVIPAddress(env, code);
+        if (!addr) {
+          await sendMsg(token, chatId, `برای ${code} آدرس VIP موجود نیست.`);
+          return;
+        }
+
+        const rec = await getVIPDNS(env, code);
+        const flag = flagFromCode(code);
+        const countryName = COUNTRY_NAMES_FA[code] || rec?.country || code;
+        const stock = rec?.stock || 0;
+        const checkUrl = `https://check-host.net/check-ping?host=${addr}`;
+
+        await sendMsg(token, chatId, `${flag} <b>${countryName}</b> - IPv4 VIP\n\n🌐 آدرس اختصاصی شما:\n<code>${addr}</code>\n\n📊 موجودی باقی‌مانده: ${stock}\n📈 سهمیه امروز: ${q.dnsUsed + 1}/${VIP_DNS_PER_DAY}`, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🔍 بررسی وضعیت فیلتر", url: checkUrl }],
+              [{ text: "🔙 بازگشت به منوی VIP", callback_data: "menu_vip" }],
+            ],
+          },
+        });
+
+        await incQuota(env, user, "dns");
+        await updateVIPUsage(env, user, "dns");
+
+        const histKey = `history:${user}`;
+        try {
+          const raw = await env.DB.get(histKey);
+          const h = raw ? JSON.parse(raw) : [];
+          h.unshift({ type: "dns-ipv4-vip", country: code, at: new Date().toISOString(), value: addr });
+          if (h.length > 20) h.splice(20);
+          await env.DB.put(histKey, JSON.stringify(h));
+        } catch (e) { }
+        return;
+      }
+
+      // VIP DNS IPv6 request
+      if (data.startsWith("vipdns6:")) {
+        const code = data.slice(8);
+        if (!user) return;
+        const userIsVIP = await isVIPUser(env, user);
+        if (!userIsVIP) return;
+
+        const q = await getQuota(env, user);
+        if (q.dnsLeft <= 0) {
+          await sendMsg(token, chatId, `محدودیت روزانه DNS VIP شما به پایان رسیده است.\nباقی‌مانده: ${q.dnsLeft}/${VIP_DNS_PER_DAY}`);
+          return;
+        }
+
+        const addresses = await allocateVIPAddress6(env, code);
+        if (!addresses || addresses.length < 2) {
+          await sendMsg(token, chatId, `برای ${code} آدرس VIP IPv6 کافی موجود نیست.`);
+          return;
+        }
+
+        const rec = await getVIPDNS6(env, code);
+        const flag = flagFromCode(code);
+        const countryName = COUNTRY_NAMES_FA[code] || rec?.country || code;
+        const stock = rec?.stock || 0;
+
+        await sendMsg(token, chatId, `${flag} <b>${countryName}</b> - IPv6 VIP\n\n🌐 آدرس‌های اختصاصی شما:\n<code>${addresses[0]}</code>\n<code>${addresses[1]}</code>\n\n📊 موجودی باقی‌مانده: ${stock}\n📈 سهمیه امروز: ${q.dnsUsed + 1}/${VIP_DNS_PER_DAY}`, {
+          reply_markup: {
+            inline_keyboard: [[{ text: "🔙 بازگشت به منوی VIP", callback_data: "menu_vip" }]]
+          }
+        });
+
+        await incQuota(env, user, "dns");
+        await updateVIPUsage(env, user, "dns");
+
+        const histKey = `history:${user}`;
+        try {
+          const raw = await env.DB.get(histKey);
+          const h = raw ? JSON.parse(raw) : [];
+          h.unshift({ type: "dns-ipv6-vip", country: code, at: new Date().toISOString(), value: addresses.join(", ") });
+          if (h.length > 20) h.splice(20);
+          await env.DB.put(histKey, JSON.stringify(h));
+        } catch (e) { }
+        return;
+      }
+
+      // VIP WireGuard request
+      if (data.startsWith("vipwg:")) {
+        const code = data.slice(6);
+        const flag = flagFromCode(code);
+        const countryName = COUNTRY_NAMES_FA[code] || code;
+        await editMsg(token, chatId, callback.message.message_id,
+          `${flag} <b>${countryName}</b> - VIP\n\nاپراتور مورد نظر را انتخاب کنید:`, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: OPERATORS.irancell.title, callback_data: `vipop:${code}:irancell` },
+                { text: OPERATORS.mci.title, callback_data: `vipop:${code}:mci` },
+              ],
+              [
+                { text: OPERATORS.tci.title, callback_data: `vipop:${code}:tci` },
+                { text: OPERATORS.rightel.title, callback_data: `vipop:${code}:rightel` },
+              ],
+              [{ text: OPERATORS.shatel.title, callback_data: `vipop:${code}:shatel` }],
+              [{ text: "🔙 بازگشت", callback_data: "vip_wg" }],
+            ],
+          },
+        });
+        return;
+      }
+
+      // VIP WG operator selection
+      if (data.startsWith("vipop:")) {
+        const parts = data.split(":");
+        const code = parts[1];
+        const op = parts[2];
+        const flag = flagFromCode(code);
+        const countryName = COUNTRY_NAMES_FA[code] || code;
+        const operatorName = OPERATORS[op] ? OPERATORS[op].title : op;
+        await editMsg(token, chatId, callback.message.message_id,
+          `${flag} <b>${countryName}</b> - ${operatorName} VIP\n\nDNS مورد نظر را انتخاب کنید:`, {
+          reply_markup: dnsChoiceKeyboard(code, `vip${op}`),
+        });
+        return;
+      }
+
+      // VIP WG final config generation
+      if (data.startsWith("choose:") && data.includes(":vip")) {
+        const parts = data.split(":");
+        const code = parts[1];
+        const opPart = parts[2];
+        const op = opPart.replace("vip", "");
+        const dnsValue = parts.slice(3).join(":");
+
+        if (!user) return;
+        const userIsVIP = await isVIPUser(env, user);
+        if (!userIsVIP) return;
+
+        const q = await getQuota(env, user);
+        if (q.wgLeft <= 0) {
+          await sendMsg(token, chatId, `محدودیت روزانه WireGuard VIP شما به پایان رسیده است.\nباقی‌مانده: ${q.wgLeft}/${VIP_WG_PER_DAY}`);
+          return;
+        }
+
+        const recBefore = await getVIPDNS(env, code);
+        const locationDns = recBefore && recBefore.addresses && recBefore.addresses.length > 0 ? recBefore.addresses[0] : null;
+        const endpoint = await allocateVIPAddress(env, code);
+
+        if (!endpoint) {
+          await sendMsg(token, chatId, `برای ${code} آدرس VIP موجود نیست.`);
+          return;
+        }
+
+        const mtu = pickRandom(WG_MTUS);
+        const userDns = dnsValue || pickRandom(WG_FIXED_DNS);
+        const priv = randBase64(32);
+        const combinedDns = locationDns ? `${locationDns}, ${userDns}` : userDns;
+        const operatorData = OPERATORS[op];
+        const operatorAddress = operatorData && operatorData.addresses && operatorData.addresses.length ? pickRandom(operatorData.addresses) : "10.66.66.2/32";
+
+        const iface = buildInterfaceOnlyConfig({
+          privateKey: priv,
+          address: "10.66.66.2/32",
+          mtu,
+          dns: combinedDns,
+          operatorAddress,
+        });
+
+        const countryNameFa = COUNTRY_NAMES_FA[code] || recBefore?.country || code;
+        const countryNameEn = COUNTRY_NAMES_EN[code] || code;
+        const operatorName = operatorData ? operatorData.title : op;
+        const filename = `VIP_${countryNameEn}_WG.conf`;
+        const flag = flagFromCode(code);
+        const recAfter = await getVIPDNS(env, code);
+        const currentStock = recAfter?.stock || 0;
+
+        const caption = `${flag} <b>${countryName}</b> VIP\n\n━━━━━━━━━━━━━━━━━━━━\n📱 اپراتور: <b>${operatorName}</b>\n🌐 DNS: <code>${combinedDns}</code>\n📡 موجودی باقی‌مانده: <b>${currentStock}</b>\n📈 سهمیه امروز: ${q.wgUsed + 1}/${VIP_WG_PER_DAY}\n━━━━━━━━━━━━━━━━━━━━\n\n✅ کانفیگ VIP شما آماده است!`;
+
+        await sendFile(token, chatId, filename, iface, caption);
+        await incQuota(env, user, "wg");
+        await updateVIPUsage(env, user, "wg");
+
+        try {
+          const histKey = `history:${user}`;
+          const raw = await env.DB.get(histKey);
+          const h = raw ? JSON.parse(raw) : [];
+          h.unshift({ type: "wg-vip", country: code, at: new Date().toISOString(), endpoint, operator: op, dns: combinedDns });
+          if (h.length > 20) h.splice(20);
+          await env.DB.put(histKey, JSON.stringify(h));
+        } catch (e) { }
         return;
       }
 
@@ -1301,6 +1830,8 @@ ${wgBar}
           },
         });
         if (!isAdmin) await incQuota(env, user, "dns");
+        // Track VIP usage
+        if (q.isVIP) await updateVIPUsage(env, user, "dns");
         const histKey = `history:${user}`;
         try {
           const raw = await env.DB.get(histKey);
@@ -1357,6 +1888,8 @@ ${wgBar}
           }
         });
         if (!isAdmin) await incQuota(env, user, "dns");
+        // Track VIP usage
+        if (q.isVIP) await updateVIPUsage(env, user, "dns");
         const histKey = `history:${user}`;
         try {
           const raw = await env.DB.get(histKey);
@@ -1490,6 +2023,8 @@ ${wgBar}
 
         await sendFile(token, chatId, filename, iface, caption);
         if (!isAdmin) await incQuota(env, user, "wg");
+        // Track VIP usage
+        if (q.isVIP) await updateVIPUsage(env, user, "wg");
         try {
           const histKey = `history:${user}`;
           const raw = await env.DB.get(histKey);
@@ -1517,8 +2052,9 @@ ${wgBar}
     const text = message && message.text ? message.text.trim() : "";
 
     if (text === "/start") {
+      const userIsVIP = await isVIPUser(env, user);
       await sendMsg(token, chatId, "سلام 👋\nاز دکمه‌ها استفاده کنید:", {
-        reply_markup: mainMenuKeyboard(String(user) === adminId),
+        reply_markup: mainMenuKeyboard(String(user) === adminId, userIsVIP),
       });
       return;
     }
@@ -1549,6 +2085,40 @@ ${wgBar}
       return;
     }
 
+    if (text === "/vip") {
+      if (!user) {
+        await sendMsg(token, chatId, "کاربر نامشخص");
+        return;
+      }
+      const userIsVIP = await isVIPUser(env, user);
+      if (!userIsVIP) {
+        await sendMsg(token, chatId,
+          "⛔️ شما به بخش VIP دسترسی ندارید.\n\n💎 <b>خرید اشتراک VIP</b>\n\n💰 قیمت: <b>45,000 تومان</b>\n\n✨ مزایای VIP:\n• دسترسی نامحدود به DNS\n• دسترسی نامحدود به WireGuard\n• پشتیبانی ویژه\n\n📩 برای خرید و اطلاعات بیشتر با ادمین در ارتباط باشید:", {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "📩 ارتباط با ادمین", url: "https://t.me/Minimalcraft" }],
+              [{ text: "🔙 بازگشت به منو", callback_data: "back" }]
+            ]
+          }
+        });
+        return;
+      }
+
+      const vipData = await getVIPUserData(env, user);
+      let expiryText = "♾️ دائمی";
+      if (vipData && vipData.expiresAt) {
+        const expiryDate = new Date(vipData.expiresAt);
+        const now = new Date();
+        const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+        expiryText = daysLeft > 0 ? `${daysLeft} روز باقی‌مانده` : "منقضی شده";
+      }
+
+      await sendMsg(token, chatId, `👑 <b>پنل VIP</b>\n\n🌟 به بخش ویژه خوش آمدید!\n\n⏰ اعتبار: ${expiryText}\n\n💎 شما به عنوان کاربر VIP دسترسی <b>نامحدود</b> به تمام خدمات دارید.\n\nیک گزینه را انتخاب کنید:`, {
+        reply_markup: vipMenuKeyboard(),
+      });
+      return;
+    }
+
     if (text === "/status" || text === "/me") {
       if (!user) {
         await sendMsg(token, chatId, "کاربر نامشخص");
@@ -1572,8 +2142,9 @@ ${wgBar}
     }
 
     // default: show menu
+    const userIsVIP = await isVIPUser(env, user);
     await sendMsg(token, chatId, "لطفاً از منوی دکمه‌ای استفاده کنید:", {
-      reply_markup: mainMenuKeyboard(String(user) === adminId),
+      reply_markup: mainMenuKeyboard(String(user) === adminId, userIsVIP),
     });
   } catch (err) {
     console.error("handleUpdate error:", err);
@@ -1686,6 +2257,78 @@ const app = {
       return jsonResponse(list);
     }
 
+    // VIP DNS IPv4 endpoints
+    if (path === "/api/vipdns" && method === "GET") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      const list = await listVIPDNS(env);
+      return jsonResponse(list);
+    }
+
+    if (path.startsWith("/api/vipdns/")) {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      const parts = path.split("/");
+      const code = parts[3];
+      if (!code) return new Response("bad request", { status: 400 });
+
+      if (method === "GET") {
+        const rec = await getVIPDNS(env, code);
+        if (!rec) return new Response("not found", { status: 404 });
+        return jsonResponse(rec);
+      }
+      if (method === "PUT") {
+        try {
+          const body = await request.json();
+          body.code = code.toUpperCase();
+          await updateVIPDNS(env, code, body);
+          return jsonResponse({ ok: true });
+        } catch (e) {
+          return jsonResponse({ error: "invalid json" }, 400);
+        }
+      }
+      if (method === "DELETE") {
+        await deleteVIPDNS(env, code);
+        return jsonResponse({ ok: true });
+      }
+    }
+
+    // VIP DNS IPv6 endpoints
+    if (path === "/api/vipdns6" && method === "GET") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      const list = await listVIPDNS6(env);
+      return jsonResponse(list);
+    }
+
+    if (path.startsWith("/api/vipdns6/")) {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      const parts = path.split("/");
+      const code = parts[3];
+      if (!code) return new Response("bad request", { status: 400 });
+
+      if (method === "GET") {
+        const rec = await getVIPDNS6(env, code);
+        if (!rec) return new Response("not found", { status: 404 });
+        return jsonResponse(rec);
+      }
+      if (method === "PUT") {
+        try {
+          const body = await request.json();
+          body.code = code.toUpperCase();
+          await updateVIPDNS6(env, code, body);
+          return jsonResponse({ ok: true });
+        } catch (e) {
+          return jsonResponse({ error: "invalid json" }, 400);
+        }
+      }
+      if (method === "DELETE") {
+        await deleteVIPDNS6(env, code);
+        return jsonResponse({ ok: true });
+      }
+    }
+
     if (path.startsWith("/api/dns6/")) {
       if (!isAdminReq(request, env))
         return new Response("forbidden", { status: 403 });
@@ -1772,6 +2415,75 @@ const app = {
         return jsonResponse({ ok: true, sent: successCount, total: us.length });
       } catch (e) {
         console.error("broadcast error:", e);
+        return jsonResponse({ error: "invalid json" }, 400);
+      }
+    }
+
+    // VIP API endpoints
+    if (path === "/api/vip" && method === "GET") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      const vipUsers = await getAllVIPUsersWithDetails(env);
+      return jsonResponse({ vipUsers });
+    }
+
+    if (path === "/api/vip/stats" && method === "GET") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      const stats = await getVIPStats(env);
+      return jsonResponse(stats);
+    }
+
+    if (path === "/api/vip/add" && method === "POST") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      try {
+        const body = await request.json();
+        const userId = body.userId;
+        if (!userId) return jsonResponse({ error: "missing userId" }, 400);
+
+        const options = {};
+        if (body.expiresAt) options.expiresAt = body.expiresAt;
+        if (body.notes) options.notes = body.notes;
+
+        const added = await addVIPUser(env, userId, options);
+        return jsonResponse({ ok: true, added });
+      } catch (e) {
+        return jsonResponse({ error: "invalid json" }, 400);
+      }
+    }
+
+    if (path === "/api/vip/remove" && method === "POST") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      try {
+        const body = await request.json();
+        const userId = body.userId;
+        if (!userId) return jsonResponse({ error: "missing userId" }, 400);
+        const removed = await removeVIPUser(env, userId);
+        return jsonResponse({ ok: true, removed });
+      } catch (e) {
+        return jsonResponse({ error: "invalid json" }, 400);
+      }
+    }
+
+    if (path === "/api/vip/update" && method === "POST") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      try {
+        const body = await request.json();
+        const userId = body.userId;
+        if (!userId) return jsonResponse({ error: "missing userId" }, 400);
+
+        if (body.expiresAt !== undefined) {
+          await updateVIPExpiration(env, userId, body.expiresAt);
+        }
+        if (body.notes !== undefined) {
+          await updateVIPNotes(env, userId, body.notes);
+        }
+
+        return jsonResponse({ ok: true });
+      } catch (e) {
         return jsonResponse({ error: "invalid json" }, 400);
       }
     }

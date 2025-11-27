@@ -955,6 +955,10 @@
                     <span class="nav-item-icon"><i class="fas fa-network-wired"></i></span>
                     <span>مدیریت IPv6</span>
                 </button>
+                <button class="nav-item" data-tab="vip-countries">
+                    <span class="nav-item-icon"><i class="fas fa-crown"></i></span>
+                    <span>کشورهای VIP</span>
+                </button>
                 <button class="nav-item" data-tab="countries">
                     <span class="nav-item-icon"><i class="fas fa-flag"></i></span>
                     <span>آدرس‌های کشورها</span>
@@ -962,6 +966,10 @@
                 <button class="nav-item" data-tab="users">
                     <span class="nav-item-icon"><i class="fas fa-users"></i></span>
                     <span>کاربران</span>
+                </button>
+                <button class="nav-item" data-tab="vip">
+                    <span class="nav-item-icon"><i class="fas fa-star"></i></span>
+                    <span>کاربران VIP</span>
                 </button>
             </nav>
         </aside>
@@ -1000,6 +1008,15 @@
                     </div>
                     <div class="stat-value" id="total-ipv6">-</div>
                     <div class="stat-label">IPv6 موجود</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon warning"
+                            style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);"><i
+                                class="fas fa-crown"></i></div>
+                    </div>
+                    <div class="stat-value" id="total-vip">-</div>
+                    <div class="stat-label">کاربران VIP</div>
                 </div>
             </div>
 
@@ -1089,6 +1106,107 @@
                 </div>
             </div>
 
+            <div class="tab-content" id="vip-countries">
+                <div class="content-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon"
+                                style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);"><i
+                                    class="fas fa-crown"></i></div>
+                            <h3 class="card-title">لیست کشورهای VIP IPv4</h3>
+                        </div>
+                        <div class="card-body scrollable">
+                            <div id="vipdns4-list">در حال بارگذاری...</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon"
+                                style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);"><i
+                                    class="fas fa-plus-circle"></i></div>
+                            <h3 class="card-title">افزودن کشور VIP IPv4</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="note"
+                                style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); color: #000;">
+                                <i class="fas fa-crown"></i>
+                                کشورهای VIP فقط برای کاربران VIP قابل دسترسی هستند
+                            </div>
+                            <form id="vipdns4-form">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label">کد کشور</label>
+                                        <input type="text" id="vipcode4" placeholder="مثال: US" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">نام کشور</label>
+                                        <input type="text" id="vipcountry4" placeholder="مثال: آمریکا" required>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">آدرس‌های IPv4 VIP (هر خط یک آدرس)</label>
+                                    <textarea id="vipaddresses4" rows="5" placeholder="1.2.3.4&#10;5.6.7.8&#10;..."
+                                        required></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-crown"></i>
+                                    <span>ذخیره کشور VIP</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="content-grid" style="margin-top: 24px;">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon"
+                                style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);"><i
+                                    class="fas fa-crown"></i></div>
+                            <h3 class="card-title">لیست کشورهای VIP IPv6</h3>
+                        </div>
+                        <div class="card-body scrollable">
+                            <div id="vipdns6-list">در حال بارگذاری...</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon"
+                                style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);"><i
+                                    class="fas fa-plus-circle"></i></div>
+                            <h3 class="card-title">افزودن کشور VIP IPv6</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="note"
+                                style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); color: #000;">
+                                <i class="fas fa-crown"></i>
+                                کشورهای VIP فقط برای کاربران VIP قابل دسترسی هستند
+                            </div>
+                            <form id="vipdns6-form">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label">کد کشور</label>
+                                        <input type="text" id="vipcode6" placeholder="مثال: US" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">نام کشور</label>
+                                        <input type="text" id="vipcountry6" placeholder="مثال: آمریکا" required>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">آدرس‌های IPv6 VIP (هر خط یک آدرس)</label>
+                                    <textarea id="vipaddresses6" rows="5"
+                                        placeholder="2001:db8::1&#10;2001:db8::2&#10;..." required></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-crown"></i>
+                                    <span>ذخیره کشور VIP</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="tab-content" id="countries">
                 <div class="card" style="grid-column: 1 / -1;">
                     <div class="card-header">
@@ -1126,6 +1244,98 @@
                             <button type="button" id="send-bc" class="btn btn-primary">
                                 <i class="fas fa-paper-plane"></i>
                                 <span>ارسال به همه کاربران</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="vip">
+                <div id="vip-stats-grid" class="stats-grid" style="margin-bottom: 24px;">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon"
+                                style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);"><i
+                                    class="fas fa-crown"></i></div>
+                        </div>
+                        <div class="stat-value" id="vip-total">-</div>
+                        <div class="stat-label">کل VIP</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon success"><i class="fas fa-infinity"></i></div>
+                        </div>
+                        <div class="stat-value" id="vip-permanent">-</div>
+                        <div class="stat-label">دائمی</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon info"><i class="fas fa-hourglass-half"></i></div>
+                        </div>
+                        <div class="stat-value" id="vip-expiring">-</div>
+                        <div class="stat-label">موقت</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon" style="background: var(--danger-light);"><i
+                                    class="fas fa-times-circle"></i></div>
+                        </div>
+                        <div class="stat-value" id="vip-expired">-</div>
+                        <div class="stat-label">منقضی</div>
+                    </div>
+                </div>
+                <div class="content-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon"
+                                style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);"><i
+                                    class="fas fa-crown"></i></div>
+                            <h3 class="card-title">لیست کاربران VIP</h3>
+                        </div>
+                        <div class="card-body scrollable" style="max-height: 500px;">
+                            <div id="vip-list">در حال بارگذاری...</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon"
+                                style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);"><i
+                                    class="fas fa-user-plus"></i></div>
+                            <h3 class="card-title">افزودن کاربر VIP</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="note">
+                                <i class="fas fa-info-circle"></i>
+                                کاربران VIP دسترسی نامحدود به تمام خدمات دارند
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">شناسه کاربر (User ID)</label>
+                                <input type="text" id="vip-user-id" placeholder="مثال: 123456789">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">نوع اشتراک</label>
+                                <select id="vip-type"
+                                    style="width: 100%; padding: 12px 16px; font-size: 14px; font-family: inherit; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-primary); color: var(--text-primary);">
+                                    <option value="permanent">دائمی (بدون انقضا)</option>
+                                    <option value="30">30 روزه</option>
+                                    <option value="60">60 روزه</option>
+                                    <option value="90">90 روزه</option>
+                                    <option value="180">180 روزه</option>
+                                    <option value="365">یک ساله</option>
+                                    <option value="custom">تاریخ دلخواه</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="custom-date-group" style="display: none;">
+                                <label class="form-label">تاریخ انقضا</label>
+                                <input type="date" id="vip-expiry-date">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">یادداشت (اختیاری)</label>
+                                <input type="text" id="vip-notes" placeholder="مثال: خریداری شده از کانال تلگرام">
+                            </div>
+                            <button type="button" id="add-vip-btn" class="btn btn-primary">
+                                <i class="fas fa-crown"></i>
+                                <span>افزودن به VIP</span>
                             </button>
                         </div>
                     </div>
@@ -1200,12 +1410,14 @@
                     var results = await Promise.all([
                         fetchJson('/api/dns'),
                         fetchJson('/api/dns6'),
-                        fetchJson('/api/users')
+                        fetchJson('/api/users'),
+                        fetchJson('/api/vip')
                     ]);
 
                     var dns4 = results[0];
                     var dns6 = results[1];
                     var users = results[2];
+                    var vipData = results[3];
 
                     var totalCountries = (dns4 ? dns4.length : 0) + (dns6 ? dns6.length : 0);
                     var totalIPv4 = (dns4 || []).reduce(function (sum, r) {
@@ -1215,11 +1427,13 @@
                         return sum + (r.addresses ? r.addresses.length : 0);
                     }, 0);
                     var totalUsers = users && users.users ? users.users.length : 0;
+                    var totalVIP = vipData && vipData.vipUsers ? vipData.vipUsers.length : 0;
 
                     document.getElementById('total-countries').textContent = totalCountries;
                     document.getElementById('total-users').textContent = totalUsers;
                     document.getElementById('total-ipv4').textContent = totalIPv4;
                     document.getElementById('total-ipv6').textContent = totalIPv6;
+                    document.getElementById('total-vip').textContent = totalVIP;
                 } catch (e) {
                     console.error('Stats update error:', e);
                 }
@@ -1682,10 +1896,317 @@
                 }
             }
 
+            async function loadVIPStats() {
+                try {
+                    var stats = await fetchJson('/api/vip/stats');
+                    document.getElementById('vip-total').textContent = stats.total || 0;
+                    document.getElementById('vip-permanent').textContent = stats.permanent || 0;
+                    document.getElementById('vip-expiring').textContent = stats.expiring || 0;
+                    document.getElementById('vip-expired').textContent = stats.expired || 0;
+                } catch (e) {
+                    console.error('VIP stats error:', e);
+                }
+            }
+
+            async function loadVIPDNS4() {
+                try {
+                    var list = await fetchJson('/api/vipdns');
+                    if (!list || list.length === 0) {
+                        document.getElementById('vipdns4-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">👑</div><div class="empty-state-text">هیچ کشور VIP IPv4 ثبت نشده است</div></div>';
+                        return;
+                    }
+                    list.sort(function (a, b) {
+                        var stockA = (a.addresses && a.addresses.length) ? a.addresses.length : 0;
+                        var stockB = (b.addresses && b.addresses.length) ? b.addresses.length : 0;
+                        return stockB - stockA;
+                    });
+                    var rows = list.map(function (r) {
+                        var flag = r.flag || '';
+                        var country = r.country || r.code;
+                        var actualStock = (r.addresses && r.addresses.length) ? r.addresses.length : 0;
+                        return '<tr><td><span class="country-flag">' + flag + '</span> <strong>' + (r.code || '') + '</strong></td><td>' + country + '</td><td><span class="badge" style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); color: #000;">' + actualStock + '</span></td><td><button data-code="' + (r.code || '') + '" class="btn btn-danger vipd el4">حذف</button></td></tr>';
+                    }).join('');
+                    document.getElementById('vipdns4-list').innerHTML = '<table><thead><tr><th>کد</th><th>کشور</th><th>موجودی</th><th>عملیات</th></tr></thead><tbody>' + rows + '</tbody></table>';
+
+                    document.querySelectorAll('.vipdel4').forEach(function (b) {
+                        b.addEventListener('click', async function (e) {
+                            var code = e.target.getAttribute('data-code');
+                            if (!confirm('آیا از حذف کشور VIP ' + code + ' از IPv4 اطمینان دارید؟')) return;
+                            await fetch('/api/vipdns/' + code, { method: 'DELETE', headers: authHeaders() });
+                            loadVIPDNS4();
+                            updateStats();
+                        });
+                    });
+                } catch (e) {
+                    document.getElementById('vipdns4-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">خطا در بارگذاری اطلاعات</div></div>';
+                }
+            }
+
+            async function loadVIPDNS6() {
+                try {
+                    var list = await fetchJson('/api/vipdns6');
+                    if (!list || list.length === 0) {
+                        document.getElementById('vipdns6-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">👑</div><div class="empty-state-text">هیچ کشور VIP IPv6 ثبت نشده است</div></div>';
+                        return;
+                    }
+                    list.sort(function (a, b) {
+                        var stockA = (a.addresses && a.addresses.length) ? a.addresses.length : 0;
+                        var stockB = (b.addresses && b.addresses.length) ? b.addresses.length : 0;
+                        return stockB - stockA;
+                    });
+                    var rows = list.map(function (r) {
+                        var flag = r.flag || '';
+                        var country = r.country || r.code;
+                        var actualStock = (r.addresses && r.addresses.length) ? r.addresses.length : 0;
+                        return '<tr><td><span class="country-flag">' + flag + '</span> <strong>' + (r.code || '') + '</strong></td><td>' + country + '</td><td><span class="badge" style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); color: #000;">' + actualStock + '</span></td><td><button data-code="' + (r.code || '') + '" class="btn btn-danger vipdel6">حذف</button></td></tr>';
+                    }).join('');
+                    document.getElementById('vipdns6-list').innerHTML = '<table><thead><tr><th>کد</th><th>کشور</th><th>موجودی</th><th>عملیات</th></tr></thead><tbody>' + rows + '</tbody></table>';
+
+                    document.querySelectorAll('.vipdel6').forEach(function (b) {
+                        b.addEventListener('click', async function (e) {
+                            var code = e.target.getAttribute('data-code');
+                            if (!confirm('آیا از حذف کشور VIP ' + code + ' از IPv6 اطمینان دارید؟')) return;
+                            await fetch('/api/vipdns6/' + code, { method: 'DELETE', headers: authHeaders() });
+                            loadVIPDNS6();
+                            updateStats();
+                        });
+                    });
+                } catch (e) {
+                    document.getElementById('vipdns6-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">خطا در بارگذاری اطلاعات</div></div>';
+                }
+            }
+
+            document.getElementById('vipdns4-form').addEventListener('submit', async function (ev) {
+                ev.preventDefault();
+                var code = document.getElementById('vipcode4').value.trim().toUpperCase();
+                var country = document.getElementById('vipcountry4').value.trim();
+                var addressesText = document.getElementById('vipaddresses4').value;
+                var newAddresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+
+                if (!code || !country || newAddresses.length === 0) {
+                    alert('لطفا همه فیلدها را پر کنید');
+                    return;
+                }
+
+                var flag = '';
+                if (code.length === 2) {
+                    flag = String.fromCodePoint.apply(null, code.split('').map(function (c) {
+                        return c.charCodeAt(0) + 127397;
+                    }));
+                }
+
+                try {
+                    var existingRec = await fetchJson('/api/vipdns/' + code).catch(() => null);
+                    var previousAddresses = (existingRec && existingRec.addresses) ? existingRec.addresses : [];
+                    var addresses = previousAddresses.concat(newAddresses);
+                    var stock = addresses.length;
+                    var body = { code: code, country: country, stock: stock, addresses: addresses, flag: flag };
+
+                    await fetch('/api/vipdns/' + code, {
+                        method: 'PUT',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                        body: JSON.stringify(body)
+                    });
+                    document.getElementById('vipdns4-form').reset();
+                    loadVIPDNS4();
+                    updateStats();
+                    alert('کشور VIP IPv4 با موفقیت ذخیره شد\n\nکد: ' + code + '\nآدرس‌های جدید: ' + newAddresses.length + '\nموجودی قبلی: ' + previousAddresses.length + '\nموجودی کل: ' + stock);
+                } catch (e) {
+                    alert('خطا در ذخیره کشور VIP IPv4');
+                    console.error(e);
+                }
+            });
+
+            document.getElementById('vipdns6-form').addEventListener('submit', async function (ev) {
+                ev.preventDefault();
+                var code = document.getElementById('vipcode6').value.trim().toUpperCase();
+                var country = document.getElementById('vipcountry6').value.trim();
+                var addressesText = document.getElementById('vipaddresses6').value;
+                var newAddresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+
+                if (!code || !country || newAddresses.length === 0) {
+                    alert('لطفا همه فیلدها را پر کنید');
+                    return;
+                }
+
+                var flag = '';
+                if (code.length === 2) {
+                    flag = String.fromCodePoint.apply(null, code.split('').map(function (c) {
+                        return c.charCodeAt(0) + 127397;
+                    }));
+                }
+
+                try {
+                    var existingRec = await fetchJson('/api/vipdns6/' + code).catch(() => null);
+                    var previousAddresses = (existingRec && existingRec.addresses) ? existingRec.addresses : [];
+                    var addresses = previousAddresses.concat(newAddresses);
+                    var stock = addresses.length;
+                    var body = { code: code, country: country, stock: stock, addresses: addresses, flag: flag };
+
+                    await fetch('/api/vipdns6/' + code, {
+                        method: 'PUT',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                        body: JSON.stringify(body)
+                    });
+                    document.getElementById('vipdns6-form').reset();
+                    loadVIPDNS6();
+                    updateStats();
+                    alert('کشور VIP IPv6 با موفقیت ذخیره شد\n\nکد: ' + code + '\nآدرس‌های جدید: ' + newAddresses.length + '\nموجودی قبلی: ' + previousAddresses.length + '\nموجودی کل: ' + stock);
+                } catch (e) {
+                    alert('خطا در ذخیره کشور VIP IPv6');
+                    console.error(e);
+                }
+            });
+
+            async function loadVIPUsers() {
+                try {
+                    var j = await fetchJson('/api/vip');
+                    var vipUsers = j.vipUsers || [];
+                    loadVIPStats();
+
+                    if (vipUsers.length === 0) {
+                        document.getElementById('vip-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">👑</div><div class="empty-state-text">هنوز هیچ کاربر VIP ثبت نشده است</div></div>';
+                        return;
+                    }
+
+                    var html = '<div class="note" style="background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); color: #000;">تعداد کل کاربران VIP: <strong>' + vipUsers.length + ' نفر</strong></div>';
+                    html += '<table><thead><tr><th>ردیف</th><th>شناسه کاربر</th><th>وضعیت</th><th>انقضا</th><th>مصرف</th><th>عملیات</th></tr></thead><tbody>';
+
+                    vipUsers.forEach(function (user, idx) {
+                        var uid = user.id || user;
+                        var expiryText = '♾️ دائمی';
+                        var statusBadge = '<span class="badge badge-success">فعال</span>';
+
+                        if (user.expiresAt) {
+                            var expiryDate = new Date(user.expiresAt);
+                            var now = new Date();
+                            var daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+
+                            if (daysLeft <= 0) {
+                                expiryText = '❌ منقضی';
+                                statusBadge = '<span class="badge" style="background: var(--danger-light); color: #dc2626;">منقضی</span>';
+                            } else if (daysLeft <= 7) {
+                                expiryText = daysLeft + ' روز';
+                                statusBadge = '<span class="badge" style="background: var(--warning-light); color: #d97706;">رو به انقضا</span>';
+                            } else {
+                                expiryText = daysLeft + ' روز';
+                            }
+                        }
+
+                        var usageText = (user.totalDnsUsed || 0) + ' DNS / ' + (user.totalWgUsed || 0) + ' WG';
+                        var notesInfo = user.notes ? ' title="' + user.notes + '"' : '';
+
+                        html += '<tr' + notesInfo + '>';
+                        html += '<td><strong>' + (idx + 1) + '</strong></td>';
+                        html += '<td><code>' + uid + '</code></td>';
+                        html += '<td>' + statusBadge + '</td>';
+                        html += '<td>' + expiryText + '</td>';
+                        html += '<td style="font-size: 12px;">' + usageText + '</td>';
+                        html += '<td><button class="btn btn-danger remove-vip" data-user-id="' + uid + '" style="padding: 6px 12px; font-size: 12px;">حذف</button></td>';
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+                    document.getElementById('vip-list').innerHTML = html;
+
+                    document.querySelectorAll('.remove-vip').forEach(function (btn) {
+                        btn.addEventListener('click', async function () {
+                            var userId = this.getAttribute('data-user-id');
+                            if (!confirm('آیا از حذف کاربر ' + userId + ' از لیست VIP اطمینان دارید؟')) return;
+
+                            try {
+                                await fetch('/api/vip/remove', {
+                                    method: 'POST',
+                                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                                    body: JSON.stringify({ userId: userId })
+                                });
+                                loadVIPUsers();
+                                updateStats();
+                                alert('کاربر با موفقیت از لیست VIP حذف شد');
+                            } catch (e) {
+                                alert('خطا در حذف کاربر از VIP');
+                                console.error(e);
+                            }
+                        });
+                    });
+                } catch (e) {
+                    document.getElementById('vip-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">خطا در بارگذاری کاربران VIP</div></div>';
+                }
+            }
+
+            document.getElementById('vip-type').addEventListener('change', function () {
+                var customGroup = document.getElementById('custom-date-group');
+                if (this.value === 'custom') {
+                    customGroup.style.display = 'block';
+                } else {
+                    customGroup.style.display = 'none';
+                }
+            });
+
+            document.getElementById('add-vip-btn').addEventListener('click', async function () {
+                var userId = document.getElementById('vip-user-id').value.trim();
+                if (!userId) {
+                    alert('لطفا شناسه کاربر را وارد کنید');
+                    return;
+                }
+
+                var vipType = document.getElementById('vip-type').value;
+                var notes = document.getElementById('vip-notes').value.trim();
+                var expiresAt = null;
+
+                if (vipType === 'custom') {
+                    var customDate = document.getElementById('vip-expiry-date').value;
+                    if (!customDate) {
+                        alert('لطفا تاریخ انقضا را انتخاب کنید');
+                        return;
+                    }
+                    expiresAt = new Date(customDate).toISOString();
+                } else if (vipType !== 'permanent') {
+                    var days = parseInt(vipType);
+                    var expiry = new Date();
+                    expiry.setDate(expiry.getDate() + days);
+                    expiresAt = expiry.toISOString();
+                }
+
+                try {
+                    var body = { userId: userId };
+                    if (expiresAt) body.expiresAt = expiresAt;
+                    if (notes) body.notes = notes;
+
+                    var result = await fetch('/api/vip/add', {
+                        method: 'POST',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                        body: JSON.stringify(body)
+                    });
+                    var data = await result.json();
+
+                    var typeText = vipType === 'permanent' ? 'دائمی' : vipType + ' روزه';
+                    if (vipType === 'custom') typeText = 'تا تاریخ انتخابی';
+
+                    if (data.added) {
+                        alert('✅ کاربر با موفقیت به لیست VIP اضافه شد!\n\nشناسه: ' + userId + '\nنوع اشتراک: ' + typeText + '\n\nاین کاربر اکنون دسترسی نامحدود به تمام خدمات دارد.');
+                    } else {
+                        alert('⚠️ این کاربر قبلاً در لیست VIP وجود دارد.\nاطلاعات اشتراک به‌روزرسانی شد.');
+                    }
+
+                    document.getElementById('vip-user-id').value = '';
+                    document.getElementById('vip-notes').value = '';
+                    document.getElementById('vip-type').value = 'permanent';
+                    document.getElementById('custom-date-group').style.display = 'none';
+                    loadVIPUsers();
+                    updateStats();
+                } catch (e) {
+                    alert('خطا در افزودن کاربر به VIP');
+                    console.error(e);
+                }
+            });
+
             loadDNS4();
             loadDNS6();
+            loadVIPDNS4();
+            loadVIPDNS6();
             loadCountries();
             loadUsers();
+            loadVIPUsers();
             updateStats();
         })();
     </script>
