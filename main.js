@@ -1760,7 +1760,17 @@ ${wgBar}
         const recAfter = await getVIPDNS(env, code);
         const currentStock = recAfter?.stock || 0;
 
-        const caption = `${flag} <b>${countryNameFa}</b> VIP\n\n━━━━━━━━━━━━━━━━━━━━\n📱 اپراتور: <b>${operatorName}</b>\n🌐 DNS: <code>${combinedDns}</code>\n📡 موجودی باقی‌مانده: <b>${currentStock}</b>\n📈 سهمیه امروز: ${q.wgUsed + 1}/${VIP_WG_PER_DAY}\n━━━━━━━━━━━━━━━━━━━━\n\n✅ کانفیگ VIP شما آماده است!\n🚀 تنظیمات بهینه‌سازی شده برای عملکرد بهتر`;
+        const caption = `${flag} <b>${countryNameFa}</b> VIP
+
+━━━━━━━━━━━━━━━━━━━━
+📱 اپراتور: ${operatorName}
+🌐 DNS: ${combinedDns}
+📡 موجودی: ${currentStock}
+📈 سهمیه: ${q.wgUsed + 1}/${VIP_WG_PER_DAY}
+━━━━━━━━━━━━━━━━━━━━
+
+✅ کانفیگ VIP شما آماده است!
+🚀 تنظیمات بهینه‌سازی شده`;
 
         await sendFile(token, chatId, filename, iface, caption);
         await incQuota(env, user, "wg");
@@ -2018,9 +2028,9 @@ ${wgBar}
         const caption = `${flag} <b>${countryNameFa}</b>
 
 ━━━━━━━━━━━━━━━━━━━━
-📱 اپراتور: <b>${operatorName}</b>
-🌐 DNS: <code>${combinedDns}</code>
-📡 موجودی: <b>${currentStock}</b>
+📱 اپراتور: ${operatorName}
+🌐 DNS: ${combinedDns}
+📡 موجودی: ${currentStock}
 📈 سهمیه: ${q.wgUsed + 1}/${MAX_WG_PER_DAY}
 ━━━━━━━━━━━━━━━━━━━━
 
