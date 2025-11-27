@@ -2020,7 +2020,8 @@ ${wgBar}
 ━━━━━━━━━━━━━━━━━━━━
 📱 اپراتور: <b>${operatorName}</b>
 🌐 DNS: <code>${combinedDns}</code>
-📡 موجودی باقی‌مانده: <b>${currentStock}</b>
+📡 موجودی: <b>${currentStock}</b>
+📈 سهمیه: ${q.wgUsed + 1}/${MAX_WG_PER_DAY}
 ━━━━━━━━━━━━━━━━━━━━
 
 ✅ کانفیگ شما آماده است!`;
