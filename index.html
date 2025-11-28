@@ -895,6 +895,99 @@
             transform: translateY(-1px);
             box-shadow: var(--shadow-md);
         }
+
+        /* New styles for delete buttons and selection */
+        .btn-delete-all-addresses {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-delete-all-addresses:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-delete-selected {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: none;
+            /* Hidden by default, shown when items are selected */
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-delete-selected:hover {
+            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+        }
+
+        .btn-delete-selected.active {
+            display: flex;
+        }
+
+        .address-item.selectable {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .address-item.selected {
+            background: var(--warning-light);
+            border-right: 3px solid var(--warning);
+        }
+
+        .address-checkbox {
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border);
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            margin-left: 8px;
+            flex-shrink: 0;
+            /* Prevent checkbox from shrinking */
+        }
+
+        .address-item.selected .address-checkbox {
+            background: var(--warning);
+            border-color: var(--warning);
+        }
+
+        .address-checkbox::after {
+            content: '✓';
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            display: none;
+        }
+
+        .address-item.selected .address-checkbox::after {
+            display: block;
+        }
     </style>
 </head>
 
@@ -1775,19 +1868,20 @@
                         html += '<button class="btn-add-addresses" data-code="' + c.code + '" style="flex: 1;">';
                         html += '<i class="fas fa-plus"></i> افزودن آدرس';
                         html += '</button>';
-                        html += '<button class="btn-delete-all-addresses" data-code="' + c.code + '" style="flex: 1; background: var(--danger);">';
+                        html += '<button class="btn-delete-all-addresses" data-code="' + c.code + '">';
                         html += '<i class="fas fa-trash-alt"></i> حذف همه آدرس‌ها';
+                        html += '</button>';
+                        html += '<button class="btn-delete-selected" data-code="' + c.code + '">';
+                        html += '<i class="fas fa-trash-alt"></i>'; // Text will be added by JS
                         html += '</button>';
                         html += '</div>';
 
                         if (c.ipv4.length > 0) {
                             html += '<div style="font-weight: 600; margin-bottom: 8px; color: var(--primary);"><i class="fas fa-globe"></i> IPv4 (' + c.ipv4.length + ')</div>';
                             c.ipv4.forEach(function (addr) {
-                                html += '<div class="address-item">';
+                                html += '<div class="address-item selectable" data-addr="' + addr + '">';
+                                html += '<div class="address-checkbox"></div>';
                                 html += '<span class="address-text">' + addr + '</span>';
-                                html += '<button class="btn-delete-address" data-code="' + c.code + '" data-type="ipv4" data-addr="' + addr + '">';
-                                html += '<i class="fas fa-trash-alt"></i> حذف';
-                                html += '</button>';
                                 html += '</div>';
                             });
                         }
@@ -1795,11 +1889,9 @@
                         if (c.ipv6.length > 0) {
                             html += '<div style="font-weight: 600; margin: 12px 0 8px; color: var(--info);"><i class="fas fa-network-wired"></i> IPv6 (' + c.ipv6.length + ')</div>';
                             c.ipv6.forEach(function (addr) {
-                                html += '<div class="address-item">';
+                                html += '<div class="address-item selectable" data-addr="' + addr + '">';
+                                html += '<div class="address-checkbox"></div>';
                                 html += '<span class="address-text">' + addr + '</span>';
-                                html += '<button class="btn-delete-address" data-code="' + c.code + '" data-type="ipv6" data-addr="' + addr + '">';
-                                html += '<i class="fas fa-trash-alt"></i> حذف';
-                                html += '</button>';
                                 html += '</div>';
                             });
                         }
@@ -1853,7 +1945,6 @@
                             var rec4 = await fetchJson('/api/dns/' + currentCountryCode).catch(() => null);
                             var rec6 = await fetchJson('/api/dns6/' + currentCountryCode).catch(() => null);
 
-                            var updated = false;
                             var addedCount = 0;
                             var duplicateCount = 0;
 
@@ -1869,7 +1960,6 @@
                                     headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
                                     body: JSON.stringify(rec4)
                                 });
-                                updated = true;
                             }
                             if (rec6 && rec6.addresses) {
                                 var oldCount = rec6.addresses.length;
@@ -1883,27 +1973,22 @@
                                     headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
                                     body: JSON.stringify(rec6)
                                 });
-                                updated = true;
                             }
 
-                            if (updated) {
-                                modal.classList.remove('active');
-                                modalAddresses.value = '';
-                                loadCountries();
-                                loadDNS4();
-                                loadDNS6();
-                                updateStats();
+                            modal.classList.remove('active');
+                            modalAddresses.value = '';
+                            loadCountries();
+                            loadDNS4();
+                            loadDNS6();
+                            updateStats();
 
-                                var successMsg = '✅ آدرس‌ها با موفقیت اضافه شدند!\n\n';
-                                successMsg += '📊 آمار:\n';
-                                successMsg += '• آدرس‌های جدید: ' + addedCount + '\n';
-                                if (duplicateCount > 0) {
-                                    successMsg += '• تکراری‌های حذف شده: ' + duplicateCount;
-                                }
-                                alert(successMsg);
-                            } else {
-                                alert('خطا: هیچ رکورد IPv4 یا IPv6 برای این کشور یافت نشد.');
+                            var successMsg = '✅ آدرس‌ها با موفقیت اضافه شدند!\n\n';
+                            successMsg += '📊 آمار:\n';
+                            successMsg += '• آدرس‌های جدید: ' + addedCount + '\n';
+                            if (duplicateCount > 0) {
+                                successMsg += '• تکراری‌های حذف شده: ' + duplicateCount;
                             }
+                            alert(successMsg);
                         } catch (err) {
                             alert('خطا در افزودن آدرس');
                             console.error(err);
@@ -1919,38 +2004,93 @@
                         });
                     });
 
-                    document.querySelectorAll('.btn-delete-address').forEach(function (btn) {
-                        btn.addEventListener('click', async function (e) {
-                            e.stopPropagation();
-                            var code = this.getAttribute('data-code');
-                            var type = this.getAttribute('data-type');
-                            var addr = this.getAttribute('data-addr');
+                    let selectedAddresses = new Set();
 
-                            if (!confirm('آیا از حذف این آدرس اطمینان دارید؟\n\n' + addr)) return;
+                    function updateDeleteSelectedButton() {
+                        const deleteSelectedBtn = document.querySelector('.btn-delete-selected');
+                        if (deleteSelectedBtn) {
+                            if (selectedAddresses.size > 0) {
+                                deleteSelectedBtn.classList.add('active');
+                                deleteSelectedBtn.textContent = `${selectedAddresses.size} انتخاب شده`;
+                            } else {
+                                deleteSelectedBtn.classList.remove('active');
+                            }
+                        }
+                    }
 
-                            try {
-                                var endpoint = type === 'ipv4' ? '/api/dns/' : '/api/dns6/';
-                                var rec = await fetchJson(endpoint + code);
+                    function toggleAddressSelection(item, addr, type) {
+                        const checkbox = item.querySelector('.address-checkbox');
+                        const key = `${type}:${addr}`;
+                        if (selectedAddresses.has(key)) {
+                            selectedAddresses.delete(key);
+                            item.classList.remove('selected');
+                            checkbox.innerHTML = '';
+                        } else {
+                            selectedAddresses.add(key);
+                            item.classList.add('selected');
+                            checkbox.innerHTML = '✓';
+                        }
+                        updateDeleteSelectedButton();
+                    }
 
-                                if (rec && rec.addresses) {
-                                    rec.addresses = rec.addresses.filter(function (a) { return a !== addr; });
-                                    rec.stock = rec.addresses.length;
+                    document.addEventListener('click', function (e) {
+                        if (e.target.classList.contains('address-item') && e.target.classList.contains('selectable')) {
+                            const item = e.target;
+                            const addr = item.getAttribute('data-addr');
+                            let type = null;
+                            if (item.closest('.address-list').querySelector('i.fa-globe')) type = 'ipv4';
+                            else if (item.closest('.address-list').querySelector('i.fa-network-wired')) type = 'ipv6';
 
-                                    await fetch(endpoint + code, {
+                            if (type) {
+                                toggleAddressSelection(item, addr, type);
+                            }
+                        }
+                    });
+
+                    document.querySelectorAll('.btn-delete-selected').forEach(function (btn) {
+                        btn.addEventListener('click', async function () {
+                            if (!confirm(`آیا از حذف ${selectedAddresses.size} آدرس انتخاب شده اطمینان دارید؟`)) return;
+
+                            const addressesToDelete = Array.from(selectedAddresses).map(key => {
+                                const [type, addr] = key.split(':');
+                                return { type, addr };
+                            });
+
+                            if (addressesToDelete.length === 0) return;
+
+                            const countryCode = this.getAttribute('data-code'); // Get country code from the button
+
+                            const recordsToUpdate = {};
+
+                            for (const { type, addr } of addressesToDelete) {
+                                const endpoint = type === 'ipv4' ? '/api/dns/' : '/api/dns6/';
+                                if (!recordsToUpdate[type]) {
+                                    recordsToUpdate[type] = await fetchJson(endpoint + countryCode).catch(() => null);
+                                }
+                                if (recordsToUpdate[type] && recordsToUpdate[type].addresses) {
+                                    recordsToUpdate[type].addresses = recordsToUpdate[type].addresses.filter(a => a !== addr);
+                                    recordsToUpdate[type].stock = recordsToUpdate[type].addresses.length;
+                                }
+                            }
+
+                            for (const type in recordsToUpdate) {
+                                if (recordsToUpdate[type]) {
+                                    const endpoint = type === 'ipv4' ? '/api/dns/' : '/api/dns6/';
+                                    await fetch(endpoint + countryCode, {
                                         method: 'PUT',
                                         headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-                                        body: JSON.stringify(rec)
+                                        body: JSON.stringify(recordsToUpdate[type])
                                     });
-
-                                    loadCountries();
-                                    loadDNS4();
-                                    loadDNS6();
-                                    updateStats();
                                 }
-                            } catch (err) {
-                                alert('خطا در حذف آدرس');
-                                console.error(err);
                             }
+
+                            selectedAddresses.clear();
+                            loadCountries();
+                            loadDNS4();
+                            loadDNS6();
+                            updateStats();
+                            updateDeleteSelectedButton();
+                            alert('آدرس‌های انتخاب شده حذف شدند.');
                         });
                     });
 
