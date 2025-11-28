@@ -1847,13 +1847,46 @@
                 }
                 if (!confirm('آیا از ارسال این پیام به همه کاربران اطمینان دارید؟')) return;
 
-                await fetch('/api/broadcast', {
-                    method: 'POST',
-                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
-                    body: JSON.stringify({ text: text })
-                });
-                alert('پیام با موفقیت به همه کاربران ارسال شد');
-                document.getElementById('broadcast').value = '';
+                try {
+                    // Show loading state
+                    var btn = document.getElementById('send-bc');
+                    var originalText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>در حال ارسال...</span>';
+                    btn.disabled = true;
+
+                    var response = await fetch('/api/broadcast', {
+                        method: 'POST',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                        body: JSON.stringify({ text: text })
+                    });
+
+                    var result = await response.json();
+
+                    // Restore button
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+
+                    if (result.ok) {
+                        var message = '✅ پیام همگانی با موفقیت ارسال شد!\n\n';
+                        message += '📊 گزارش ارسال:\n';
+                        message += '👥 کل کاربران: ' + result.total + '\n';
+                        message += '✅ ارسال موفق: ' + result.sent;
+                        if (result.failed && result.failed > 0) {
+                            message += '\n❌ ارسال ناموفق: ' + result.failed;
+                        }
+                        alert(message);
+                        document.getElementById('broadcast').value = '';
+                    } else {
+                        alert('خطا در ارسال پیام: ' + (result.error || 'خطای نامشخص'));
+                    }
+                } catch (e) {
+                    console.error('Broadcast error:', e);
+                    alert('خطا در ارسال پیام همگانی');
+                    // Restore button in case of error
+                    var btn = document.getElementById('send-bc');
+                    btn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>ارسال به همه کاربران</span>';
+                    btn.disabled = false;
+                }
             });
 
             async function loadCountries() {
@@ -1866,11 +1899,9 @@
                         return;
                     }
                     const data = await res.json();
-                    countries = Array.isArray(data) ? data : [];
                     renderCountries();
                 } catch (e) {
                     console.error('Load countries error:', e);
-                    countries = [];
                 }
             }
 
