@@ -1,7 +1,7 @@
 // main.js — Telegram WireGuard/DNS Bot + Responsive Web Panel --> index.html for Cloudflare Pages
 // ---------------------------------------------------------------
 // - KV binding name: DB
-// - Required env vars: BOT_TOKEN, ADMIN_ID (fallback to numeric ADMIN_FALLBACK)
+// - Required env vars: BOT_TOKEN, ADMIN_ID
 //   per-user daily quotas (3 DNS / 3 WG), responsive admin panel, admin broadcast.
 // ---------------------------------------------------------------
 
@@ -14,9 +14,6 @@ const VIP_DNS_PER_DAY = 10;
 const VIP_WG_PER_DAY = 10;
 const DATE_YYYYMMDD = () =>
   new Date().toISOString().slice(0, 10).replace(/-/g, "");
-
-// Fallback admin id (used if ENV ADMIN_ID is missing)
-const ADMIN_FALLBACK = "7240662021";
 
 // Random MTU selection list
 const WG_MTUS = [1280, 1320, 1360, 1380, 1400, 1420, 1440, 1480, 1500];
@@ -37,282 +34,18 @@ const WG_FIXED_DNS = [
   "185.51.200.2",
 ];
 
-// Country names in Persian
-const COUNTRY_NAMES_FA = {
-  IR: "ایران",
-  US: "آمریکا",
-  GB: "انگلستان",
-  DE: "آلمان",
-  FR: "فرانسه",
-  NL: "هلند",
-  SE: "سوئد",
-  FI: "فنلاند",
-  NO: "نروژ",
-  DK: "دانمارک",
-  CH: "سوئیس",
-  AT: "اتریش",
-  BE: "بلژیک",
-  ES: "اسپانیا",
-  IT: "ایتالیا",
-  PL: "لهستان",
-  RO: "رومانی",
-  CZ: "چک",
-  HU: "مجارستان",
-  BG: "بلغارستان",
-  UA: "اوکراین",
-  RU: "روسیه",
-  TR: "ترکیه",
-  AE: "امارات",
-  SA: "عربستان",
-  JP: "ژاپن",
-  KR: "کره جنوبی",
-  SG: "سنگاپور",
-  HK: "هنگ کنگ",
-  AU: "استرالیا",
-  CA: "کانادا",
-  BR: "برزیل",
-  MX: "مکزیک",
-  AR: "آرژانتین",
-  CL: "شیلی",
-  IN: "هند",
-  ID: "اندونزی",
-  TH: "تایلند",
-  VN: "ویتنام",
-  MY: "مالزی",
-  PH: "فیلیپین",
-  ZA: "آفریقای جنوبی",
-  EG: "مصر",
-  NG: "نیجریه",
-  IL: "اسرائیل",
-  GE: "گرجستان",
-  AM: "ارمنستان",
-  AZ: "آذربایجان",
-  KZ: "قزاقستان",
-  UZ: "ازبکستان",
-  IS: "ایسلند",
-  IE: "ایرلند",
-  PT: "پرتغال",
-  GR: "یونان",
-  HR: "کرواسی",
-  RS: "صربستان",
-  LV: "لتونی",
-  LT: "لیتوانی",
-  EE: "استونی",
-  SK: "اسلواکی",
-  SI: "اسلوونی",
-  LU: "لوکزامبورگ",
-};
+// Import country data
+import COUNTRY_DATA_RAW from './countries.json' assert { type: 'json' };
+const COUNTRY_DATA = COUNTRY_DATA_RAW || {};
 
-// Country names in English (for config filenames) - COMPLETE LIST
-const COUNTRY_NAMES_EN = {
-  IR: "Iran",
-  US: "USA",
-  GB: "UK",
-  DE: "Germany",
-  FR: "France",
-  NL: "Netherlands",
-  SE: "Sweden",
-  FI: "Finland",
-  NO: "Norway",
-  DK: "Denmark",
-  CH: "Switzerland",
-  AT: "Austria",
-  BE: "Belgium",
-  ES: "Spain",
-  IT: "Italy",
-  PL: "Poland",
-  RO: "Romania",
-  CZ: "Czechia",
-  HU: "Hungary",
-  BG: "Bulgaria",
-  UA: "Ukraine",
-  RU: "Russia",
-  TR: "Turkey",
-  AE: "UAE",
-  SA: "Saudi",
-  JP: "Japan",
-  KR: "SouthKorea",
-  SG: "Singapore",
-  HK: "HongKong",
-  AU: "Australia",
-  CA: "Canada",
-  BR: "Brazil",
-  MX: "Mexico",
-  AR: "Argentina",
-  CL: "Chile",
-  IN: "India",
-  ID: "Indonesia",
-  TH: "Thailand",
-  VN: "Vietnam",
-  MY: "Malaysia",
-  PH: "Philippines",
-  ZA: "SouthAfrica",
-  EG: "Egypt",
-  NG: "Nigeria",
-  IL: "Israel",
-  GE: "Georgia",
-  AM: "Armenia",
-  AZ: "Azerbaijan",
-  KZ: "Kazakhstan",
-  UZ: "Uzbekistan",
-  IS: "Iceland",
-  IE: "Ireland",
-  PT: "Portugal",
-  GR: "Greece",
-  HR: "Croatia",
-  RS: "Serbia",
-  LV: "Latvia",
-  LT: "Lithuania",
-  EE: "Estonia",
-  SK: "Slovakia",
-  SI: "Slovenia",
-  LU: "Luxembourg",
-  AL: "Albania",
-  BA: "Bosnia",
-  BY: "Belarus",
-  CY: "Cyprus",
-  MC: "Monaco",
-  MD: "Moldova",
-  ME: "Montenegro",
-  MK: "Macedonia",
-  MT: "Malta",
-  SM: "SanMarino",
-  VA: "Vatican",
-  AD: "Andorra",
-  LI: "Liechtenstein",
-  FO: "Faroe",
-  GI: "Gibraltar",
-  JE: "Jersey",
-  IM: "IsleOfMan",
-  GG: "Guernsey",
-  AX: "Aland",
-  GL: "Greenland",
-  CN: "China",
-  TW: "Taiwan",
-  MO: "Macau",
-  KP: "NorthKorea",
-  MN: "Mongolia",
-  KH: "Cambodia",
-  LA: "Laos",
-  MM: "Myanmar",
-  BD: "Bangladesh",
-  BT: "Bhutan",
-  NP: "Nepal",
-  LK: "SriLanka",
-  MV: "Maldives",
-  PK: "Pakistan",
-  AF: "Afghanistan",
-  IQ: "Iraq",
-  SY: "Syria",
-  LB: "Lebanon",
-  JO: "Jordan",
-  PS: "Palestine",
-  YE: "Yemen",
-  OM: "Oman",
-  KW: "Kuwait",
-  QA: "Qatar",
-  BH: "Bahrain",
-  DZ: "Algeria",
-  TN: "Tunisia",
-  MA: "Morocco",
-  LY: "Libya",
-  SD: "Sudan",
-  SO: "Somalia",
-  ET: "Ethiopia",
-  KE: "Kenya",
-  TZ: "Tanzania",
-  UG: "Uganda",
-  RW: "Rwanda",
-  BI: "Burundi",
-  MW: "Malawi",
-  ZM: "Zambia",
-  ZW: "Zimbabwe",
-  MZ: "Mozambique",
-  AO: "Angola",
-  NA: "Namibia",
-  BW: "Botswana",
-  LS: "Lesotho",
-  SZ: "Eswatini",
-  MG: "Madagascar",
-  MU: "Mauritius",
-  SC: "Seychelles",
-  KM: "Comoros",
-  DJ: "Djibouti",
-  ER: "Eritrea",
-  SS: "SouthSudan",
-  CM: "Cameroon",
-  CF: "CentralAfrican",
-  TD: "Chad",
-  CG: "Congo",
-  CD: "DRCongo",
-  GA: "Gabon",
-  GQ: "EquatorialGuinea",
-  ST: "SaoTome",
-  GH: "Ghana",
-  CI: "IvoryCoast",
-  BF: "BurkinaFaso",
-  ML: "Mali",
-  NE: "Niger",
-  SN: "Senegal",
-  GM: "Gambia",
-  GW: "GuineaBissau",
-  GN: "Guinea",
-  SL: "SierraLeone",
-  LR: "Liberia",
-  TG: "Togo",
-  BJ: "Benin",
-  MR: "Mauritania",
-  CV: "CapeVerde",
-  NZ: "NewZealand",
-  PG: "PapuaNewGuinea",
-  FJ: "Fiji",
-  NC: "NewCaledonia",
-  PF: "FrenchPolynesia",
-  WS: "Samoa",
-  TO: "Tonga",
-  VU: "Vanuatu",
-  SB: "SolomonIslands",
-  KI: "Kiribati",
-  FM: "Micronesia",
-  MH: "MarshallIslands",
-  PW: "Palau",
-  NR: "Nauru",
-  TV: "Tuvalu",
-  TK: "Tokelau",
-  NU: "Niue",
-  CK: "CookIslands",
-  CO: "Colombia",
-  VE: "Venezuela",
-  EC: "Ecuador",
-  PE: "Peru",
-  BO: "Bolivia",
-  PY: "Paraguay",
-  UY: "Uruguay",
-  GY: "Guyana",
-  SR: "Suriname",
-  GF: "FrenchGuiana",
-  CR: "CostaRica",
-  PA: "Panama",
-  NI: "Nicaragua",
-  HN: "Honduras",
-  SV: "ElSalvador",
-  GT: "Guatemala",
-  BZ: "Belize",
-  CU: "Cuba",
-  JM: "Jamaica",
-  HT: "Haiti",
-  DO: "DominicanRepublic",
-  PR: "PuertoRico",
-  TT: "TrinidadTobago",
-  BB: "Barbados",
-  BS: "Bahamas",
-  LC: "SaintLucia",
-  GD: "Grenada",
-  VC: "SaintVincent",
-  AG: "AntiguaBarbuda",
-  DM: "Dominica",
-  KN: "SaintKitts",
-};
+// Helper functions to get country names
+const COUNTRY_NAMES_FA = new Proxy({}, {
+  get: (target, code) => COUNTRY_DATA[code]?.fa || code
+});
+
+const COUNTRY_NAMES_EN = new Proxy({}, {
+  get: (target, code) => COUNTRY_DATA[code]?.en || code
+});
 
 // User-selectable operators with their address ranges
 const OPERATORS = {
@@ -581,16 +314,113 @@ async function allUsers(env) {
 /* ---------------------- Quota System ---------------------- */
 async function getQuota(env, id) {
   const isVIP = await isVIPUser(env, id);
+  const isPro = await isProUser(env, id);
   const d = DATE_YYYYMMDD();
   const dns = parseInt(await env.DB.get(`q:dns:${id}:${d}`)) || 0;
   const wg = parseInt(await env.DB.get(`q:wg:${id}:${d}`)) || 0;
+
+  // Pro users get 10 limit, VIP users get 10 limit, regular users get 3 limit
+  const dailyLimit = (isVIP || isPro) ? 10 : 3;
+
   return {
     dnsUsed: dns,
     wgUsed: wg,
-    dnsLeft: isVIP ? Math.max(0, VIP_DNS_PER_DAY - dns) : Math.max(0, MAX_DNS_PER_DAY - dns),
-    wgLeft: isVIP ? Math.max(0, VIP_WG_PER_DAY - wg) : Math.max(0, MAX_WG_PER_DAY - wg),
+    dnsLeft: Math.max(0, dailyLimit - dns),
+    wgLeft: Math.max(0, dailyLimit - wg),
     isVIP: isVIP,
+    isPro: isPro,
+    dailyLimit: dailyLimit
   };
+}
+
+/* ---------------------- Pro Key System ---------------------- */
+async function isProUser(env, userId) {
+  const raw = await env.DB.get(`pro:user:${userId}`);
+  if (!raw) return false;
+
+  try {
+    const userData = JSON.parse(raw);
+    if (!userData.expiresAt) return true;
+
+    const expiryDate = new Date(userData.expiresAt);
+    const now = new Date();
+    return expiryDate > now;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function addProUser(env, userId, days) {
+  const expiryDate = new Date();
+  expiryDate.setDate(expiryDate.getDate() + parseInt(days));
+  expiryDate.setHours(23, 59, 59, 999);
+
+  const userData = {
+    addedAt: new Date().toISOString(),
+    expiresAt: expiryDate.toISOString(),
+    durationDays: parseInt(days)
+  };
+
+  await env.DB.put(`pro:user:${userId}`, JSON.stringify(userData));
+  return true;
+}
+
+async function getAllProKeys(env) {
+  const res = await env.DB.list({ prefix: 'prokey:', limit: 1000 });
+  const keys = [];
+  for (const k of res.keys || []) {
+    try {
+      const raw = await env.DB.get(k.name);
+      if (raw) {
+        const data = JSON.parse(raw);
+        keys.push({ key: k.name.replace('prokey:', ''), ...data });
+      }
+    } catch (e) { }
+  }
+  return keys;
+}
+
+async function createProKey(env, days, count = 1) {
+  const keys = [];
+  for (let i = 0; i < count; i++) {
+    const keyCode = randBase64(16).replace(/[^a-zA-Z0-9]/g, '').substring(0, 12).toUpperCase();
+    const keyData = {
+      days: parseInt(days),
+      used: false,
+      createdAt: new Date().toISOString()
+    };
+    await env.DB.put(`prokey:${keyCode}`, JSON.stringify(keyData));
+    keys.push(keyCode);
+  }
+  return keys;
+}
+
+async function useProKey(env, userId, keyCode) {
+  const raw = await env.DB.get(`prokey:${keyCode.toUpperCase()}`);
+  if (!raw) return { success: false, error: 'کد پرو نامعتبر است' };
+
+  try {
+    const keyData = JSON.parse(raw);
+    if (keyData.used) {
+      return { success: false, error: 'این کد قبلاً استفاده شده است' };
+    }
+
+    keyData.used = true;
+    keyData.usedBy = userId;
+    keyData.usedAt = new Date().toISOString();
+    await env.DB.put(`prokey:${keyCode.toUpperCase()}`, JSON.stringify(keyData));
+
+    await addProUser(env, userId, keyData.days);
+
+    return { success: true, days: keyData.days };
+  } catch (e) {
+    return { success: false, error: 'خطا در پردازش کد' };
+  }
+}
+
+async function deleteProKey(env, keyCode) {
+  await env.DB.delete(`prokey:${keyCode.toUpperCase()}`);
+  return true;
 }
 
 async function incQuota(env, id, type) {
@@ -838,8 +668,16 @@ function buildInterfaceOnlyConfig({
 /* ---------------------- Telegram webhook handler ---------------------- */
 export async function handleUpdate(update, env, { waitUntil } = {}) {
   const token = env.BOT_TOKEN;
-  // prefer env ADMIN_ID, otherwise fallback to ADMIN_FALLBACK
-  const adminId = String(env.ADMIN_ID || ADMIN_FALLBACK);
+  if (!token) {
+    console.error("CRITICAL: BOT_TOKEN environment variable is not set");
+    throw new Error("BOT_TOKEN is required but not configured");
+  }
+  // require ADMIN_ID from environment
+  const adminId = env.ADMIN_ID ? String(env.ADMIN_ID) : null;
+  if (!adminId) {
+    console.error("CRITICAL: ADMIN_ID environment variable is not set");
+    throw new Error("ADMIN_ID is required but not configured");
+  }
   try {
     if (!update) return;
 
@@ -2134,6 +1972,60 @@ ${wgBar}
       return;
     }
 
+    if (text.startsWith("/pro")) {
+      if (!user) {
+        await sendMsg(token, chatId, "کاربر نامشخص");
+        return;
+      }
+
+      const parts = text.trim().split(/\s+/);
+      if (parts.length === 1) {
+        // Show Pro info
+        const isPro = await isProUser(env, user);
+        if (isPro) {
+          const proData = await env.DB.get(`pro:user:${user}`);
+          const userData = proData ? JSON.parse(proData) : {};
+          let expiryText = "نامشخص";
+          if (userData.expiresAt) {
+            const expiryDate = new Date(userData.expiresAt);
+            const now = new Date();
+            const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+            expiryText = daysLeft > 0 ? `${daysLeft} روز` : "منقضی شده";
+          }
+          await sendMsg(token, chatId, `⭐️ <b>شما کاربر پرو هستید!</b>\n\n✅ سهمیه روزانه: <b>10 DNS + 10 WireGuard</b>\n⏰ اعتبار باقی‌مانده: ${expiryText}\n\n💡 با اشتراک پرو، از همه امکانات با سهمیه بالاتر استفاده کنید!`);
+        } else {
+          await sendMsg(token, chatId,
+            "⭐️ <b>ارتقا به حساب پرو</b>\n\n🎯 با خرید اشتراک پرو:\n• سهمیه روزانه <b>10 DNS</b> دریافت کنید\n• سهمیه روزانه <b>10 WireGuard</b> دریافت کنید\n• از همه سرورهای عادی با سهمیه بالاتر استفاده کنید\n\n💰 قیمت‌ها:\n• 30 روزه: 25,000 تومان\n• 90 روزه: 65,000 تومان\n• 180 روزه: 120,000 تومان\n\n📩 برای خرید کد پرو با ادمین در ارتباط باشید:\n@Minimalcraft\n\n💡 <b>نحوه استفاده:</b>\nبعد از خرید کد، از دستور زیر استفاده کنید:\n<code>/pro کد_شما</code>",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "📩 ارتباط با ادمین", url: "https://t.me/Minimalcraft" }]
+                ]
+              }
+            }
+          );
+        }
+        return;
+      }
+
+      // User entered a key
+      const keyCode = parts[1].toUpperCase();
+      const result = await useProKey(env, user, keyCode);
+
+      if (result.success) {
+        await sendMsg(token, chatId,
+          `🎉 <b>تبریک!</b>\n\n✅ کد پرو شما با موفقیت فعال شد!\n\n⏰ مدت اعتبار: <b>${result.days} روز</b>\n📈 سهمیه روزانه جدید: <b>10 DNS + 10 WireGuard</b>\n\n🚀 از این لحظه می‌توانید با سهمیه بالاتر از خدمات استفاده کنید!\n\n💚 از اعتماد شما متشکریم!`
+        );
+        const userIsVIP = await isVIPUser(env, user);
+        await sendMsg(token, chatId, "منوی اصلی:", {
+          reply_markup: mainMenuKeyboard(String(user) === adminId, userIsVIP),
+        });
+      } else {
+        await sendMsg(token, chatId, `❌ ${result.error}\n\n💡 اگر کد را از ادمین خریداری کرده‌اید، لطفاً مجدداً تلاش کنید یا با پشتیبانی تماس بگیرید.`);
+      }
+      return;
+    }
+
     if (text === "/status" || text === "/me") {
       if (!user) {
         await sendMsg(token, chatId, "کاربر نامشخص");
@@ -2185,15 +2077,35 @@ ${wgBar}
 /* ---------------------- Web app.fetch (Pages catch-all) ---------------------- */
 
 function isAdminReq(request, env) {
+  if (!env.ADMIN_ID) return false; // No admin configured
   const url = new URL(request.url);
   const q = url.searchParams.get("admin");
   const header = request.headers.get("x-admin-id");
-  const adminId = String(env.ADMIN_ID || ADMIN_FALLBACK);
+  const adminId = String(env.ADMIN_ID);
   return String(q) === adminId || String(header) === adminId;
 }
 
 const app = {
   async fetch(request, env) {
+    // Validate required environment variables
+    if (!env.BOT_TOKEN || !env.ADMIN_ID) {
+      console.error("CRITICAL: Required environment variables missing", {
+        hasBotToken: !!env.BOT_TOKEN,
+        hasAdminId: !!env.ADMIN_ID
+      });
+      // For root path, still serve the HTML but admin panel won't work
+      // For API endpoints, return 503 Service Unavailable
+      const url = new URL(request.url);
+      if (url.pathname === "/" && request.method.toUpperCase() === "GET") {
+        // Allow homepage to load (it will show access denied anyway)
+      } else if (url.pathname.startsWith("/api/") || url.pathname === "/webhook") {
+        return new Response(
+          "Service unavailable: Required environment variables (BOT_TOKEN, ADMIN_ID) are not configured",
+          { status: 503 }
+        );
+      }
+    }
+
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method.toUpperCase();
@@ -2201,11 +2113,12 @@ const app = {
     // Root: serve index.html
     if (path === "/" && method === "GET") {
       try {
+        // Try ASSETS first (Cloudflare Pages)
         if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
-          const htmlFile = await env.ASSETS.fetch(new Request(request.url));
+          const htmlFile = await env.ASSETS.fetch(request);
           return htmlFile;
         }
-        // Fallback: read index.html directly (for Node.js environment)
+        // Fallback: read index.html directly (for development/Node.js)
         const fs = await import("fs/promises");
         const content = await fs.readFile("index.html", "utf-8");
         return new Response(content, {
@@ -2217,6 +2130,28 @@ const app = {
       } catch (e) {
         console.error("Error serving index.html:", e);
         return new Response("index.html not found", { status: 404 });
+      }
+    }
+
+    // Serve countries.json
+    if (path === "/countries.json" && method === "GET") {
+      try {
+        // Try ASSETS first (Cloudflare Pages)
+        if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
+          return env.ASSETS.fetch(request);
+        }
+        // Fallback: read countries.json directly (for development/Node.js)
+        const fs = await import("fs/promises");
+        const content = await fs.readFile("countries.json", "utf-8");
+        return new Response(content, {
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "public, max-age=86400",
+          },
+        });
+      } catch (e) {
+        console.error("Error serving countries.json:", e);
+        return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
       }
     }
 
@@ -2517,6 +2452,41 @@ const app = {
       } catch (e) {
         return jsonResponse({ error: "invalid json" }, 400);
       }
+    }
+
+    // Pro Key API endpoints
+    if (path === "/api/prokeys" && method === "GET") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      const keys = await getAllProKeys(env);
+      return jsonResponse({ keys });
+    }
+
+    if (path === "/api/prokeys/create" && method === "POST") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      try {
+        const body = await request.json();
+        const days = parseInt(body.days);
+        const count = parseInt(body.count) || 1;
+        if (!days || days <= 0) return jsonResponse({ error: "invalid days" }, 400);
+
+        const keys = await createProKey(env, days, count);
+        return jsonResponse({ ok: true, keys });
+      } catch (e) {
+        return jsonResponse({ error: "invalid json" }, 400);
+      }
+    }
+
+    if (path.startsWith("/api/prokeys/") && method === "DELETE") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      const parts = path.split("/");
+      const keyCode = parts[3];
+      if (!keyCode) return new Response("bad request", { status: 400 });
+
+      await deleteProKey(env, keyCode);
+      return jsonResponse({ ok: true });
     }
 
     return new Response("Not found", { status: 404 });
