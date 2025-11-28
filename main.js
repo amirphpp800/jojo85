@@ -34,21 +34,13 @@ const WG_FIXED_DNS = [
   "185.51.200.2",
 ];
 
-// Import country data directly
-import { readFile } from 'fs/promises';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
+// Import country data - will be loaded from countries.json via fetch
 let COUNTRY_DATA = {};
 
 async function loadCountryData() {
   try {
-    const countryFilePath = join(__dirname, 'countries.json');
-    const data = await readFile(countryFilePath, 'utf-8');
-    COUNTRY_DATA = JSON.parse(data);
+    const response = await fetch('/countries.json');
+    COUNTRY_DATA = await response.json();
   } catch (e) {
     console.error('Failed to load country data:', e);
     COUNTRY_DATA = {};
@@ -2151,20 +2143,11 @@ const app = {
     // Root: serve index.html
     if (path === "/" && method === "GET") {
       try {
-        // Try ASSETS first (Cloudflare Pages)
+        // Use ASSETS (Cloudflare Pages)
         if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
-          const htmlFile = await env.ASSETS.fetch(request);
-          return htmlFile;
+          return env.ASSETS.fetch(request);
         }
-        // Fallback: read index.html directly (for development/Node.js)
-        const fs = await import("fs/promises");
-        const content = await fs.readFile("index.html", "utf-8");
-        return new Response(content, {
-          headers: {
-            "Content-Type": "text/html; charset=utf-8",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-          },
-        });
+        return new Response("index.html not found", { status: 404 });
       } catch (e) {
         console.error("Error serving index.html:", e);
         return new Response("index.html not found", { status: 404 });
@@ -2174,19 +2157,11 @@ const app = {
     // Serve countries.json
     if (path === "/countries.json" && method === "GET") {
       try {
-        // Try ASSETS first (Cloudflare Pages)
+        // Use ASSETS (Cloudflare Pages)
         if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
           return env.ASSETS.fetch(request);
         }
-        // Fallback: read countries.json directly (for development/Node.js)
-        const fs = await import("fs/promises");
-        const content = await fs.readFile("countries.json", "utf-8");
-        return new Response(content, {
-          headers: {
-            "Content-Type": "application/json; charset=utf-8",
-            "Cache-Control": "public, max-age=86400",
-          },
-        });
+        return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
       } catch (e) {
         console.error("Error serving countries.json:", e);
         return new Response("{}", { status: 404, headers: { "Content-Type": "application/json" } });
