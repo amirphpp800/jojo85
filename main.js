@@ -35,7 +35,7 @@ const WG_FIXED_DNS = [
 ];
 
 // Import country data
-import COUNTRY_DATA_RAW from './countries.json' assert { type: 'json' };
+import COUNTRY_DATA_RAW from './countries.json' with { type: 'json' };
 const COUNTRY_DATA = COUNTRY_DATA_RAW || {};
 
 // Helper functions to get country names
@@ -1266,7 +1266,7 @@ ${wgBar}
       if (data === "menu_broadcast") {
         if (String(user) !== adminId) return;
         await env.DB.put(`awaitBroadcast:${adminId}`, "1");
-        await sendMsg(token, chatId, "لطفا متن پیام همگانی را ارسال کنید:");
+        await sendMsg(token, chatId, "📢 <b>پیام همگانی</b>\n\nلطفا متن پیام را ارسال کنید:\n\n💡 پیام شما به تمام کاربران ربات ارسال خواهد شد.");
         return;
       }
 
@@ -1559,8 +1559,7 @@ ${wgBar}
       if (data.startsWith("choose:") && data.includes(":vip")) {
         const parts = data.split(":");
         const code = parts[1];
-        const opPart = parts[2];
-        const op = opPart.replace("vip", "");
+        const op = parts[2];
         const dnsValue = parts.slice(3).join(":");
 
         if (!user) return;
@@ -2105,27 +2104,28 @@ function isAdminReq(request, env) {
 
 const app = {
   async fetch(request, env) {
-    // Validate required environment variables
-    if (!env.BOT_TOKEN || !env.ADMIN_ID) {
-      console.error("CRITICAL: Required environment variables missing", {
-        hasBotToken: !!env.BOT_TOKEN,
-        hasAdminId: !!env.ADMIN_ID
-      });
-      // For root path, still serve the HTML but admin panel won't work
-      // For API endpoints, return 503 Service Unavailable
-      const url = new URL(request.url);
-      if (url.pathname === "/" && request.method.toUpperCase() === "GET") {
-        // Allow homepage to load (it will show access denied anyway)
-      } else if (url.pathname.startsWith("/api/") || url.pathname === "/webhook") {
-        return new Response(
-          "Service unavailable: Required environment variables (BOT_TOKEN, ADMIN_ID) are not configured",
-          { status: 503 }
-        );
-      }
-    }
-
     const url = new URL(request.url);
     const path = url.pathname;
+
+    // Validate required environment variables based on endpoint
+    // BOT_TOKEN is only required for /webhook (Telegram bot functionality)
+    // ADMIN_ID is required for admin API endpoints
+    if (path === "/webhook" && !env.BOT_TOKEN) {
+      console.error("CRITICAL: BOT_TOKEN is required for webhook endpoint");
+      return new Response(
+        "Service unavailable: BOT_TOKEN is not configured",
+        { status: 503 }
+      );
+    }
+
+    if (path.startsWith("/api/") && !env.ADMIN_ID) {
+      console.error("CRITICAL: ADMIN_ID is required for API endpoints");
+      return new Response(
+        "Service unavailable: ADMIN_ID is not configured",
+        { status: 503 }
+      );
+    }
+
     const method = request.method.toUpperCase();
 
     // Root: serve index.html
