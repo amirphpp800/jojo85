@@ -66,7 +66,7 @@ async function loadCountryData(env) {
     }
     
     // Fallback to fetch for other environments
-    const response = await fetch('/countries.json');
+    const response = await fetch('./countries.json');
     COUNTRY_DATA = await response.json();
     console.log('Country data loaded from fetch');
   } catch (e) {
