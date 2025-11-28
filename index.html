@@ -955,13 +955,13 @@
                     <span class="nav-item-icon"><i class="fas fa-network-wired"></i></span>
                     <span>مدیریت IPv6</span>
                 </button>
-                <button class="nav-item" data-tab="vip-countries">
-                    <span class="nav-item-icon"><i class="fas fa-crown"></i></span>
-                    <span>کشورهای VIP</span>
-                </button>
                 <button class="nav-item" data-tab="countries">
                     <span class="nav-item-icon"><i class="fas fa-flag"></i></span>
                     <span>آدرس‌های کشورها</span>
+                </button>
+                <button class="nav-item" data-tab="vip-countries">
+                    <span class="nav-item-icon"><i class="fas fa-crown"></i></span>
+                    <span>کشورهای VIP</span>
                 </button>
                 <button class="nav-item" data-tab="users">
                     <span class="nav-item-icon"><i class="fas fa-users"></i></span>
@@ -970,6 +970,10 @@
                 <button class="nav-item" data-tab="vip">
                     <span class="nav-item-icon"><i class="fas fa-star"></i></span>
                     <span>کاربران VIP</span>
+                </button>
+                <button class="nav-item" data-tab="prokeys">
+                    <span class="nav-item-icon"><i class="fas fa-key"></i></span>
+                    <span>کدهای پرو</span>
                 </button>
             </nav>
         </aside>
@@ -1341,6 +1345,57 @@
                     </div>
                 </div>
             </div>
+
+            <div class="tab-content" id="prokeys">
+                <div class="content-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon"
+                                style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);"><i
+                                    class="fas fa-key"></i></div>
+                            <h3 class="card-title">لیست کدهای پرو</h3>
+                        </div>
+                        <div class="card-body scrollable" style="max-height: 500px;">
+                            <div id="prokeys-list">در حال بارگذاری...</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon"
+                                style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);"><i
+                                    class="fas fa-plus-circle"></i></div>
+                            <h3 class="card-title">ایجاد کد پرو</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="note"
+                                style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); color: #065f46; border-right-color: #10b981;">
+                                <i class="fas fa-info-circle"></i>
+                                کدهای پرو سهمیه روزانه کاربران را از 3 به 10 افزایش می‌دهد
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">مدت زمان (روز)</label>
+                                <select id="prokey-days"
+                                    style="width: 100%; padding: 12px 16px; font-size: 14px; font-family: inherit; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-primary); color: var(--text-primary);">
+                                    <option value="30">30 روزه</option>
+                                    <option value="90">90 روزه</option>
+                                    <option value="180">180 روزه</option>
+                                    <option value="365">یک ساله</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">تعداد کد</label>
+                                <input type="number" id="prokey-count" value="1" min="1" max="50"
+                                    placeholder="تعداد کد برای ساخت">
+                            </div>
+                            <button type="button" id="create-prokey-btn" class="btn btn-primary"
+                                style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                                <i class="fas fa-plus"></i>
+                                <span>ایجاد کد</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -1351,9 +1406,12 @@
             const ADMIN = new URL(location).searchParams.get('admin') || '';
 
             if (!ADMIN) {
-                document.body.innerHTML = '<div class="access-denied"><div class="access-card"><div class="access-icon">🔒</div><h2 class="access-title">دسترسی محدود</h2><p class="access-text">پارامتر های ورودی را ب درستی تنظیم کنید</p></div></div>';
+                document.body.innerHTML = '<div class="access-denied"><div class="access-card"><div class="access-icon">🔒</div><h2 class="access-title">دسترسی محدود</h2><p class="access-text">این صفحه تنها برای مدیران سیستم قابل دسترسی است.<br><br>لطفاً با مدیر سیستم تماس بگیرید.</p></div></div>';
                 return;
             }
+
+            console.log('Admin panel initialized with admin ID');
+            console.log('Testing authentication...');
 
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('overlay');
@@ -1401,23 +1459,26 @@
                 opts = opts || {};
                 opts.headers = Object.assign({}, opts.headers || {}, authHeaders());
                 var res = await fetch(path, opts);
-                if (!res.ok) throw new Error('خطا');
+                if (!res.ok) {
+                    var errorText = await res.text().catch(() => 'Unknown error');
+                    console.error('Fetch error:', {
+                        path: path,
+                        status: res.status,
+                        statusText: res.statusText,
+                        error: errorText,
+                        headers: Object.fromEntries(opts.headers || {})
+                    });
+                    throw new Error('خطا ' + res.status + ': ' + res.statusText);
+                }
                 return res.json();
             }
 
             async function updateStats() {
                 try {
-                    var results = await Promise.all([
-                        fetchJson('/api/dns'),
-                        fetchJson('/api/dns6'),
-                        fetchJson('/api/users'),
-                        fetchJson('/api/vip')
-                    ]);
-
-                    var dns4 = results[0];
-                    var dns6 = results[1];
-                    var users = results[2];
-                    var vipData = results[3];
+                    var dns4 = await fetchJson('/api/dns').catch((e) => { console.error('DNS4 fetch error:', e.message || e); return []; });
+                    var dns6 = await fetchJson('/api/dns6').catch((e) => { console.error('DNS6 fetch error:', e.message || e); return []; });
+                    var users = await fetchJson('/api/users').catch((e) => { console.error('Users fetch error:', e.message || e); return { users: [] }; });
+                    var vipData = await fetchJson('/api/vip').catch((e) => { console.error('VIP fetch error:', e.message || e); return { vipUsers: [] }; });
 
                     var totalCountries = (dns4 ? dns4.length : 0) + (dns6 ? dns6.length : 0);
                     var totalIPv4 = (dns4 || []).reduce(function (sum, r) {
@@ -1656,8 +1717,8 @@
 
             async function loadCountries() {
                 try {
-                    var dns4 = await fetchJson('/api/dns');
-                    var dns6 = await fetchJson('/api/dns6');
+                    var dns4 = await fetchJson('/api/dns').catch(() => []);
+                    var dns6 = await fetchJson('/api/dns6').catch(() => []);
 
                     var allCountries = {};
 
@@ -1710,9 +1771,12 @@
                         html += '<div class="country-card-body">';
                         html += '<div class="address-list">';
 
-                        html += '<div style="margin-bottom: 12px;">';
-                        html += '<button class="btn-add-addresses" data-code="' + c.code + '">';
-                        html += '<i class="fas fa-plus"></i> افزودن آدرس به این کشور';
+                        html += '<div style="margin-bottom: 12px; display: flex; gap: 8px;">';
+                        html += '<button class="btn-add-addresses" data-code="' + c.code + '" style="flex: 1;">';
+                        html += '<i class="fas fa-plus"></i> افزودن آدرس';
+                        html += '</button>';
+                        html += '<button class="btn-delete-all-addresses" data-code="' + c.code + '" style="flex: 1; background: var(--danger);">';
+                        html += '<i class="fas fa-trash-alt"></i> حذف همه آدرس‌ها';
                         html += '</button>';
                         html += '</div>';
 
@@ -1890,9 +1954,57 @@
                         });
                     });
 
+                    document.querySelectorAll('.btn-delete-all-addresses').forEach(function (btn) {
+                        btn.addEventListener('click', async function (e) {
+                            e.stopPropagation();
+                            var code = this.getAttribute('data-code');
+
+                            if (!confirm('⚠️ هشدار!\n\nآیا از حذف تمام آدرس‌های کشور ' + code + ' اطمینان دارید؟\n\nاین عمل غیرقابل بازگشت است!')) return;
+
+                            try {
+                                var rec4 = await fetchJson('/api/dns/' + code).catch(() => null);
+                                var rec6 = await fetchJson('/api/dns6/' + code).catch(() => null);
+
+                                var totalDeleted = 0;
+
+                                if (rec4 && rec4.addresses) {
+                                    totalDeleted += rec4.addresses.length;
+                                    rec4.addresses = [];
+                                    rec4.stock = 0;
+                                    await fetch('/api/dns/' + code, {
+                                        method: 'PUT',
+                                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                                        body: JSON.stringify(rec4)
+                                    });
+                                }
+
+                                if (rec6 && rec6.addresses) {
+                                    totalDeleted += rec6.addresses.length;
+                                    rec6.addresses = [];
+                                    rec6.stock = 0;
+                                    await fetch('/api/dns6/' + code, {
+                                        method: 'PUT',
+                                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                                        body: JSON.stringify(rec6)
+                                    });
+                                }
+
+                                loadCountries();
+                                loadDNS4();
+                                loadDNS6();
+                                updateStats();
+
+                                alert('✅ تمام آدرس‌ها حذف شدند!\n\nتعداد: ' + totalDeleted + ' آدرس');
+                            } catch (err) {
+                                alert('خطا در حذف آدرس‌ها');
+                                console.error(err);
+                            }
+                        });
+                    });
+
                 } catch (e) {
                     document.getElementById('countries-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-exclamation-triangle"></i></div><div class="empty-state-text">خطا در بارگذاری اطلاعات</div></div>';
-                    console.error('Load countries error:', e);
+                    console.error('Load countries error:', e.message || e);
                 }
             }
 
@@ -2160,7 +2272,6 @@
                     }
 
                     if (vipType === 'permanent') {
-                        // بدون تاریخ انقضا - دائمی
                         requestBody.days = 0;
                     } else if (vipType === 'custom') {
                         var customDate = document.getElementById('vip-expiry-date').value;
@@ -2172,7 +2283,6 @@
                         selectedDate.setHours(23, 59, 59, 999);
                         requestBody.expiresAt = selectedDate.toISOString();
                     } else {
-                        // تبدیل به عدد صحیح
                         requestBody.days = parseInt(vipType);
                     }
 
@@ -2196,6 +2306,91 @@
                 }
             });
 
+            async function loadProKeys() {
+                try {
+                    var result = await fetchJson('/api/prokeys');
+                    var keys = result.keys || [];
+
+                    if (keys.length === 0) {
+                        document.getElementById('prokeys-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔑</div><div class="empty-state-text">هیچ کد پرو ایجاد نشده است</div></div>';
+                        return;
+                    }
+
+                    var html = '<table><thead><tr><th>کد</th><th>مدت</th><th>وضعیت</th><th>تاریخ ساخت</th><th>عملیات</th></tr></thead><tbody>';
+                    keys.forEach(function (k) {
+                        var statusBadge = k.used
+                            ? '<span class="badge" style="background: var(--danger-light); color: var(--danger);">استفاده شده</span>'
+                            : '<span class="badge badge-success">فعال</span>';
+                        var createdDate = k.createdAt ? new Date(k.createdAt).toLocaleDateString('fa-IR') : '-';
+                        var usedInfo = k.used ? '<br><small>توسط: ' + (k.usedBy || 'نامشخص') + '</small>' : '';
+
+                        html += '<tr>';
+                        html += '<td><code>' + k.key + '</code>' + usedInfo + '</td>';
+                        html += '<td>' + k.days + ' روز</td>';
+                        html += '<td>' + statusBadge + '</td>';
+                        html += '<td>' + createdDate + '</td>';
+                        html += '<td><button class="btn btn-danger delete-prokey" data-key="' + k.key + '" style="padding: 6px 12px; font-size: 12px;">حذف</button></td>';
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+
+                    document.getElementById('prokeys-list').innerHTML = html;
+
+                    document.querySelectorAll('.delete-prokey').forEach(function (btn) {
+                        btn.addEventListener('click', async function () {
+                            var key = this.getAttribute('data-key');
+                            if (!confirm('آیا از حذف این کد پرو اطمینان دارید؟\n\n' + key)) return;
+
+                            try {
+                                await fetch('/api/prokeys/' + key, {
+                                    method: 'DELETE',
+                                    headers: authHeaders()
+                                });
+                                loadProKeys();
+                                alert('کد با موفقیت حذف شد');
+                            } catch (e) {
+                                alert('خطا در حذف کد');
+                                console.error(e);
+                            }
+                        });
+                    });
+                } catch (e) {
+                    document.getElementById('prokeys-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">خطا در بارگذاری کدها</div></div>';
+                    console.error('Pro keys load error:', e.message || e);
+                }
+            }
+
+            document.getElementById('create-prokey-btn').addEventListener('click', async function () {
+                var days = document.getElementById('prokey-days').value;
+                var count = parseInt(document.getElementById('prokey-count').value) || 1;
+
+                if (count < 1 || count > 50) {
+                    alert('تعداد باید بین 1 تا 50 باشد');
+                    return;
+                }
+
+                if (!confirm('آیا از ایجاد ' + count + ' کد ' + days + ' روزه اطمینان دارید؟')) return;
+
+                try {
+                    var result = await fetch('/api/prokeys/create', {
+                        method: 'POST',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                        body: JSON.stringify({ days: days, count: count })
+                    });
+
+                    var data = await result.json();
+                    if (data.ok && data.keys) {
+                        var keysText = data.keys.join('\n');
+                        alert('✅ کدهای پرو با موفقیت ایجاد شدند!\n\n' + keysText + '\n\nلطفاً این کدها را کپی کرده و در جای امنی ذخیره کنید.');
+                        loadProKeys();
+                        document.getElementById('prokey-count').value = '1';
+                    }
+                } catch (e) {
+                    alert('خطا در ایجاد کد');
+                    console.error(e);
+                }
+            });
+
             loadDNS4();
             loadDNS6();
             loadVIPDNS4();
@@ -2203,6 +2398,7 @@
             loadCountries();
             loadUsers();
             loadVIPUsers();
+            loadProKeys();
             updateStats();
         })();
     </script>
