@@ -2548,15 +2548,6 @@
 
             async function loadProKeys() {
                 try {
-                    await renderProKeys();
-                } catch (e) {
-                    console.error('Pro keys load error:', e);
-                    document.getElementById('prokeys-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">خطا در بارگذاری کدها</div></div>';
-                }
-            }
-
-            async function renderProKeys() {
-                try {
                     const res = await fetch('/api/prokeys', {
                         headers: authHeaders()
                     });
@@ -2648,55 +2639,7 @@
                 }
             });
 
-            // Initial loads
-            var countries = [];
-            var dns4Countries = [];
-            var dns6Countries = [];
-            var users = [];
-            var vipUsers = [];
-            var proKeys = [];
 
-            function renderDNS4() { /* Placeholder, actual rendering is in loadDNS4 */ }
-            function renderDNS6() { /* Placeholder, actual rendering is in loadDNS6 */ }
-            function renderUsers() { /* Placeholder, actual rendering is in loadUsers */ }
-            function renderVIPUsers() { /* Placeholder, actual rendering is in loadVIPUsers */ }
-            function renderProKeys() { loadProKeys(); } // Call loadProKeys to render
-
-            async function loadDNS4Countries() {
-                try {
-                    const res = await fetch('/api/dns', {
-                        headers: authHeaders()
-                    });
-                    if (!res.ok) {
-                        console.error('DNS4 API error:', res.status);
-                        return;
-                    }
-                    const data = await res.json();
-                    dns4Countries = Array.isArray(data) ? data : [];
-                    renderDNS4();
-                } catch (e) {
-                    console.error('DNS4 fetch error:', e);
-                    dns4Countries = [];
-                }
-            }
-
-            async function loadDNS6Countries() {
-                try {
-                    const res = await fetch('/api/dns6', {
-                        headers: authHeaders()
-                    });
-                    if (!res.ok) {
-                        console.error('DNS6 API error:', res.status);
-                        return;
-                    }
-                    const data = await res.json();
-                    dns6Countries = Array.isArray(data) ? data : [];
-                    renderDNS6();
-                } catch (e) {
-                    console.error('DNS6 fetch error:', e);
-                    dns6Countries = [];
-                }
-            }
 
             loadDNS4();
             loadDNS6();
