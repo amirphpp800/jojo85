@@ -34,21 +34,49 @@ const WG_FIXED_DNS = [
   "185.51.200.2",
 ];
 
-// Import country data - will be loaded from countries.json via fetch
+// Import country data - will be loaded from countries.json
 let COUNTRY_DATA = {};
 
-async function loadCountryData() {
+async function loadCountryData(env) {
   try {
+    // Try to load from file system first (for local/Node.js environment)
+    if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+      try {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+        const url = await import('url');
+        const __filename = url.fileURLToPath(import.meta.url);
+        const __dirname = path.dirname(__filename);
+        const filePath = path.join(__dirname, 'countries.json');
+        const data = await fs.readFile(filePath, 'utf-8');
+        COUNTRY_DATA = JSON.parse(data);
+        console.log('Country data loaded from file system');
+        return;
+      } catch (fileError) {
+        console.log('Could not load from file system, trying fetch...');
+      }
+    }
+
+    // For Cloudflare Pages environment
+    if (env && env.ASSETS) {
+      const response = await env.ASSETS.fetch(new Request('https://dummy.com/countries.json'));
+      COUNTRY_DATA = await response.json();
+      console.log('Country data loaded from ASSETS');
+      return;
+    }
+
+    // Fallback to fetch for other environments
     const response = await fetch('/countries.json');
     COUNTRY_DATA = await response.json();
+    console.log('Country data loaded from fetch');
   } catch (e) {
     console.error('Failed to load country data:', e);
     COUNTRY_DATA = {};
   }
 }
 
-// Initialize country data on module load
-await loadCountryData();
+// Initialize country data on module load (will be reloaded in fetch with env)
+await loadCountryData(null);
 
 // Helper functions to get country names
 const COUNTRY_NAMES_FA = new Proxy({}, {
@@ -2521,4 +2549,15 @@ const app = {
 };
 
 /* ---------------------- Export default app ---------------------- */
-export default app;
+// Ensure country data is loaded before exporting
+const wrappedApp = {
+  async fetch(request, env) {
+    // Reload country data with proper env if not loaded
+    if (Object.keys(COUNTRY_DATA).length === 0) {
+      await loadCountryData(env);
+    }
+    return app.fetch(request, env);
+  }
+};
+
+export default wrappedApp;
