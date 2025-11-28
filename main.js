@@ -6,7 +6,6 @@
 // ---------------------------------------------------------------
 
 import { isVIPUser, getAllVIPUsersWithDetails, addVIPUser, removeVIPUser, getVIPUserData, updateVIPUsage, updateVIPExpiration, updateVIPNotes, getVIPStats, calculateVIPExpiry, buildVIPWireGuardConfig } from './vip.js';
-import COUNTRY_DATA from './countries.json' assert { type: 'json' };
 
 /* ---------------------- Config ---------------------- */
 const MAX_DNS_PER_DAY = 3;
