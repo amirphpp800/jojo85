@@ -319,17 +319,18 @@ async function getQuota(env, id) {
   const dns = parseInt(await env.DB.get(`q:dns:${id}:${d}`)) || 0;
   const wg = parseInt(await env.DB.get(`q:wg:${id}:${d}`)) || 0;
 
-  // Pro users get 10 limit, VIP users get 10 limit, regular users get 3 limit
-  const dailyLimit = (isVIP || isPro) ? 10 : 3;
+  // VIP and Pro users get 10 limit, regular users get 3 limit
+  const dnsLimit = (isVIP || isPro) ? 10 : 3;
+  const wgLimit = (isVIP || isPro) ? 10 : 3;
 
   return {
     dnsUsed: dns,
     wgUsed: wg,
-    dnsLeft: Math.max(0, dailyLimit - dns),
-    wgLeft: Math.max(0, dailyLimit - wg),
+    dnsLeft: Math.max(0, dnsLimit - dns),
+    wgLeft: Math.max(0, wgLimit - wg),
     isVIP: isVIP,
     isPro: isPro,
-    dailyLimit: dailyLimit
+    dailyLimit: (isVIP || isPro) ? 10 : 3
   };
 }
 
@@ -755,7 +756,7 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const userIsVIP = await isVIPUser(env, user);
         if (!userIsVIP) {
           await editMsg(token, chatId, callback.message.message_id,
-            "⛔️ شما به بخش VIP دسترسی ندارید.\n\n💎 <b>خرید اشتراک VIP</b>\n\n💰 قیمت: <b>45,000 تومان</b>\n\n✨ مزایای VIP:\n• سهمیه روزانه 10 عددی (DNS و WireGuard)\n• دسترسی به سرورهای اختصاصی VIP\n• کیفیت و سرعت بالاتر\n• پشتیبانی ویژه\n\n📩 برای خرید و اطلاعات بیشتر با ادمین در ارتباط باشید:", {
+            "⛔️ شما به بخش VIP دسترسی ندارید.\n\n💎 <b>خرید اشتراک VIP</b>\n\n✨ مزایای VIP:\n• سهمیه روزانه 10 عددی (DNS و WireGuard)\n• دسترسی به سرورهای اختصاصی VIP\n• کیفیت و سرعت بالاتر\n• پشتیبانی ویژه\n\n📩 برای دریافت اطلاعات و خرید با ادمین در ارتباط باشید:\n@Minimalcraft", {
             reply_markup: {
               inline_keyboard: [
                 [{ text: "📩 ارتباط با ادمین", url: "https://t.me/Minimalcraft" }],
@@ -1061,15 +1062,16 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const dnsCount = hist.filter(h => h.type === "dns-ipv4" || h.type === "dns-ipv6").length;
         const wgCount = hist.filter(h => h.type === "wg").length;
 
-        const vipBadge = q.isVIP ? '\n\n👑 <b>کاربر VIP</b> - سهمیه روزانه 10 عدد' : '';
+        const vipBadge = q.isVIP ? '\n\n👑 <b>کاربر VIP</b> - سهمیه روزانه 10 DNS و 10 WireGuard' : '';
+        const proBadge = q.isPro && !q.isVIP ? '\n\n⭐️ <b>کاربر پرو</b> - سهمیه روزانه 10 DNS و 10 WireGuard' : '';
 
-        const text = `👤 <b>حساب کاربری شما</b>${vipBadge}
+        const text = `👤 <b>حساب کاربری شما</b>${vipBadge}${proBadge}
 
 ━━━━━━━━━━━━━━━━━━━━
 
 📊 <b>سهمیه امروز:</b>
-┌ 🌐 DNS: <b>${q.isVIP ? q.dnsLeft + ' از ' + VIP_DNS_PER_DAY : q.dnsLeft + ' از ' + MAX_DNS_PER_DAY}</b>
-└ 🛡️ WireGuard: <b>${q.isVIP ? q.wgLeft + ' از ' + VIP_WG_PER_DAY : q.wgLeft + ' از ' + MAX_WG_PER_DAY}</b>
+┌ 🌐 DNS: <b>${q.dnsLeft} از ${q.isVIP || q.isPro ? 10 : MAX_DNS_PER_DAY}</b>
+└ 🛡️ WireGuard: <b>${q.wgLeft} از ${q.isVIP || q.isPro ? 10 : MAX_WG_PER_DAY}</b>
 
 📁 <b>آمار کلی:</b>
 ┌ 🌐 آدرس‌های دریافتی: <b>${dnsCount}</b>
@@ -1089,21 +1091,25 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         if (!user) return;
         const q = await getQuota(env, user);
 
-        const dnsBar = "█".repeat(q.dnsLeft) + "░".repeat(MAX_DNS_PER_DAY - q.dnsLeft);
-        const wgBar = "█".repeat(q.wgLeft) + "░".repeat(MAX_WG_PER_DAY - q.wgLeft);
+        const maxQuota = (q.isVIP || q.isPro) ? 10 : MAX_DNS_PER_DAY;
+        const dnsBar = "█".repeat(q.dnsLeft) + "░".repeat(maxQuota - q.dnsLeft);
+        const wgBar = "█".repeat(q.wgLeft) + "░".repeat(maxQuota - q.wgLeft);
+
+        const statusBadge = q.isVIP ? '👑 VIP' : (q.isPro ? '⭐️ پرو' : '👤 عادی');
 
         const text = `📊 <b>سهمیه امروز شما</b>
+${statusBadge}
 
 ━━━━━━━━━━━━━━━━━━━━
 
 🌐 <b>DNS</b>
 ${dnsBar}
-باقی‌مانده: <b>${q.dnsLeft}</b> از ${MAX_DNS_PER_DAY}
+باقی‌مانده: <b>${q.dnsLeft}</b> از ${maxQuota}
 مصرف شده: <b>${q.dnsUsed}</b>
 
 🛡️ <b>WireGuard</b>
 ${wgBar}
-باقی‌مانده: <b>${q.wgLeft}</b> از ${MAX_WG_PER_DAY}
+باقی‌مانده: <b>${q.wgLeft}</b> از ${maxQuota}
 مصرف شده: <b>${q.wgUsed}</b>
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -1946,7 +1952,7 @@ ${wgBar}
       const userIsVIP = await isVIPUser(env, user);
       if (!userIsVIP) {
         await sendMsg(token, chatId,
-          "⛔️ شما به بخش VIP دسترسی ندارید.\n\n💎 <b>خرید اشتراک VIP</b>\n\n💰 قیمت: <b>45,000 تومان</b>\n\n✨ مزایای VIP:\n• سهمیه روزانه 10 عددی (DNS و WireGuard)\n• دسترسی به سرورهای اختصاصی VIP\n• کیفیت و سرعت بالاتر\n• پشتیبانی ویژه\n\n📩 برای خرید و اطلاعات بیشتر با ادمین در ارتباط باشید:", {
+          "⛔️ شما به بخش VIP دسترسی ندارید.\n\n💎 <b>خرید اشتراک VIP</b>\n\n✨ مزایای VIP:\n• سهمیه روزانه 10 عددی (DNS و WireGuard)\n• دسترسی به سرورهای اختصاصی VIP\n• کیفیت و سرعت بالاتر\n• پشتیبانی ویژه\n\n📩 برای دریافت اطلاعات و خرید با ادمین در ارتباط باشید:\n@Minimalcraft", {
           reply_markup: {
             inline_keyboard: [
               [{ text: "📩 ارتباط با ادمین", url: "https://t.me/Minimalcraft" }],
@@ -1995,7 +2001,7 @@ ${wgBar}
           await sendMsg(token, chatId, `⭐️ <b>شما کاربر پرو هستید!</b>\n\n✅ سهمیه روزانه: <b>10 DNS + 10 WireGuard</b>\n⏰ اعتبار باقی‌مانده: ${expiryText}\n\n💡 با اشتراک پرو، از همه امکانات با سهمیه بالاتر استفاده کنید!`);
         } else {
           await sendMsg(token, chatId,
-            "⭐️ <b>ارتقا به حساب پرو</b>\n\n🎯 با خرید اشتراک پرو:\n• سهمیه روزانه <b>10 DNS</b> دریافت کنید\n• سهمیه روزانه <b>10 WireGuard</b> دریافت کنید\n• از همه سرورهای عادی با سهمیه بالاتر استفاده کنید\n\n💰 قیمت‌ها:\n• 30 روزه: 25,000 تومان\n• 90 روزه: 65,000 تومان\n• 180 روزه: 120,000 تومان\n\n📩 برای خرید کد پرو با ادمین در ارتباط باشید:\n@Minimalcraft\n\n💡 <b>نحوه استفاده:</b>\nبعد از خرید کد، از دستور زیر استفاده کنید:\n<code>/pro کد_شما</code>",
+            "⭐️ <b>ارتقا به حساب پرو</b>\n\n🎯 با خرید اشتراک پرو:\n• سهمیه روزانه <b>10 DNS</b> دریافت کنید\n• سهمیه روزانه <b>10 WireGuard</b> دریافت کنید\n• از همه سرورهای عادی با سهمیه بالاتر استفاده کنید\n\n📩 برای دریافت اطلاعات و خرید کد پرو با ادمین در ارتباط باشید:\n@Minimalcraft\n\n💡 <b>نحوه استفاده:</b>\nبعد از خرید کد، از دستور زیر استفاده کنید:\n<code>/pro کد_شما</code>",
             {
               reply_markup: {
                 inline_keyboard: [
@@ -2013,9 +2019,19 @@ ${wgBar}
       const result = await useProKey(env, user, keyCode);
 
       if (result.success) {
+        // Send notification to user
         await sendMsg(token, chatId,
-          `🎉 <b>تبریک!</b>\n\n✅ کد پرو شما با موفقیت فعال شد!\n\n⏰ مدت اعتبار: <b>${result.days} روز</b>\n📈 سهمیه روزانه جدید: <b>10 DNS + 10 WireGuard</b>\n\n🚀 از این لحظه می‌توانید با سهمیه بالاتر از خدمات استفاده کنید!\n\n💚 از اعتماد شما متشکریم!`
+          `🎉 <b>تبریک!</b>\n\n✅ اشتراک پرو شما با موفقیت فعال شد!\n\n⏰ مدت اعتبار: <b>${result.days} روز</b>\n📈 سهمیه روزانه جدید: <b>10 DNS + 10 WireGuard</b>\n\n🚀 از این لحظه می‌توانید با سهمیه بالاتر از خدمات استفاده کنید!\n\n💚 از اعتماد شما متشکریم!`
         );
+
+        // Send notification to admin
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + result.days);
+        const expiryStr = expiryDate.toLocaleDateString('fa-IR');
+        await sendMsg(token, adminId,
+          `🔔 <b>اشتراک پرو فعال شد</b>\n\n👤 کاربر: <code>${user}</code>\n⏰ مدت: ${result.days} روز\n📅 انقضا: ${expiryStr}`
+        );
+
         const userIsVIP = await isVIPUser(env, user);
         await sendMsg(token, chatId, "منوی اصلی:", {
           reply_markup: mainMenuKeyboard(String(user) === adminId, userIsVIP),
@@ -2413,6 +2429,20 @@ const app = {
         if (body.notes) options.notes = body.notes;
 
         const added = await addVIPUser(env, userId, options);
+
+        // Send notification to user
+        let expiryText = "♾️ دائمی";
+        if (options.expiresAt) {
+          const expiryDate = new Date(options.expiresAt);
+          const now = new Date();
+          const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+          expiryText = daysLeft > 0 ? `${daysLeft} روز` : "منقضی شده";
+        }
+
+        await sendMsg(token, userId,
+          `🎉 <b>تبریک!</b>\n\n👑 اشتراک VIP شما با موفقیت فعال شد!\n\n⏰ مدت اعتبار: ${expiryText}\n📈 سهمیه روزانه جدید: <b>10 DNS + 10 WireGuard</b>\n🌟 دسترسی به سرورهای اختصاصی VIP\n\n🚀 از این لحظه می‌توانید از امکانات ویژه VIP استفاده کنید!\n\n💚 از اعتماد شما متشکریم!`
+        );
+
         return jsonResponse({ ok: true, added, expiresAt: options.expiresAt });
       } catch (e) {
         return jsonResponse({ error: "invalid json" }, 400);
