@@ -56,7 +56,7 @@ async function loadCountryData(env) {
         console.log('Could not load from file system, trying fetch...');
       }
     }
-
+    
     // For Cloudflare Pages environment
     if (env && env.ASSETS) {
       const response = await env.ASSETS.fetch(new Request('https://dummy.com/countries.json'));
@@ -64,7 +64,7 @@ async function loadCountryData(env) {
       console.log('Country data loaded from ASSETS');
       return;
     }
-
+    
     // Fallback to fetch for other environments
     const response = await fetch('/countries.json');
     COUNTRY_DATA = await response.json();
@@ -78,13 +78,26 @@ async function loadCountryData(env) {
 // Initialize country data on module load (will be reloaded in fetch with env)
 await loadCountryData(null);
 
-// Helper functions to get country names
+// Helper functions to get country names - با چک کردن اینکه داده لود شده
 const COUNTRY_NAMES_FA = new Proxy({}, {
-  get: (target, code) => COUNTRY_DATA[code]?.fa || code
+  get: (target, code) => {
+    const upperCode = code ? code.toUpperCase() : '';
+    if (COUNTRY_DATA[upperCode] && COUNTRY_DATA[upperCode].fa) {
+      return COUNTRY_DATA[upperCode].fa;
+    }
+    console.log('Country data missing for:', upperCode, 'Available:', Object.keys(COUNTRY_DATA).length);
+    return upperCode;
+  }
 });
 
 const COUNTRY_NAMES_EN = new Proxy({}, {
-  get: (target, code) => COUNTRY_DATA[code]?.en || code
+  get: (target, code) => {
+    const upperCode = code ? code.toUpperCase() : '';
+    if (COUNTRY_DATA[upperCode] && COUNTRY_DATA[upperCode].en) {
+      return COUNTRY_DATA[upperCode].en;
+    }
+    return upperCode;
+  }
 });
 
 // User-selectable operators with their address ranges
@@ -2552,9 +2565,11 @@ const app = {
 // Ensure country data is loaded before exporting
 const wrappedApp = {
   async fetch(request, env) {
-    // Reload country data with proper env if not loaded
+    // همیشه یکبار چک کنیم که داده لود شده
     if (Object.keys(COUNTRY_DATA).length === 0) {
+      console.log('Loading country data in wrapped app...');
       await loadCountryData(env);
+      console.log('Country data loaded, count:', Object.keys(COUNTRY_DATA).length);
     }
     return app.fetch(request, env);
   }
