@@ -34,29 +34,222 @@ const WG_FIXED_DNS = [
   "185.51.200.2",
 ];
 
-// Import country data directly - works in both Node.js and Cloudflare Workers
-import COUNTRY_DATA from './countries.json' with { type: 'json' };
+const COUNTRY_DATA = {
+  "AF": { "fa": "افغانستان", "en": "Afghanistan" },
+  "AL": { "fa": "آلبانی", "en": "Albania" },
+  "DZ": { "fa": "الجزایر", "en": "Algeria" },
+  "AD": { "fa": "آندورا", "en": "Andorra" },
+  "AO": { "fa": "آنگولا", "en": "Angola" },
+  "AG": { "fa": "آنتیگوا و باربودا", "en": "Antigua and Barbuda" },
+  "AR": { "fa": "آرژانتین", "en": "Argentina" },
+  "AM": { "fa": "ارمنستان", "en": "Armenia" },
+  "AU": { "fa": "استرالیا", "en": "Australia" },
+  "AT": { "fa": "اتریش", "en": "Austria" },
+  "AZ": { "fa": "آذربایجان", "en": "Azerbaijan" },
+  "BS": { "fa": "باهاماس", "en": "Bahamas" },
+  "BH": { "fa": "بحرین", "en": "Bahrain" },
+  "BD": { "fa": "بنگلادش", "en": "Bangladesh" },
+  "BB": { "fa": "باربادوس", "en": "Barbados" },
+  "BY": { "fa": "بلاروس", "en": "Belarus" },
+  "BE": { "fa": "بلژیک", "en": "Belgium" },
+  "BZ": { "fa": "بلیز", "en": "Belize" },
+  "BJ": { "fa": "بنین", "en": "Benin" },
+  "BT": { "fa": "بوتان", "en": "Bhutan" },
+  "BO": { "fa": "بولیوی", "en": "Bolivia" },
+  "BA": { "fa": "بوسنی و هرزگوین", "en": "Bosnia and Herzegovina" },
+  "BW": { "fa": "بوتسوانا", "en": "Botswana" },
+  "BR": { "fa": "برزیل", "en": "Brazil" },
+  "BN": { "fa": "برونئی", "en": "Brunei" },
+  "BG": { "fa": "بلغارستان", "en": "Bulgaria" },
+  "BF": { "fa": "بورکینافاسو", "en": "Burkina Faso" },
+  "BI": { "fa": "بوروندی", "en": "Burundi" },
+  "CV": { "fa": "کیپ ورد", "en": "Cape Verde" },
+  "KH": { "fa": "کامبوج", "en": "Cambodia" },
+  "CM": { "fa": "کامرون", "en": "Cameroon" },
+  "CA": { "fa": "کانادا", "en": "Canada" },
+  "CF": { "fa": "جمهوری آفریقای مرکزی", "en": "Central African Republic" },
+  "TD": { "fa": "چاد", "en": "Chad" },
+  "CL": { "fa": "شیلی", "en": "Chile" },
+  "CN": { "fa": "چین", "en": "China" },
+  "CO": { "fa": "کلمبیا", "en": "Colombia" },
+  "KM": { "fa": "کومور", "en": "Comoros" },
+  "CG": { "fa": "کنگو", "en": "Congo" },
+  "CD": { "fa": "کنگو دموکراتیک", "en": "DR Congo" },
+  "CR": { "fa": "کاستاریکا", "en": "Costa Rica" },
+  "HR": { "fa": "کرواسی", "en": "Croatia" },
+  "CU": { "fa": "کوبا", "en": "Cuba" },
+  "CY": { "fa": "قبرس", "en": "Cyprus" },
+  "CZ": { "fa": "چک", "en": "Czechia" },
+  "DK": { "fa": "دانمارک", "en": "Denmark" },
+  "DJ": { "fa": "جیبوتی", "en": "Djibouti" },
+  "DM": { "fa": "دومینیکا", "en": "Dominica" },
+  "DO": { "fa": "جمهوری دومینیکن", "en": "Dominican Republic" },
+  "EC": { "fa": "اکوادور", "en": "Ecuador" },
+  "EG": { "fa": "مصر", "en": "Egypt" },
+  "SV": { "fa": "السالوادور", "en": "El Salvador" },
+  "GQ": { "fa": "گینه استوایی", "en": "Equatorial Guinea" },
+  "ER": { "fa": "اریتره", "en": "Eritrea" },
+  "EE": { "fa": "استونی", "en": "Estonia" },
+  "SZ": { "fa": "اسواتینی", "en": "Eswatini" },
+  "ET": { "fa": "اتیوپی", "en": "Ethiopia" },
+  "FJ": { "fa": "فیجی", "en": "Fiji" },
+  "FI": { "fa": "فنلاند", "en": "Finland" },
+  "FR": { "fa": "فرانسه", "en": "France" },
+  "GA": { "fa": "گابن", "en": "Gabon" },
+  "GM": { "fa": "گامبیا", "en": "Gambia" },
+  "GE": { "fa": "گرجستان", "en": "Georgia" },
+  "DE": { "fa": "آلمان", "en": "Germany" },
+  "GH": { "fa": "غنا", "en": "Ghana" },
+  "GR": { "fa": "یونان", "en": "Greece" },
+  "GD": { "fa": "گرنادا", "en": "Grenada" },
+  "GT": { "fa": "گواتمالا", "en": "Guatemala" },
+  "GN": { "fa": "گینه", "en": "Guinea" },
+  "GW": { "fa": "گینه بیسائو", "en": "Guinea-Bissau" },
+  "GY": { "fa": "گویان", "en": "Guyana" },
+  "HT": { "fa": "هائیتی", "en": "Haiti" },
+  "HN": { "fa": "هندوراس", "en": "Honduras" },
+  "HU": { "fa": "مجارستان", "en": "Hungary" },
+  "IS": { "fa": "ایسلند", "en": "Iceland" },
+  "IN": { "fa": "هند", "en": "India" },
+  "ID": { "fa": "اندونزی", "en": "Indonesia" },
+  "IR": { "fa": "ایران", "en": "Iran" },
+  "IQ": { "fa": "عراق", "en": "Iraq" },
+  "IE": { "fa": "ایرلند", "en": "Ireland" },
+  "IL": { "fa": "اسرائیل", "en": "Israel" },
+  "IT": { "fa": "ایتالیا", "en": "Italy" },
+  "CI": { "fa": "ساحل عاج", "en": "Ivory Coast" },
+  "JM": { "fa": "جامائیکا", "en": "Jamaica" },
+  "JP": { "fa": "ژاپن", "en": "Japan" },
+  "JO": { "fa": "اردن", "en": "Jordan" },
+  "KZ": { "fa": "قزاقستان", "en": "Kazakhstan" },
+  "KE": { "fa": "کنیا", "en": "Kenya" },
+  "KI": { "fa": "کیریباتی", "en": "Kiribati" },
+  "KW": { "fa": "کویت", "en": "Kuwait" },
+  "KG": { "fa": "قرقیزستان", "en": "Kyrgyzstan" },
+  "LA": { "fa": "لائوس", "en": "Laos" },
+  "LV": { "fa": "لتونی", "en": "Latvia" },
+  "LB": { "fa": "لبنان", "en": "Lebanon" },
+  "LS": { "fa": "لسوتو", "en": "Lesotho" },
+  "LR": { "fa": "لیبریا", "en": "Liberia" },
+  "LY": { "fa": "لیبی", "en": "Libya" },
+  "LI": { "fa": "لیختن‌اشتاین", "en": "Liechtenstein" },
+  "LT": { "fa": "لیتوانی", "en": "Lithuania" },
+  "LU": { "fa": "لوکزامبورگ", "en": "Luxembourg" },
+  "MG": { "fa": "ماداگاسکار", "en": "Madagascar" },
+  "MW": { "fa": "مالاوی", "en": "Malawi" },
+  "MY": { "fa": "مالزی", "en": "Malaysia" },
+  "MV": { "fa": "مالدیو", "en": "Maldives" },
+  "ML": { "fa": "مالی", "en": "Mali" },
+  "MT": { "fa": "مالت", "en": "Malta" },
+  "MH": { "fa": "جزایر مارشال", "en": "Marshall Islands" },
+  "MR": { "fa": "موریتانی", "en": "Mauritania" },
+  "MU": { "fa": "موریس", "en": "Mauritius" },
+  "MX": { "fa": "مکزیک", "en": "Mexico" },
+  "FM": { "fa": "میکرونزی", "en": "Micronesia" },
+  "MD": { "fa": "مولداوی", "en": "Moldova" },
+  "MC": { "fa": "موناکو", "en": "Monaco" },
+  "MN": { "fa": "مغولستان", "en": "Mongolia" },
+  "ME": { "fa": "مونته‌نگرو", "en": "Montenegro" },
+  "MA": { "fa": "مراکش", "en": "Morocco" },
+  "MZ": { "fa": "موزامبیک", "en": "Mozambique" },
+  "MM": { "fa": "میانمار", "en": "Myanmar" },
+  "NA": { "fa": "نامیبیا", "en": "Namibia" },
+  "NR": { "fa": "نائورو", "en": "Nauru" },
+  "NP": { "fa": "نپال", "en": "Nepal" },
+  "NL": { "fa": "هلند", "en": "Netherlands" },
+  "NZ": { "fa": "نیوزیلند", "en": "New Zealand" },
+  "NI": { "fa": "نیکاراگوئه", "en": "Nicaragua" },
+  "NE": { "fa": "نیجر", "en": "Niger" },
+  "NG": { "fa": "نیجریه", "en": "Nigeria" },
+  "KP": { "fa": "کره شمالی", "en": "North Korea" },
+  "MK": { "fa": "مقدونیه شمالی", "en": "North Macedonia" },
+  "NO": { "fa": "نروژ", "en": "Norway" },
+  "OM": { "fa": "عمان", "en": "Oman" },
+  "PK": { "fa": "پاکستان", "en": "Pakistan" },
+  "PW": { "fa": "پالائو", "en": "Palau" },
+  "PS": { "fa": "فلسطین", "en": "Palestine" },
+  "PA": { "fa": "پاناما", "en": "Panama" },
+  "PG": { "fa": "پاپوآ گینه نو", "en": "Papua New Guinea" },
+  "PY": { "fa": "پاراگوئه", "en": "Paraguay" },
+  "PE": { "fa": "پرو", "en": "Peru" },
+  "PH": { "fa": "فیلیپین", "en": "Philippines" },
+  "PL": { "fa": "لهستان", "en": "Poland" },
+  "PT": { "fa": "پرتغال", "en": "Portugal" },
+  "QA": { "fa": "قطر", "en": "Qatar" },
+  "RO": { "fa": "رومانی", "en": "Romania" },
+  "RU": { "fa": "روسیه", "en": "Russia" },
+  "RW": { "fa": "رواندا", "en": "Rwanda" },
+  "KN": { "fa": "سنت کیتس و نویس", "en": "Saint Kitts and Nevis" },
+  "LC": { "fa": "سنت لوسیا", "en": "Saint Lucia" },
+  "VC": { "fa": "سنت وینسنت", "en": "Saint Vincent" },
+  "WS": { "fa": "ساموآ", "en": "Samoa" },
+  "SM": { "fa": "سان مارینو", "en": "San Marino" },
+  "ST": { "fa": "سائوتومه و پرنسیپ", "en": "Sao Tome and Principe" },
+  "SA": { "fa": "عربستان", "en": "Saudi Arabia" },
+  "SN": { "fa": "سنگال", "en": "Senegal" },
+  "RS": { "fa": "صربستان", "en": "Serbia" },
+  "SC": { "fa": "سیشل", "en": "Seychelles" },
+  "SL": { "fa": "سیرالئون", "en": "Sierra Leone" },
+  "SG": { "fa": "سنگاپور", "en": "Singapore" },
+  "SK": { "fa": "اسلواکی", "en": "Slovakia" },
+  "SI": { "fa": "اسلوونی", "en": "Slovenia" },
+  "SB": { "fa": "جزایر سلیمان", "en": "Solomon Islands" },
+  "SO": { "fa": "سومالی", "en": "Somalia" },
+  "ZA": { "fa": "آفریقای جنوبی", "en": "South Africa" },
+  "KR": { "fa": "کره جنوبی", "en": "South Korea" },
+  "SS": { "fa": "سودان جنوبی", "en": "South Sudan" },
+  "ES": { "fa": "اسپانیا", "en": "Spain" },
+  "LK": { "fa": "سری‌لانکا", "en": "Sri Lanka" },
+  "SD": { "fa": "سودان", "en": "Sudan" },
+  "SR": { "fa": "سورینام", "en": "Suriname" },
+  "SE": { "fa": "سوئد", "en": "Sweden" },
+  "CH": { "fa": "سوئیس", "en": "Switzerland" },
+  "SY": { "fa": "سوریه", "en": "Syria" },
+  "TJ": { "fa": "تاجیکستان", "en": "Tajikistan" },
+  "TZ": { "fa": "تانزانیا", "en": "Tanzania" },
+  "TH": { "fa": "تایلند", "en": "Thailand" },
+  "TL": { "fa": "تیمور شرقی", "en": "Timor-Leste" },
+  "TG": { "fa": "توگو", "en": "Togo" },
+  "TO": { "fa": "تونگا", "en": "Tonga" },
+  "TT": { "fa": "ترینیداد و توباگو", "en": "Trinidad and Tobago" },
+  "TN": { "fa": "تونس", "en": "Tunisia" },
+  "TR": { "fa": "ترکیه", "en": "Turkey" },
+  "TM": { "fa": "ترکمنستان", "en": "Turkmenistan" },
+  "TV": { "fa": "تووالو", "en": "Tuvalu" },
+  "UG": { "fa": "اوگاندا", "en": "Uganda" },
+  "UA": { "fa": "اوکراین", "en": "Ukraine" },
+  "AE": { "fa": "امارات", "en": "UAE" },
+  "GB": { "fa": "انگلستان", "en": "UK" },
+  "US": { "fa": "آمریکا", "en": "USA" },
+  "UY": { "fa": "اروگوئه", "en": "Uruguay" },
+  "UZ": { "fa": "ازبکستان", "en": "Uzbekistan" },
+  "VU": { "fa": "وانواتو", "en": "Vanuatu" },
+  "VA": { "fa": "واتیکان", "en": "Vatican" },
+  "VE": { "fa": "ونزوئلا", "en": "Venezuela" },
+  "VN": { "fa": "ویتنام", "en": "Vietnam" },
+  "YE": { "fa": "یمن", "en": "Yemen" },
+  "ZM": { "fa": "زامبیا", "en": "Zambia" },
+  "ZW": { "fa": "زیمبابوه", "en": "Zimbabwe" },
+  "TW": { "fa": "تایوان", "en": "Taiwan" },
+  "HK": { "fa": "هنگ کنگ", "en": "Hong Kong" },
+  "MO": { "fa": "ماکائو", "en": "Macau" }
+};
 
-// Helper functions to get country names
-const COUNTRY_NAMES_FA = new Proxy({}, {
-  get: (target, code) => {
-    const upperCode = code ? code.toUpperCase() : '';
-    if (COUNTRY_DATA[upperCode] && COUNTRY_DATA[upperCode].fa) {
-      return COUNTRY_DATA[upperCode].fa;
-    }
-    return upperCode;
+function getCountryNameFA(code) {
+  const upperCode = code ? code.toUpperCase() : '';
+  if (COUNTRY_DATA[upperCode] && COUNTRY_DATA[upperCode].fa) {
+    return COUNTRY_DATA[upperCode].fa;
   }
-});
+  return upperCode;
+}
 
-const COUNTRY_NAMES_EN = new Proxy({}, {
-  get: (target, code) => {
-    const upperCode = code ? code.toUpperCase() : '';
-    if (COUNTRY_DATA[upperCode] && COUNTRY_DATA[upperCode].en) {
-      return COUNTRY_DATA[upperCode].en;
-    }
-    return upperCode;
+function getCountryNameEN(code) {
+  const upperCode = code ? code.toUpperCase() : '';
+  if (COUNTRY_DATA[upperCode] && COUNTRY_DATA[upperCode].en) {
+    return COUNTRY_DATA[upperCode].en;
   }
-});
+  return upperCode;
+}
 
 // User-selectable operators with their address ranges
 const OPERATORS = {
@@ -562,7 +755,7 @@ function countriesKeyboard(list, page = 0, mode = "select") {
   const rows = [];
   for (const r of pageItems) {
     const code = (r.code || "").toUpperCase();
-    const countryNameFa = COUNTRY_NAMES_FA[code] || r.country || code;
+    const countryNameFa = getCountryNameFA(code) || r.country || code;
     const flag = r.flag || flagFromCode(code);
     const stockCount = r.stock ?? 0;
     const emoji = stockEmoji(stockCount);
@@ -1154,7 +1347,7 @@ ${wgBar}
             const date = dateTime.slice(0, 10);
             const time = dateTime.slice(11, 16);
             const flag = h.country ? flagFromCode(h.country) : "🌍";
-            const countryName = COUNTRY_NAMES_FA[h.country] || h.country || "نامشخص";
+            const countryName = getCountryNameFA(h.country) || h.country || "نامشخص";
 
             let typeIcon = "📦";
             let typeName = h.type;
@@ -1203,7 +1396,7 @@ ${wgBar}
           const recentDns = dnsHist.slice(0, 8);
           recentDns.forEach((h, idx) => {
             const flag = h.country ? flagFromCode(h.country) : "🌍";
-            const countryName = COUNTRY_NAMES_FA[h.country] || h.country || "نامشخص";
+            const countryName = getCountryNameFA(h.country) || h.country || "نامشخص";
             const ipType = h.type === "dns-ipv6" ? "IPv6" : "IPv4";
             const date = h.at.slice(0, 10);
 
@@ -1245,7 +1438,7 @@ ${wgBar}
           const recentWg = wgHist.slice(0, 6);
           recentWg.forEach((h, idx) => {
             const flag = h.country ? flagFromCode(h.country) : "🌍";
-            const countryName = COUNTRY_NAMES_FA[h.country] || h.country || "نامشخص";
+            const countryName = getCountryNameFA(h.country) || h.country || "نامشخص";
             const date = h.at.slice(0, 10);
             const opName = h.operator && OPERATORS[h.operator] ? OPERATORS[h.operator].title : h.operator || "-";
 
@@ -1361,7 +1554,7 @@ ${wgBar}
       if (data.startsWith("ct:")) {
         const code = data.slice(3);
         const flag = flagFromCode(code);
-        const countryName = COUNTRY_NAMES_FA[code] || code;
+        const countryName = getCountryNameFA(code) || code;
         const rec = await getDNS(env, code);
         const stockInfo = rec
           ? `موجودی: ${rec.stock || 0} IP`
@@ -1455,7 +1648,7 @@ ${wgBar}
 
         const rec = await getVIPDNS(env, code);
         const flag = flagFromCode(code);
-        const countryName = COUNTRY_NAMES_FA[code] || rec?.country || code;
+        const countryName = getCountryNameFA(code) || rec?.country || code;
         const stock = rec?.stock || 0;
         const checkUrl = `https://check-host.net/check-ping?host=${addr}`;
 
@@ -1503,7 +1696,7 @@ ${wgBar}
 
         const rec = await getVIPDNS6(env, code);
         const flag = flagFromCode(code);
-        const countryName = COUNTRY_NAMES_FA[code] || rec?.country || code;
+        const countryName = getCountryNameFA(code) || rec?.country || code;
         const stock = rec?.stock || 0;
 
         await sendMsg(token, chatId, `${flag} <b>${countryName}</b> - IPv6 VIP\n\n🌐 آدرس‌های اختصاصی شما:\n<code>${addresses[0]}</code>\n<code>${addresses[1]}</code>\n\n📊 موجودی باقی‌مانده: ${stock}\n📈 سهمیه امروز: ${q.dnsUsed + 1}/${VIP_DNS_PER_DAY}`, {
@@ -1530,7 +1723,7 @@ ${wgBar}
       if (data.startsWith("vipwg:")) {
         const code = data.slice(6);
         const flag = flagFromCode(code);
-        const countryName = COUNTRY_NAMES_FA[code] || code;
+        const countryName = getCountryNameFA(code) || code;
         await editMsg(token, chatId, callback.message.message_id,
           `${flag} <b>${countryName}</b> - VIP\n\nاپراتور مورد نظر را انتخاب کنید:`, {
           reply_markup: {
@@ -1557,7 +1750,7 @@ ${wgBar}
         const code = parts[1];
         const op = parts[2];
         const flag = flagFromCode(code);
-        const countryName = COUNTRY_NAMES_FA[code] || code;
+        const countryName = getCountryNameFA(code) || code;
         const operatorName = OPERATORS[op] ? OPERATORS[op].title : op;
         await editMsg(token, chatId, callback.message.message_id,
           `${flag} <b>${countryName}</b> - ${operatorName} VIP\n\nDNS مورد نظر را انتخاب کنید:`, {
@@ -1608,8 +1801,8 @@ ${wgBar}
           operatorAddress,
         });
 
-        const countryNameFa = COUNTRY_NAMES_FA[code] || recBefore?.country || code;
-        const countryNameEn = COUNTRY_NAMES_EN[code] || code;
+        const countryNameFa = getCountryNameFA(code) || recBefore?.country || code;
+        const countryNameEn = getCountryNameEN(code) || code;
         const operatorName = operatorData ? operatorData.title : op;
         const filename = `VIP_${countryNameEn}_WG.conf`;
         const flag = flagFromCode(code);
@@ -1668,7 +1861,7 @@ ${wgBar}
 
         const rec = await getDNS(env, code);
         const flag = flagFromCode(code);
-        const countryName = COUNTRY_NAMES_FA[code] || rec?.country || code;
+        const countryName = getCountryNameFA(code) || rec?.country || code;
         const stock = rec?.stock || 0;
         const checkUrl = `https://check-host.net/check-ping?host=${addr}`;
 
@@ -1738,7 +1931,7 @@ ${wgBar}
 
         const rec = await getDNS6(env, code);
         const flag = flagFromCode(code);
-        const countryNameFa = COUNTRY_NAMES_FA[code] || rec?.country || code;
+        const countryNameFa = getCountryNameFA(code) || rec?.country || code;
         const stock = rec?.stock || 0;
 
         const message = `${flag} <b>${countryNameFa}</b> - IPv6
@@ -1775,7 +1968,7 @@ ${wgBar}
       if (data.startsWith("wg:")) {
         const code = data.slice(3);
         const flag = flagFromCode(code);
-        const countryName = COUNTRY_NAMES_FA[code] || code;
+        const countryName = getCountryNameFA(code) || code;
         // ادیت پیام به جای ارسال جدید
         await editMsg(
           token,
@@ -1793,7 +1986,7 @@ ${wgBar}
         const code = parts[1];
         const op = parts[2];
         const flag = flagFromCode(code);
-        const countryName = COUNTRY_NAMES_FA[code] || code;
+        const countryName = getCountryNameFA(code) || code;
         const operatorName = OPERATORS[op] ? OPERATORS[op].title : op;
         // ادیت پیام به جای ارسال جدید
         await editMsg(
@@ -1871,8 +2064,8 @@ ${wgBar}
 
         // Use English country name for filename
         const countryNameFa =
-          COUNTRY_NAMES_FA[code] || recBefore?.country || code;
-        const countryNameEn = COUNTRY_NAMES_EN[code] || code;
+          getCountryNameFA(code) || recBefore?.country || code;
+        const countryNameEn = getCountryNameEN(code) || code;
         const operatorName = operatorData ? operatorData.title : op;
         const filename = `${countryNameEn}_WG.conf`;
         const flag = flagFromCode(code);
