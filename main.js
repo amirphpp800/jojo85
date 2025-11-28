@@ -1065,13 +1065,15 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
         const vipBadge = q.isVIP ? '\n\n👑 <b>کاربر VIP</b> - سهمیه روزانه 10 DNS و 10 WireGuard' : '';
         const proBadge = q.isPro && !q.isVIP ? '\n\n⭐️ <b>کاربر پرو</b> - سهمیه روزانه 10 DNS و 10 WireGuard' : '';
 
+        const dailyQuota = (q.isVIP || q.isPro) ? 10 : MAX_DNS_PER_DAY;
+
         const text = `👤 <b>حساب کاربری شما</b>${vipBadge}${proBadge}
 
 ━━━━━━━━━━━━━━━━━━━━
 
 📊 <b>سهمیه امروز:</b>
-┌ 🌐 DNS: <b>${q.dnsLeft} از ${q.isVIP || q.isPro ? 10 : MAX_DNS_PER_DAY}</b>
-└ 🛡️ WireGuard: <b>${q.wgLeft} از ${q.isVIP || q.isPro ? 10 : MAX_WG_PER_DAY}</b>
+┌ 🌐 DNS: <b>${q.dnsLeft} از ${dailyQuota}</b>
+└ 🛡️ WireGuard: <b>${q.wgLeft} از ${dailyQuota}</b>
 
 📁 <b>آمار کلی:</b>
 ┌ 🌐 آدرس‌های دریافتی: <b>${dnsCount}</b>
