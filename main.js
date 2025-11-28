@@ -34,9 +34,21 @@ const WG_FIXED_DNS = [
   "185.51.200.2",
 ];
 
-// Import country data
-import COUNTRY_DATA_RAW from './countries.json' with { type: 'json' };
-const COUNTRY_DATA = COUNTRY_DATA_RAW || {};
+// Import country data - use async fetch for Cloudflare Workers compatibility
+let COUNTRY_DATA = {};
+
+async function loadCountryData() {
+  try {
+    const response = await fetch(new URL('./countries.json', import.meta.url));
+    COUNTRY_DATA = await response.json();
+  } catch (e) {
+    console.error('Failed to load country data:', e);
+    COUNTRY_DATA = {};
+  }
+}
+
+// Initialize country data on module load
+await loadCountryData();
 
 // Helper functions to get country names
 const COUNTRY_NAMES_FA = new Proxy({}, {
