@@ -1853,7 +1853,9 @@
 
             async function loadCountries() {
                 try {
-                    const res = await fetch('/api/dns');
+                    const res = await fetch('/api/dns', {
+                        headers: authHeaders()
+                    });
                     if (!res.ok) {
                         console.error('API error:', res.status);
                         return;
@@ -2541,7 +2543,9 @@
 
             async function loadProKeys() {
                 try {
-                    const res = await fetch('/api/prokeys');
+                    const res = await fetch('/api/prokeys', {
+                        headers: authHeaders()
+                    });
                     if (!res.ok) {
                         console.error('Pro keys API error:', res.status);
                         return;
@@ -2649,7 +2653,9 @@
 
             async function loadDNS4Countries() {
                 try {
-                    const res = await fetch('/api/dns');
+                    const res = await fetch('/api/dns', {
+                        headers: authHeaders()
+                    });
                     if (!res.ok) {
                         console.error('DNS4 API error:', res.status);
                         return;
@@ -2665,7 +2671,9 @@
 
             async function loadDNS6Countries() {
                 try {
-                    const res = await fetch('/api/dns6');
+                    const res = await fetch('/api/dns6', {
+                        headers: authHeaders()
+                    });
                     if (!res.ok) {
                         console.error('DNS6 API error:', res.status);
                         return;
