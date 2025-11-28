@@ -1580,6 +1580,11 @@
                         targetContent.classList.add('active');
                     }
 
+                    // Reload data when switching to specific tabs
+                    if (targetTab === 'prokeys') {
+                        loadProKeys();
+                    }
+
                     sidebar.classList.remove('open');
                     overlay.classList.remove('active');
                 });
@@ -2543,67 +2548,73 @@
 
             async function loadProKeys() {
                 try {
+                    await renderProKeys();
+                } catch (e) {
+                    console.error('Pro keys load error:', e);
+                    document.getElementById('prokeys-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">خطا در بارگذاری کدها</div></div>';
+                }
+            }
+
+            async function renderProKeys() {
+                try {
                     const res = await fetch('/api/prokeys', {
                         headers: authHeaders()
                     });
                     if (!res.ok) {
                         console.error('Pro keys API error:', res.status);
+                        document.getElementById('prokeys-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">خطا در بارگذاری کدها</div></div>';
                         return;
                     }
                     const data = await res.json();
-                    proKeys = Array.isArray(data.keys) ? data.keys : [];
-                    renderProKeys();
+                    const keys = Array.isArray(data.keys) ? data.keys : [];
+
+                    if (keys.length === 0) {
+                        document.getElementById('prokeys-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔑</div><div class="empty-state-text">هیچ کد پرو ایجاد نشده است</div></div>';
+                        return;
+                    }
+
+                    var html = '<table><thead><tr><th>کد</th><th>مدت</th><th>وضعیت</th><th>تاریخ ساخت</th><th>عملیات</th></tr></thead><tbody>';
+                    keys.forEach(function (k) {
+                        var statusBadge = k.used
+                            ? '<span class="badge" style="background: var(--danger-light); color: var(--danger);">استفاده شده</span>'
+                            : '<span class="badge badge-success">فعال</span>';
+                        var createdDate = k.createdAt ? new Date(k.createdAt).toLocaleDateString('fa-IR') : '-';
+                        var usedInfo = k.used ? '<br><small>توسط: ' + (k.usedBy || 'نامشخص') + '</small>' : '';
+
+                        html += '<tr>';
+                        html += '<td><code>' + k.key + '</code>' + usedInfo + '</td>';
+                        html += '<td>' + k.days + ' روز</td>';
+                        html += '<td>' + statusBadge + '</td>';
+                        html += '<td>' + createdDate + '</td>';
+                        html += '<td><button class="btn btn-danger delete-prokey" data-key="' + k.key + '" style="padding: 6px 12px; font-size: 12px;">حذف</button></td>';
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+
+                    document.getElementById('prokeys-list').innerHTML = html;
+
+                    document.querySelectorAll('.delete-prokey').forEach(function (btn) {
+                        btn.addEventListener('click', async function () {
+                            var key = this.getAttribute('data-key');
+                            if (!confirm('آیا از حذف این کد پرو اطمینان دارید؟\n\n' + key)) return;
+
+                            try {
+                                await fetch('/api/prokeys/' + key, {
+                                    method: 'DELETE',
+                                    headers: authHeaders()
+                                });
+                                loadProKeys();
+                                alert('کد با موفقیت حذف شد');
+                            } catch (e) {
+                                alert('خطا در حذف کد');
+                                console.error(e);
+                            }
+                        });
+                    });
                 } catch (e) {
                     console.error('Pro keys load error:', e);
-                    proKeys = [];
+                    document.getElementById('prokeys-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">خطا در بارگذاری کدها</div></div>';
                 }
-            }
-
-            function renderProKeys() {
-                var keys = proKeys;
-                if (keys.length === 0) {
-                    document.getElementById('prokeys-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔑</div><div class="empty-state-text">هیچ کد پرو ایجاد نشده است</div></div>';
-                    return;
-                }
-
-                var html = '<table><thead><tr><th>کد</th><th>مدت</th><th>وضعیت</th><th>تاریخ ساخت</th><th>عملیات</th></tr></thead><tbody>';
-                keys.forEach(function (k) {
-                    var statusBadge = k.used
-                        ? '<span class="badge" style="background: var(--danger-light); color: var(--danger);">استفاده شده</span>'
-                        : '<span class="badge badge-success">فعال</span>';
-                    var createdDate = k.createdAt ? new Date(k.createdAt).toLocaleDateString('fa-IR') : '-';
-                    var usedInfo = k.used ? '<br><small>توسط: ' + (k.usedBy || 'نامشخص') + '</small>' : '';
-
-                    html += '<tr>';
-                    html += '<td><code>' + k.key + '</code>' + usedInfo + '</td>';
-                    html += '<td>' + k.days + ' روز</td>';
-                    html += '<td>' + statusBadge + '</td>';
-                    html += '<td>' + createdDate + '</td>';
-                    html += '<td><button class="btn btn-danger delete-prokey" data-key="' + k.key + '" style="padding: 6px 12px; font-size: 12px;">حذف</button></td>';
-                    html += '</tr>';
-                });
-                html += '</tbody></table>';
-
-                document.getElementById('prokeys-list').innerHTML = html;
-
-                document.querySelectorAll('.delete-prokey').forEach(function (btn) {
-                    btn.addEventListener('click', async function () {
-                        var key = this.getAttribute('data-key');
-                        if (!confirm('آیا از حذف این کد پرو اطمینان دارید؟\n\n' + key)) return;
-
-                        try {
-                            await fetch('/api/prokeys/' + key, {
-                                method: 'DELETE',
-                                headers: authHeaders()
-                            });
-                            loadProKeys();
-                            alert('کد با موفقیت حذف شد');
-                        } catch (e) {
-                            alert('خطا در حذف کد');
-                            console.error(e);
-                        }
-                    });
-                });
             }
 
             document.getElementById('create-prokey-btn').addEventListener('click', async function () {
@@ -2694,8 +2705,10 @@
             loadCountries();
             loadUsers();
             loadVIPUsers();
-            loadProKeys();
             updateStats();
+
+            // Initial load for pro keys when page loads
+            loadProKeys();
         })();
     </script>
 </body>
