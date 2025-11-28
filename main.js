@@ -34,13 +34,21 @@ const WG_FIXED_DNS = [
   "185.51.200.2",
 ];
 
-// Import country data - use async fetch for Cloudflare Workers compatibility
+// Import country data directly
+import { readFile } from 'fs/promises';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 let COUNTRY_DATA = {};
 
 async function loadCountryData() {
   try {
-    const response = await fetch(new URL('./countries.json', import.meta.url));
-    COUNTRY_DATA = await response.json();
+    const countryFilePath = join(__dirname, 'countries.json');
+    const data = await readFile(countryFilePath, 'utf-8');
+    COUNTRY_DATA = JSON.parse(data);
   } catch (e) {
     console.error('Failed to load country data:', e);
     COUNTRY_DATA = {};
