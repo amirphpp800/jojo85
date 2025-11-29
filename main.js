@@ -504,8 +504,9 @@ async function allocateAddress6(env, code) {
 async function addUser(env, id) {
   const raw = await env.DB.get("users:list");
   const arr = raw ? JSON.parse(raw) : [];
-  if (!arr.includes(id)) {
-    arr.push(id);
+  const strId = String(id);
+  if (!arr.includes(strId) && !arr.includes(Number(id))) {
+    arr.push(strId);
     await env.DB.put("users:list", JSON.stringify(arr));
   }
 }
@@ -1869,7 +1870,7 @@ ${wgBar}
       if (data === "fj_add") {
         if (String(user) !== adminId) return;
         await env.DB.put(`awaitForcedJoinAdd:${adminId}`, "1");
-        await sendMsg(token, chatId, 
+        await sendMsg(token, chatId,
           "📡 <b>افزودن کانال جویین اجباری</b>\n\nآیدی یا یوزرنیم کانال را ارسال کنید:\n\n💡 مثال:\n<code>@channel_username</code>\nیا\n<code>-1001234567890</code>\n\n⚠️ توجه: ربات باید ادمین کانال باشد.", {
           reply_markup: {
             inline_keyboard: [[{ text: "❌ انصراف", callback_data: "settings_forced_join" }]]
@@ -1961,7 +1962,7 @@ ${wgBar}
         await editMsg(token, chatId, callback.message.message_id, text, {
           reply_markup: {
             inline_keyboard: [
-              logChannel 
+              logChannel
                 ? [{ text: "✏️ تغییر کانال", callback_data: "log_channel_set" }, { text: "🗑 حذف", callback_data: "log_channel_delete" }]
                 : [{ text: "➕ تنظیم کانال گزارش", callback_data: "log_channel_set" }],
               [{ text: "🔙 بازگشت", callback_data: "menu_service_settings" }]
@@ -3074,15 +3075,30 @@ const app = {
         if (!text) return jsonResponse({ error: "missing text" }, 400);
         const us = await allUsers(env);
         let successCount = 0;
+        let failedCount = 0;
+        const failedUsers = [];
         for (const u of us) {
           try {
-            await sendMsg(env.BOT_TOKEN, u, text);
-            successCount++;
+            const result = await sendMsg(env.BOT_TOKEN, u, text);
+            if (result && result.ok) {
+              successCount++;
+            } else {
+              failedCount++;
+              failedUsers.push({ id: u, error: result?.description || 'Unknown error' });
+            }
           } catch (e) {
+            failedCount++;
+            failedUsers.push({ id: u, error: e.message || 'Request failed' });
             console.error("broadcast err for user", u, e);
           }
         }
-        return jsonResponse({ ok: true, sent: successCount, total: us.length });
+        return jsonResponse({
+          ok: true,
+          sent: successCount,
+          failed: failedCount,
+          total: us.length,
+          failedUsers: failedUsers.slice(0, 20)
+        });
       } catch (e) {
         console.error("broadcast error:", e);
         return jsonResponse({ error: "invalid json" }, 400);
