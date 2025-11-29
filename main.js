@@ -1869,7 +1869,7 @@ ${wgBar}
       if (data === "fj_add") {
         if (String(user) !== adminId) return;
         await env.DB.put(`awaitForcedJoinAdd:${adminId}`, "1");
-        await sendMsg(token, chatId,
+        await sendMsg(token, chatId, 
           "📡 <b>افزودن کانال جویین اجباری</b>\n\nآیدی یا یوزرنیم کانال را ارسال کنید:\n\n💡 مثال:\n<code>@channel_username</code>\nیا\n<code>-1001234567890</code>\n\n⚠️ توجه: ربات باید ادمین کانال باشد.", {
           reply_markup: {
             inline_keyboard: [[{ text: "❌ انصراف", callback_data: "settings_forced_join" }]]
@@ -1961,7 +1961,7 @@ ${wgBar}
         await editMsg(token, chatId, callback.message.message_id, text, {
           reply_markup: {
             inline_keyboard: [
-              logChannel
+              logChannel 
                 ? [{ text: "✏️ تغییر کانال", callback_data: "log_channel_set" }, { text: "🗑 حذف", callback_data: "log_channel_delete" }]
                 : [{ text: "➕ تنظیم کانال گزارش", callback_data: "log_channel_set" }],
               [{ text: "🔙 بازگشت", callback_data: "menu_service_settings" }]
@@ -2356,13 +2356,14 @@ ${wgBar}
         const stock = rec?.stock || 0;
         const checkUrl = `https://check-host.net/check-ping?host=${addr}`;
 
+        const maxQuota = (q.isVIP || q.isPro) ? 10 : MAX_DNS_PER_DAY;
         const message = `${flag} <b>${countryName}</b> - IPv4
 
 🌐 آدرس اختصاصی شما:
 <code>${addr}</code>
 
 📊 موجودی باقی‌مانده ${countryName}: ${stock} عدد
-📈 سهمیه امروز شما: ${q.dnsUsed + 1}/${MAX_DNS_PER_DAY}
+📈 سهمیه امروز شما: ${q.dnsUsed + 1}/${maxQuota}
 
 🔧 DNS‌های پیشنهادی:
 • <code>178.22.122.100</code> - شاتل
