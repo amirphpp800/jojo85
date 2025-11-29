@@ -1873,6 +1873,16 @@
                         message += '✅ ارسال موفق: ' + result.sent;
                         if (result.failed && result.failed > 0) {
                             message += '\n❌ ارسال ناموفق: ' + result.failed;
+                            message += '\n\n📋 دلایل احتمالی خطا:';
+                            message += '\n• کاربر ربات را بلاک کرده';
+                            message += '\n• کاربر چت را پاک کرده';
+                            message += '\n• اکانت کاربر حذف شده';
+                            if (result.failedUsers && result.failedUsers.length > 0) {
+                                message += '\n\n🔍 جزئیات خطاها (حداکثر ۵ مورد):';
+                                result.failedUsers.slice(0, 5).forEach(function (u) {
+                                    message += '\n• ID: ' + u.id + ' - ' + u.error;
+                                });
+                            }
                         }
                         alert(message);
                         document.getElementById('broadcast').value = '';
