@@ -628,6 +628,168 @@ async function deleteProKey(env, keyCode) {
   return true;
 }
 
+/* ---------------------- Forced Join System ---------------------- */
+async function getForcedJoinChannels(env) {
+  const raw = await env.DB.get('settings:forced_join_channels');
+  return raw ? JSON.parse(raw) : [];
+}
+
+async function addForcedJoinChannel(env, channelId, channelName = '') {
+  const channels = await getForcedJoinChannels(env);
+  const exists = channels.find(c => c.id === channelId);
+  if (exists) return false;
+  channels.push({ id: channelId, name: channelName, addedAt: new Date().toISOString() });
+  await env.DB.put('settings:forced_join_channels', JSON.stringify(channels));
+  return true;
+}
+
+async function removeForcedJoinChannel(env, channelId) {
+  const channels = await getForcedJoinChannels(env);
+  const filtered = channels.filter(c => c.id !== channelId);
+  if (filtered.length === channels.length) return false;
+  await env.DB.put('settings:forced_join_channels', JSON.stringify(filtered));
+  return true;
+}
+
+async function updateForcedJoinChannel(env, oldChannelId, newChannelId, newName = '') {
+  const channels = await getForcedJoinChannels(env);
+  const idx = channels.findIndex(c => c.id === oldChannelId);
+  if (idx === -1) return false;
+  channels[idx] = { id: newChannelId, name: newName || channels[idx].name, addedAt: channels[idx].addedAt };
+  await env.DB.put('settings:forced_join_channels', JSON.stringify(channels));
+  return true;
+}
+
+async function checkUserMembership(token, userId, channelId) {
+  try {
+    const res = await tg(token, 'getChatMember', { chat_id: channelId, user_id: userId });
+    if (res.ok && res.result) {
+      const status = res.result.status;
+      return ['member', 'administrator', 'creator'].includes(status);
+    }
+    return false;
+  } catch (e) {
+    console.error('checkUserMembership error:', e);
+    return false;
+  }
+}
+
+async function checkAllMemberships(token, userId, env) {
+  const channels = await getForcedJoinChannels(env);
+  if (!channels || channels.length === 0) return { passed: true, failedChannels: [] };
+
+  const failedChannels = [];
+  for (const channel of channels) {
+    const isMember = await checkUserMembership(token, userId, channel.id);
+    if (!isMember) {
+      failedChannels.push(channel);
+    }
+  }
+
+  return { passed: failedChannels.length === 0, failedChannels };
+}
+
+/* ---------------------- Log Channel System ---------------------- */
+async function getLogChannel(env) {
+  const raw = await env.DB.get('settings:log_channel');
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function setLogChannel(env, channelId) {
+  await env.DB.put('settings:log_channel', JSON.stringify({ id: channelId, setAt: new Date().toISOString() }));
+  return true;
+}
+
+async function removeLogChannel(env) {
+  await env.DB.delete('settings:log_channel');
+  return true;
+}
+
+function maskUserId(userId) {
+  const idStr = String(userId);
+  if (idStr.length <= 3) return '***';
+  const start = Math.floor((idStr.length - 3) / 2);
+  return idStr.slice(0, start) + '***' + idStr.slice(start + 3);
+}
+
+function maskAddress(address) {
+  if (!address) return '';
+
+  // IPv4: سانسور قسمت 3.4 (دو اکتت آخر)
+  const ipv4Pattern = /^(\d{1,3}\.\d{1,3})\.\d{1,3}\.\d{1,3}$/;
+  if (ipv4Pattern.test(address)) {
+    return address.replace(ipv4Pattern, '$1.***.***');
+  }
+
+  // IPv6: سانسور قسمت میانی
+  const ipv6Pattern = /^([0-9a-fA-F:]+)$/;
+  if (ipv6Pattern.test(address) && address.includes(':')) {
+    const parts = address.split(':');
+    if (parts.length >= 4) {
+      // سانسور قسمت‌های میانی
+      const masked = parts.slice(0, 2).concat(['***', '***']).concat(parts.slice(-2));
+      return masked.join(':');
+    }
+  }
+
+  // اگر فرمت شناخته‌شده نبود، فقط بخشی رو نشون بده
+  if (address.length > 10) {
+    return address.slice(0, 6) + '***';
+  }
+
+  return address;
+}
+
+async function logActivity(token, env, userId, actionType, countryCode, actionDetails = '') {
+  const logChannel = await getLogChannel(env);
+  if (!logChannel || !logChannel.id) return;
+
+  const maskedId = maskUserId(userId);
+  const flag = flagFromCode(countryCode);
+  const countryName = getCountryNameFA(countryCode) || countryCode;
+  const now = new Date().toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' });
+
+  let actionText = '';
+  if (actionType === 'dns-ipv4') {
+    actionText = '🌐 DNS IPv4';
+  } else if (actionType === 'dns-ipv6') {
+    actionText = '🌐 DNS IPv6';
+  } else if (actionType === 'wg') {
+    actionText = '🛡️ WireGuard';
+  } else if (actionType === 'dns-ipv4-vip') {
+    actionText = '👑 DNS IPv4 VIP';
+  } else if (actionType === 'dns-ipv6-vip') {
+    actionText = '👑 DNS IPv6 VIP';
+  } else if (actionType === 'wg-vip') {
+    actionText = '👑 WireGuard VIP';
+  }
+
+  // سانسور آدرس در actionDetails
+  let maskedDetails = actionDetails;
+  if (actionDetails) {
+    // اگر آدرس داخل متن هست، سانسورش کن
+    const addressMatch = actionDetails.match(/آدرس[‌ها]*:\s*([^\n]+)/);
+    if (addressMatch && addressMatch[1]) {
+      const addresses = addressMatch[1].split(',').map(a => a.trim());
+      const maskedAddresses = addresses.map(addr => maskAddress(addr)).join(', ');
+      maskedDetails = actionDetails.replace(addressMatch[1], maskedAddresses);
+    }
+  }
+
+  const logMessage = `📋 <b>گزارش فعالیت</b>
+
+👤 کاربر: <code>${maskedId}</code>
+${actionText}
+${flag} کشور: ${countryName}
+${maskedDetails ? `📝 ${maskedDetails}\n` : ''}🕐 زمان: ${now}`;
+
+  try {
+    await sendMsg(token, logChannel.id, logMessage);
+  } catch (e) {
+    console.error('logActivity error:', e);
+  }
+}
+
 async function incQuota(env, id, type) {
   const d = DATE_YYYYMMDD();
   const key = `q:${type}:${id}:${d}`;
@@ -676,8 +838,47 @@ function mainMenuKeyboard(isAdmin = false, isVIP = false) {
       { text: "📢 پیام همگانی", callback_data: "menu_broadcast" },
       { text: "📊 آمار ربات", callback_data: "menu_stats" },
     ]);
-    rows.push([{ text: "🎁 ریست محدودیت", callback_data: "menu_reset_quota" }]);
+    rows.push([
+      { text: "🎁 ریست محدودیت", callback_data: "menu_reset_quota" },
+      { text: "⚙️ تنظیمات سرویس", callback_data: "menu_service_settings" },
+    ]);
   }
+  return { inline_keyboard: rows };
+}
+
+function serviceSettingsKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "📡 کانال‌های جویین اجباری", callback_data: "settings_forced_join" }],
+      [{ text: "📝 کانال گزارش", callback_data: "settings_log_channel" }],
+      [{ text: "🔙 بازگشت به منو", callback_data: "back" }],
+    ],
+  };
+}
+
+function forcedJoinSettingsKeyboard(channels) {
+  const rows = [];
+  for (const ch of channels) {
+    const displayName = ch.name || ch.id;
+    rows.push([
+      { text: `📢 ${displayName}`, callback_data: `fjview:${ch.id}` },
+      { text: "✏️", callback_data: `fjedit:${ch.id}` },
+      { text: "🗑", callback_data: `fjdelete:${ch.id}` },
+    ]);
+  }
+  rows.push([{ text: "➕ افزودن کانال جدید", callback_data: "fj_add" }]);
+  rows.push([{ text: "🔙 بازگشت", callback_data: "menu_service_settings" }]);
+  return { inline_keyboard: rows };
+}
+
+function forcedJoinRequiredKeyboard(failedChannels) {
+  const rows = [];
+  for (const ch of failedChannels) {
+    const displayName = ch.name || `کانال`;
+    const channelLink = ch.id.startsWith('@') ? `https://t.me/${ch.id.slice(1)}` : `https://t.me/c/${ch.id.replace('-100', '')}`;
+    rows.push([{ text: `📢 عضویت در ${displayName}`, url: channelLink }]);
+  }
+  rows.push([{ text: "✅ عضو شدم", callback_data: "check_membership" }]);
   return { inline_keyboard: rows };
 }
 
@@ -934,6 +1135,94 @@ export async function handleUpdate(update, env, { waitUntil } = {}) {
           );
           return;
         }
+      }
+
+      // Handle forced join channel add
+      const awaitFJAdd = await env.DB.get(`awaitForcedJoinAdd:${adminId}`);
+      if (awaitFJAdd) {
+        const channelInput = message.text.trim();
+        await env.DB.delete(`awaitForcedJoinAdd:${adminId}`);
+
+        // Parse input - could be @username or -100xxx or "name:@channel"
+        let channelId = channelInput;
+        let channelName = '';
+
+        if (channelInput.includes(':') && !channelInput.startsWith('-')) {
+          const parts = channelInput.split(':');
+          if (parts[0].trim().toLowerCase() === 'نام') {
+            channelName = parts.slice(1).join(':').trim();
+            await sendMsg(token, chatId, "❌ لطفاً آیدی کانال را هم وارد کنید.");
+            return;
+          }
+        }
+
+        const added = await addForcedJoinChannel(env, channelId, channelName);
+        const channels = await getForcedJoinChannels(env);
+
+        if (added) {
+          await sendMsg(token, chatId, `✅ کانال <code>${channelId}</code> با موفقیت اضافه شد.`, {
+            reply_markup: forcedJoinSettingsKeyboard(channels),
+          });
+        } else {
+          await sendMsg(token, chatId, `⚠️ این کانال قبلاً اضافه شده است.`, {
+            reply_markup: forcedJoinSettingsKeyboard(channels),
+          });
+        }
+        return;
+      }
+
+      // Handle forced join channel edit
+      const awaitFJEdit = await env.DB.get(`awaitForcedJoinEdit:${adminId}`);
+      if (awaitFJEdit) {
+        const oldChannelId = awaitFJEdit;
+        const newInput = message.text.trim();
+        await env.DB.delete(`awaitForcedJoinEdit:${adminId}`);
+
+        let newChannelId = oldChannelId;
+        let newName = '';
+
+        // Check if only updating name
+        if (newInput.startsWith('نام:')) {
+          newName = newInput.slice(4).trim();
+        } else {
+          newChannelId = newInput;
+        }
+
+        const updated = await updateForcedJoinChannel(env, oldChannelId, newChannelId, newName);
+        const channels = await getForcedJoinChannels(env);
+
+        if (updated) {
+          await sendMsg(token, chatId, `✅ کانال با موفقیت ویرایش شد.`, {
+            reply_markup: forcedJoinSettingsKeyboard(channels),
+          });
+        } else {
+          await sendMsg(token, chatId, `❌ خطا در ویرایش کانال.`, {
+            reply_markup: forcedJoinSettingsKeyboard(channels),
+          });
+        }
+        return;
+      }
+
+      // Handle log channel set
+      const awaitLogCh = await env.DB.get(`awaitLogChannel:${adminId}`);
+      if (awaitLogCh) {
+        const channelId = message.text.trim();
+        await env.DB.delete(`awaitLogChannel:${adminId}`);
+
+        await setLogChannel(env, channelId);
+
+        // Send confirmation to the log channel
+        try {
+          await sendMsg(token, channelId, "✅ <b>کانال گزارش تنظیم شد</b>\n\n📋 از این پس، فعالیت‌های کاربران در این کانال ثبت خواهد شد.\n\n⏰ زمان تنظیم: " + new Date().toLocaleString('fa-IR', { timeZone: 'Asia/Tehran' }));
+          await sendMsg(token, chatId, `✅ کانال گزارش با موفقیت تنظیم شد.\n\nپیام تایید به کانال ارسال شد.`, {
+            reply_markup: serviceSettingsKeyboard(),
+          });
+        } catch (e) {
+          await sendMsg(token, chatId, `⚠️ کانال تنظیم شد اما ارسال پیام تایید ناموفق بود.\n\nمطمئن شوید ربات ادمین کانال است.`, {
+            reply_markup: serviceSettingsKeyboard(),
+          });
+        }
+        return;
       }
     }
 
@@ -1550,6 +1839,202 @@ ${wgBar}
         return;
       }
 
+      // Service Settings Menu
+      if (data === "menu_service_settings") {
+        if (String(user) !== adminId) return;
+        await editMsg(token, chatId, callback.message.message_id,
+          "⚙️ <b>تنظیمات سرویس</b>\n\nیکی از گزینه‌ها را انتخاب کنید:", {
+          reply_markup: serviceSettingsKeyboard(),
+        });
+        return;
+      }
+
+      // Forced Join Settings
+      if (data === "settings_forced_join") {
+        if (String(user) !== adminId) return;
+        const channels = await getForcedJoinChannels(env);
+        let text = "📡 <b>تنظیمات جویین اجباری</b>\n\n";
+        if (channels.length === 0) {
+          text += "هیچ کانالی برای جویین اجباری تنظیم نشده است.\n\n💡 با افزودن کانال، کاربران موظف به عضویت در آن‌ها خواهند بود.";
+        } else {
+          text += `📊 تعداد کانال‌ها: ${channels.length}\n\n💡 کاربران قبل از استفاده از ربات باید در همه کانال‌ها عضو شوند.`;
+        }
+        await editMsg(token, chatId, callback.message.message_id, text, {
+          reply_markup: forcedJoinSettingsKeyboard(channels),
+        });
+        return;
+      }
+
+      // Add Forced Join Channel
+      if (data === "fj_add") {
+        if (String(user) !== adminId) return;
+        await env.DB.put(`awaitForcedJoinAdd:${adminId}`, "1");
+        await sendMsg(token, chatId,
+          "📡 <b>افزودن کانال جویین اجباری</b>\n\nآیدی یا یوزرنیم کانال را ارسال کنید:\n\n💡 مثال:\n<code>@channel_username</code>\nیا\n<code>-1001234567890</code>\n\n⚠️ توجه: ربات باید ادمین کانال باشد.", {
+          reply_markup: {
+            inline_keyboard: [[{ text: "❌ انصراف", callback_data: "settings_forced_join" }]]
+          }
+        });
+        return;
+      }
+
+      // View Forced Join Channel
+      if (data.startsWith("fjview:")) {
+        if (String(user) !== adminId) return;
+        const channelId = data.slice(7);
+        const channels = await getForcedJoinChannels(env);
+        const channel = channels.find(c => c.id === channelId);
+        if (!channel) {
+          await sendMsg(token, chatId, "کانال یافت نشد.");
+          return;
+        }
+        const addedDate = channel.addedAt ? new Date(channel.addedAt).toLocaleDateString('fa-IR') : 'نامشخص';
+        await editMsg(token, chatId, callback.message.message_id,
+          `📢 <b>اطلاعات کانال</b>\n\n🆔 آیدی: <code>${channel.id}</code>\n📝 نام: ${channel.name || 'تنظیم نشده'}\n📅 تاریخ افزودن: ${addedDate}`, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "✏️ ویرایش", callback_data: `fjedit:${channelId}` }],
+              [{ text: "🗑 حذف", callback_data: `fjdelete:${channelId}` }],
+              [{ text: "🔙 بازگشت", callback_data: "settings_forced_join" }]
+            ]
+          }
+        });
+        return;
+      }
+
+      // Edit Forced Join Channel
+      if (data.startsWith("fjedit:")) {
+        if (String(user) !== adminId) return;
+        const channelId = data.slice(7);
+        await env.DB.put(`awaitForcedJoinEdit:${adminId}`, channelId);
+        await sendMsg(token, chatId,
+          `✏️ <b>ویرایش کانال</b>\n\nآیدی یا یوزرنیم جدید کانال را ارسال کنید:\n\nکانال فعلی: <code>${channelId}</code>\n\n💡 برای تغییر فقط نام، با فرمت زیر ارسال کنید:\n<code>نام:نام جدید</code>`, {
+          reply_markup: {
+            inline_keyboard: [[{ text: "❌ انصراف", callback_data: "settings_forced_join" }]]
+          }
+        });
+        return;
+      }
+
+      // Delete Forced Join Channel
+      if (data.startsWith("fjdelete:")) {
+        if (String(user) !== adminId) return;
+        const channelId = data.slice(9);
+        await editMsg(token, chatId, callback.message.message_id,
+          `⚠️ آیا از حذف کانال <code>${channelId}</code> اطمینان دارید؟`, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "✅ بله، حذف کن", callback_data: `fjconfirmdelete:${channelId}` },
+                { text: "❌ انصراف", callback_data: "settings_forced_join" }
+              ]
+            ]
+          }
+        });
+        return;
+      }
+
+      // Confirm Delete Forced Join Channel
+      if (data.startsWith("fjconfirmdelete:")) {
+        if (String(user) !== adminId) return;
+        const channelId = data.slice(16);
+        await removeForcedJoinChannel(env, channelId);
+        const channels = await getForcedJoinChannels(env);
+        await editMsg(token, chatId, callback.message.message_id,
+          `✅ کانال <code>${channelId}</code> با موفقیت حذف شد.`, {
+          reply_markup: forcedJoinSettingsKeyboard(channels),
+        });
+        return;
+      }
+
+      // Log Channel Settings
+      if (data === "settings_log_channel") {
+        if (String(user) !== adminId) return;
+        const logChannel = await getLogChannel(env);
+        let text = "📝 <b>تنظیمات کانال گزارش</b>\n\n";
+        if (!logChannel) {
+          text += "هیچ کانالی برای گزارش تنظیم نشده است.\n\n💡 با تنظیم کانال گزارش، فعالیت‌های کاربران (دریافت DNS و کانفیگ) در کانال ثبت می‌شود.";
+        } else {
+          const setDate = logChannel.setAt ? new Date(logChannel.setAt).toLocaleDateString('fa-IR') : 'نامشخص';
+          text += `✅ کانال گزارش فعال است\n\n🆔 آیدی: <code>${logChannel.id}</code>\n📅 تاریخ تنظیم: ${setDate}`;
+        }
+        await editMsg(token, chatId, callback.message.message_id, text, {
+          reply_markup: {
+            inline_keyboard: [
+              logChannel
+                ? [{ text: "✏️ تغییر کانال", callback_data: "log_channel_set" }, { text: "🗑 حذف", callback_data: "log_channel_delete" }]
+                : [{ text: "➕ تنظیم کانال گزارش", callback_data: "log_channel_set" }],
+              [{ text: "🔙 بازگشت", callback_data: "menu_service_settings" }]
+            ]
+          }
+        });
+        return;
+      }
+
+      // Set Log Channel
+      if (data === "log_channel_set") {
+        if (String(user) !== adminId) return;
+        await env.DB.put(`awaitLogChannel:${adminId}`, "1");
+        await sendMsg(token, chatId,
+          "📝 <b>تنظیم کانال گزارش</b>\n\nآیدی یا یوزرنیم کانال را ارسال کنید:\n\n💡 مثال:\n<code>@channel_username</code>\nیا\n<code>-1001234567890</code>\n\n⚠️ توجه: ربات باید ادمین کانال باشد تا بتواند پیام ارسال کند.", {
+          reply_markup: {
+            inline_keyboard: [[{ text: "❌ انصراف", callback_data: "settings_log_channel" }]]
+          }
+        });
+        return;
+      }
+
+      // Delete Log Channel
+      if (data === "log_channel_delete") {
+        if (String(user) !== adminId) return;
+        await editMsg(token, chatId, callback.message.message_id,
+          "⚠️ آیا از حذف کانال گزارش اطمینان دارید؟\n\nبا حذف، فعالیت‌های کاربران دیگر ثبت نخواهد شد.", {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "✅ بله، حذف کن", callback_data: "log_channel_confirm_delete" },
+                { text: "❌ انصراف", callback_data: "settings_log_channel" }
+              ]
+            ]
+          }
+        });
+        return;
+      }
+
+      // Confirm Delete Log Channel
+      if (data === "log_channel_confirm_delete") {
+        if (String(user) !== adminId) return;
+        await removeLogChannel(env);
+        await editMsg(token, chatId, callback.message.message_id,
+          "✅ کانال گزارش با موفقیت حذف شد.", {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "➕ تنظیم کانال جدید", callback_data: "log_channel_set" }],
+              [{ text: "🔙 بازگشت", callback_data: "menu_service_settings" }]
+            ]
+          }
+        });
+        return;
+      }
+
+      // Check Membership (for forced join)
+      if (data === "check_membership") {
+        const membershipCheck = await checkAllMemberships(token, user, env);
+        if (membershipCheck.passed) {
+          const userIsVIP = await isVIPUser(env, user);
+          await editMsg(token, chatId, callback.message.message_id,
+            "✅ عضویت شما تایید شد!\n\nاکنون می‌توانید از ربات استفاده کنید.", {
+            reply_markup: mainMenuKeyboard(String(user) === adminId, userIsVIP),
+          });
+        } else {
+          await editMsg(token, chatId, callback.message.message_id,
+            "❌ هنوز در همه کانال‌ها عضو نشده‌اید!\n\nلطفاً ابتدا در کانال‌های زیر عضو شوید:", {
+            reply_markup: forcedJoinRequiredKeyboard(membershipCheck.failedChannels),
+          });
+        }
+        return;
+      }
+
       // country selected
       if (data.startsWith("ct:")) {
         const code = data.slice(3);
@@ -1663,6 +2148,8 @@ ${wgBar}
 
         await incQuota(env, user, "dns");
         await updateVIPUsage(env, user, "dns");
+        // Log VIP activity
+        await logActivity(token, env, user, 'dns-ipv4-vip', code, `آدرس: ${addr}`);
 
         const histKey = `history:${user}`;
         try {
@@ -1707,6 +2194,8 @@ ${wgBar}
 
         await incQuota(env, user, "dns");
         await updateVIPUsage(env, user, "dns");
+        // Log VIP activity
+        await logActivity(token, env, user, 'dns-ipv6-vip', code, `آدرس‌ها: ${addresses.join(", ")}`);
 
         const histKey = `history:${user}`;
         try {
@@ -1824,6 +2313,8 @@ ${wgBar}
         await sendFile(token, chatId, filename, iface, caption);
         await incQuota(env, user, "wg");
         await updateVIPUsage(env, user, "wg");
+        // Log VIP WG activity
+        await logActivity(token, env, user, 'wg-vip', code, `اپراتور: ${operatorName}`);
 
         try {
           const histKey = `history:${user}`;
@@ -1892,7 +2383,11 @@ ${wgBar}
             ],
           },
         });
-        if (!isAdmin) await incQuota(env, user, "dns");
+        if (!isAdmin) {
+          await incQuota(env, user, "dns");
+          // Log activity for non-admin users
+          await logActivity(token, env, user, 'dns-ipv4', code, `آدرس: ${addr}`);
+        }
         // Track VIP usage
         if (q.isVIP) await updateVIPUsage(env, user, "dns");
         const histKey = `history:${user}`;
@@ -1950,7 +2445,11 @@ ${wgBar}
             ]
           }
         });
-        if (!isAdmin) await incQuota(env, user, "dns");
+        if (!isAdmin) {
+          await incQuota(env, user, "dns");
+          // Log activity for non-admin users
+          await logActivity(token, env, user, 'dns-ipv6', code, `آدرس‌ها: ${addresses.join(", ")}`);
+        }
         // Track VIP usage
         if (q.isVIP) await updateVIPUsage(env, user, "dns");
         const histKey = `history:${user}`;
@@ -2086,7 +2585,11 @@ ${wgBar}
 ✅ کانفیگ شما آماده است!`;
 
         await sendFile(token, chatId, filename, iface, caption);
-        if (!isAdmin) await incQuota(env, user, "wg");
+        if (!isAdmin) {
+          await incQuota(env, user, "wg");
+          // Log activity for non-admin users
+          await logActivity(token, env, user, 'wg', code, `اپراتور: ${operatorName}`);
+        }
         // Track VIP usage
         if (q.isVIP) await updateVIPUsage(env, user, "wg");
         try {
@@ -2116,6 +2619,17 @@ ${wgBar}
     const text = message && message.text ? message.text.trim() : "";
 
     if (text === "/start") {
+      // Check forced join for non-admin users
+      if (String(user) !== adminId) {
+        const membershipCheck = await checkAllMemberships(token, user, env);
+        if (!membershipCheck.passed) {
+          await sendMsg(token, chatId,
+            "👋 سلام!\n\n⚠️ برای استفاده از ربات، ابتدا باید در کانال‌های زیر عضو شوید:", {
+            reply_markup: forcedJoinRequiredKeyboard(membershipCheck.failedChannels),
+          });
+          return;
+        }
+      }
       const userIsVIP = await isVIPUser(env, user);
       await sendMsg(token, chatId, "سلام 👋\nاز دکمه‌ها استفاده کنید:", {
         reply_markup: mainMenuKeyboard(String(user) === adminId, userIsVIP),
