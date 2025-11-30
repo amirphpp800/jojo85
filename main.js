@@ -251,15 +251,32 @@ function getCountryNameEN(code) {
   return upperCode;
 }
 
-// User-selectable operators with their address ranges
+// User-selectable operators with their address ranges (IPv4 and IPv6)
 const OPERATORS = {
-  irancell: { title: "ایرانسل", addresses: ["2.144.0.0/16"] },
-  mci: { title: "همراه اول", addresses: ["5.52.0.0/16"] },
-  tci: { title: "مخابرات", addresses: ["2.176.0.0/15", "2.190.0.0/15"] },
-  rightel: { title: "رایتل", addresses: ["37.137.128.0/17", "95.162.0.0/17"] },
+  irancell: {
+    title: "ایرانسل",
+    addresses: ["2.144.0.0/16"],
+    addressesV6: ["2001:4860:4860::8888/128", "2001:4860:4860::8844/128"]
+  },
+  mci: {
+    title: "همراه اول",
+    addresses: ["5.52.0.0/16"],
+    addressesV6: ["2606:4700:4700::1111/128", "2606:4700:4700::1001/128"]
+  },
+  tci: {
+    title: "مخابرات",
+    addresses: ["2.176.0.0/15", "2.190.0.0/15"],
+    addressesV6: ["2620:fe::fe/128", "2620:fe::9/128"]
+  },
+  rightel: {
+    title: "رایتل",
+    addresses: ["37.137.128.0/17", "95.162.0.0/17"],
+    addressesV6: ["2001:67c:2b0::1/128", "2001:67c:2b0::2/128"]
+  },
   shatel: {
     title: "شاتل موبایل",
     addresses: ["94.182.0.0/16", "37.148.0.0/18"],
+    addressesV6: ["2a00:1450:4001::8888/128", "2a00:1450:4001::8844/128"]
   },
 };
 
@@ -322,14 +339,6 @@ function randBase64(len = 32) {
   const arr = new Uint8Array(len);
   crypto.getRandomValues(arr);
   return btoa(String.fromCharCode(...arr));
-}
-
-// Convert country code (e.g. "IR") to flag emoji
-function flagFromCode(code = "") {
-  if (!code || code.length !== 2) return "";
-  return code
-    .toUpperCase()
-    .replace(/./g, (c) => String.fromCodePoint(c.charCodeAt(0) + 127397));
 }
 
 /* ---------------------- KV Helpers ---------------------- */
@@ -975,6 +984,10 @@ function countriesKeyboard(list, page = 0, mode = "select") {
     else if (mode === "vipdns4") callbackData = `vipdns4:${code}`;
     else if (mode === "vipdns6") callbackData = `vipdns6:${code}`;
     else if (mode === "vipwg") callbackData = `vipwg:${code}`;
+    else if (mode.startsWith("wg6country:")) {
+      // Extract parameters from mode and append country code
+      callbackData = `${mode}:ct:${code}`;
+    }
     else callbackData = `ct:${code}`;
 
     rows.push([
@@ -1065,10 +1078,10 @@ function ipv6OptionKeyboard(code, op, dns, wg6Left = 0, wg6Limit = 1) {
     [
       {
         text: hasQuota ? `📡 IPv4 + IPv6 ${quotaText}` : `❌ IPv6 ${quotaText}`,
-        callback_data: hasQuota ? `wgfinal:${code}:${op}:${dns}:yes` : `noop:noquota`
+        callback_data: hasQuota ? `wg6select:${code}:${op}:${dns}` : `noop:noquota`
       },
     ],
-    [{ text: "🔙 بازگشت", callback_data: `op:${code}:${op}` }],
+    [{ text: "🔙 بازگشت", callback_data: `choose:${code}:${op}:${dns}` }],
   ];
   return { inline_keyboard: rows };
 }
@@ -2560,19 +2573,131 @@ DNS: ${dnsValue}
 
 📡 آیا می‌خواهید آدرس IPv6 نیز در کانفیگ اضافه شود؟
 
-💡 <i>نکته: IPv6 می‌تواند در برخی شبکه‌ها عملکرد بهتری داشته باشد</i>`,
+💡 <i>نکته: IPv6 می‌تواند در برخی شبکه‌ها عملکرد بهتری داشته باشد</i>
+
+🔢 سهمیه IPv6 امروز: ${q.wg6Left}/${q.wg6Limit}`,
           { reply_markup: ipv6OptionKeyboard(code, op, dnsValue, q.wg6Left, q.wg6Limit) },
         );
         return;
       }
 
-      // wg final: wgfinal:CODE:OP:DNS:IPV6 -> allocate IP, build config, send file
+      // wg IPv6 country selection: wg6select:CODE:OP:DNS
+      if (data.startsWith("wg6select:")) {
+        const parts = data.split(":");
+        const ipv4Code = parts[1];
+        const op = parts[2];
+        const dnsValue = parts.slice(3).join(":");
+
+        if (!user) return;
+        const q = await getQuota(env, user);
+        const isAdmin = String(user) === adminId;
+
+        if (!isAdmin && q.wg6Left <= 0) {
+          await sendMsg(token, chatId, `محدودیت روزانه IPv6 شما به پایان رسیده است.\nباقی‌مانده: ${q.wg6Left}/${q.wg6Limit}`);
+          return;
+        }
+
+        const list = await listDNS6(env);
+        if (!list || list.length === 0) {
+          await editMsg(token, chatId, callback.message.message_id, "کشور IPv6 موجود نیست.", {
+            reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: `choose:${ipv4Code}:${op}:${dnsValue}` }]] }
+          });
+          return;
+        }
+
+        const mapped = list.map((r) => ({
+          code: (r.code || "").toUpperCase(),
+          country: r.country || r.code,
+          stock: r.stock || 0,
+        })).sort((a, b) => b.stock - a.stock);
+
+        await editMsg(
+          token,
+          chatId,
+          callback.message.message_id,
+          `📡 <b>انتخاب کشور IPv6</b>\n\nکشور مورد نظر برای IPv6 را انتخاب کنید:\n(سهمیه امروز: ${q.wg6Left}/${q.wg6Limit})\n\n🟢 موجود | 🟡 کم | 🔴 تمام`,
+          { reply_markup: countriesKeyboard(mapped, 0, `wg6country:${ipv4Code}:${op}:${dnsValue}`) },
+        );
+        return;
+      }
+
+      // wg IPv6 country selected: wg6country:IPV4CODE:OP:DNS:ct:IPV6CODE
+      if (data.startsWith("wg6country:")) {
+        const parts = data.split(":");
+        const ipv4Code = parts[1];
+        const op = parts[2];
+        const dns = parts[3];
+        const ipv6Code = parts[5]; // after "ct:"
+
+        // Redirect to final config with IPv6 code
+        callback.data = `wgfinal:${ipv4Code}:${op}:${dns}:${ipv6Code}`;
+        // Continue to wgfinal handler below
+      }
+
+      // wg IPv6 country selection: wg6select:CODE:OP:DNS
+      if (data.startsWith("wg6select:")) {
+        const parts = data.split(":");
+        const ipv4Code = parts[1];
+        const op = parts[2];
+        const dnsValue = parts.slice(3).join(":");
+
+        if (!user) return;
+        const q = await getQuota(env, user);
+        const isAdmin = String(user) === adminId;
+
+        if (!isAdmin && q.wg6Left <= 0) {
+          await sendMsg(token, chatId, `محدودیت روزانه IPv6 شما به پایان رسیده است.\nباقی‌مانده: ${q.wg6Left}/${q.wg6Limit}`);
+          return;
+        }
+
+        const list = await listDNS6(env);
+        if (!list || list.length === 0) {
+          await editMsg(token, chatId, callback.message.message_id, "کشور IPv6 موجود نیست.", {
+            reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: `choose:${ipv4Code}:${op}:${dnsValue}` }]] }
+          });
+          return;
+        }
+
+        const mapped = list.map((r) => ({
+          code: (r.code || "").toUpperCase(),
+          country: r.country || r.code,
+          stock: r.stock || 0,
+        })).sort((a, b) => b.stock - a.stock);
+
+        await editMsg(
+          token,
+          chatId,
+          callback.message.message_id,
+          `📡 <b>انتخاب کشور IPv6</b>\n\nکشور مورد نظر برای IPv6 را انتخاب کنید:\n(سهمیه امروز: ${q.wg6Left}/${q.wg6Limit})\n\n🟢 موجود | 🟡 کم | 🔴 تمام`,
+          { reply_markup: countriesKeyboard(mapped, 0, `wg6country:${ipv4Code}:${op}:${dnsValue}`) },
+        );
+        return;
+      }
+
+      // wg IPv6 country selected: wg6country:IPV4CODE:OP:DNS:ct:IPV6CODE
+      if (data.startsWith("wg6country:")) {
+        const parts = data.split(":");
+        const ipv4Code = parts[1];
+        const op = parts[2];
+        const dns = parts[3];
+        const ipv6Code = parts[5]; // after "ct:"
+
+        // Redirect to final config with IPv6 code
+        callback.data = `wgfinal:${ipv4Code}:${op}:${dns}:${ipv6Code}`;
+        // Continue to wgfinal handler below
+      }
+
+      // wg final: wgfinal:CODE:OP:DNS:IPV6CODE -> allocate IP, build config, send file
       if (data.startsWith("wgfinal:")) {
         const parts = data.split(":");
         const code = parts[1];
         const op = parts[2];
         const dnsValue = parts[3];
-        const includeIPv6 = parts[4] === "yes";
+        const ipv6CodeOrFlag = parts[4];
+
+        // Check if IPv6 is enabled (either "yes" for old format or country code for new format)
+        const includeIPv6 = ipv6CodeOrFlag && ipv6CodeOrFlag !== "no";
+        const ipv6CountryCode = (ipv6CodeOrFlag && ipv6CodeOrFlag !== "no" && ipv6CodeOrFlag !== "yes") ? ipv6CodeOrFlag : code;
 
         if (!user) {
           await sendMsg(token, chatId, "کاربر نامشخص");
@@ -2615,10 +2740,10 @@ DNS: ${dnsValue}
           return;
         }
 
-        // IPv6 allocation if requested
+        // IPv6 allocation if requested (from selected country)
         let ipv6Addresses = null;
         if (includeIPv6) {
-          ipv6Addresses = await allocateAddress6(env, code);
+          ipv6Addresses = await allocateAddress6(env, ipv6CountryCode);
           if (!ipv6Addresses) {
             // If no IPv6 available, continue without it
             ipv6Addresses = null;
@@ -2634,9 +2759,9 @@ DNS: ${dnsValue}
           ? `${locationDns}, ${userDns}`
           : userDns;
 
-        // If IPv6 addresses available, add them to DNS
-        if (ipv6Addresses && ipv6Addresses.length > 0) {
-          combinedDns += `, ${ipv6Addresses.join(', ')}`;
+        // If IPv6 addresses available, add BOTH IPv6 addresses to DNS
+        if (ipv6Addresses && ipv6Addresses.length >= 2) {
+          combinedDns += `, ${ipv6Addresses[0]}, ${ipv6Addresses[1]}`;
         }
 
         // Address: از اپراتور انتخابی
@@ -2648,10 +2773,18 @@ DNS: ${dnsValue}
             ? pickRandom(operatorData.addresses)
             : "10.66.66.2/32";
 
-        // If IPv6 is enabled, add IPv6 address to interface address
-        if (ipv6Addresses && ipv6Addresses.length > 0) {
-          operatorAddress = `${operatorAddress}, fd00::2/128`;
+        // اگر IPv6 فعال باشه، آدرس IPv6 اپراتور رو هم اضافه کن
+        if (includeIPv6 && ipv6Addresses && ipv6Addresses.length > 0) {
+          // اگه اپراتور IPv6 داره، ازش استفاده کن
+          if (operatorData && operatorData.addressesV6 && operatorData.addressesV6.length > 0) {
+            const ipv6OpAddr = pickRandom(operatorData.addressesV6);
+            operatorAddress = `${operatorAddress}, ${ipv6OpAddr}`;
+          } else {
+            // در غیر این صورت از آدرس پیشفرض IPv6 استفاده کن
+            operatorAddress = `${operatorAddress}, fd00::2/128`;
+          }
         }
+        // اگر IPv6 فعال نباشه، فقط همون آدرس IPv4 اپراتور باقی میمونه
 
         const iface = buildInterfaceOnlyConfig({
           privateKey: priv,
@@ -2666,6 +2799,16 @@ DNS: ${dnsValue}
           getCountryNameFA(code) || recBefore?.country || code;
         const countryNameEn = getCountryNameEN(code) || code;
         const operatorName = operatorData ? operatorData.title : op;
+
+        // Get IPv6 country info if different from IPv4
+        let ipv6CountryInfo = '';
+        if (ipv6Addresses && ipv6CountryCode !== code) {
+          const ipv6Rec = await getDNS6(env, ipv6CountryCode);
+          const ipv6CountryNameFa = getCountryNameFA(ipv6CountryCode) || ipv6Rec?.country || ipv6CountryCode;
+          const ipv6Flag = flagFromCode(ipv6CountryCode);
+          ipv6CountryInfo = ` + ${ipv6Flag}${ipv6CountryNameFa}`;
+        }
+
         const filename = ipv6Addresses ? `${countryNameEn}_WG6.conf` : `${countryNameEn}_WG.conf`;
         const flag = flagFromCode(code);
 
@@ -2673,7 +2816,7 @@ DNS: ${dnsValue}
         const recAfter = await getDNS(env, code);
         const currentStock = recAfter?.stock || 0;
 
-        const ipv6Status = ipv6Addresses ? `\n📡 IPv6: فعال (${ipv6Addresses.length} آدرس)` : '';
+        const ipv6Status = ipv6Addresses ? `\n📡 IPv6: فعال (${ipv6Addresses.length} آدرس${ipv6CountryInfo})` : '';
         const caption = `${flag} <b>${countryNameFa}</b>
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -2692,7 +2835,7 @@ DNS: ${dnsValue}
             await incQuota(env, user, "wg6");
           }
           // Log activity for non-admin users
-          const activityDetails = ipv6Addresses ? `اپراتور: ${operatorName} (IPv6 فعال)` : `اپراتور: ${operatorName}`;
+          const activityDetails = ipv6Addresses ? `اپراتور: ${operatorName} (IPv6: ${ipv6CountryCode})` : `اپراتور: ${operatorName}`;
           await logActivity(token, env, user, 'wg', code, activityDetails);
         }
         // Track VIP usage
@@ -2704,6 +2847,7 @@ DNS: ${dnsValue}
           h.unshift({
             type: ipv6Addresses ? "wg6" : "wg",
             country: code,
+            ipv6Country: ipv6Addresses ? ipv6CountryCode : null,
             at: new Date().toISOString(),
             endpoint,
             operator: op,
@@ -3104,6 +3248,39 @@ const app = {
       }
     }
 
+    // DNS6 rename endpoint
+    if (path.startsWith("/api/dns6/rename/") && method === "POST") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      const parts = path.split("/");
+      const oldCode = parts[4];
+      const newCode = parts[5];
+      if (!oldCode || !newCode) return new Response("bad request", { status: 400 });
+
+      try {
+        const body = await request.json();
+        const rec = await getDNS6(env, oldCode);
+        if (!rec) return new Response("not found", { status: 404 });
+
+        // Update record with new code
+        rec.code = newCode.toUpperCase();
+        if (body.country) rec.country = body.country;
+
+        // Generate new flag
+        if (newCode.length === 2) {
+          rec.flag = String.fromCodePoint(...newCode.toUpperCase().split('').map(c => c.charCodeAt(0) + 127397));
+        }
+
+        // Delete old record and create new one
+        await deleteDNS6(env, oldCode);
+        await updateDNS6(env, newCode, rec);
+
+        return jsonResponse({ ok: true });
+      } catch (e) {
+        return jsonResponse({ error: "invalid json" }, 400);
+      }
+    }
+
     if (path.startsWith("/api/dns6/")) {
       if (!isAdminReq(request, env))
         return new Response("forbidden", { status: 403 });
@@ -3333,17 +3510,4 @@ const app = {
 };
 
 /* ---------------------- Export default app ---------------------- */
-// Ensure country data is loaded before exporting
-const wrappedApp = {
-  async fetch(request, env) {
-    // همیشه یکبار چک کنیم که داده لود شده
-    if (Object.keys(COUNTRY_DATA).length === 0) {
-      console.log('Loading country data in wrapped app...');
-      await loadCountryData(env);
-      console.log('Country data loaded, count:', Object.keys(COUNTRY_DATA).length);
-    }
-    return app.fetch(request, env);
-  }
-};
-
-export default wrappedApp;
+export default app;
