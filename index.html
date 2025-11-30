@@ -1155,6 +1155,16 @@
                         <span>کدهای پرو</span>
                     </button>
                 </div>
+
+                <div class="nav-separator"></div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">گزارشات</div>
+                    <button class="nav-item" id="log-page-btn">
+                        <span class="nav-item-icon"><i class="fas fa-file-alt"></i></span>
+                        <span>لاگ‌های فعالیت</span>
+                    </button>
+                </div>
             </nav>
         </aside>
 
@@ -2815,6 +2825,11 @@
 
             // Initial load for pro keys when page loads
             loadProKeys();
+
+            // Log page button handler
+            document.getElementById('log-page-btn').addEventListener('click', function() {
+                window.open('/log.html?admin=' + ADMIN, '_blank');
+            });
         })();
     </script>
 </body>
