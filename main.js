@@ -762,6 +762,33 @@ function maskAddress(address) {
 }
 
 async function logActivity(token, env, userId, actionType, countryCode, actionDetails = '') {
+  // ذخیره لاگ در KV
+  try {
+    const logsRaw = await env.DB.get("system:logs");
+    const logs = logsRaw ? JSON.parse(logsRaw) : [];
+    
+    const logEntry = {
+      userId: userId,
+      type: actionType,
+      country: getCountryNameFA(countryCode) || countryCode,
+      flag: flagFromCode(countryCode),
+      details: actionDetails,
+      timestamp: new Date().toISOString()
+    };
+    
+    logs.unshift(logEntry);
+    
+    // نگه داشتن فقط 1000 لاگ آخر
+    if (logs.length > 1000) {
+      logs.splice(1000);
+    }
+    
+    await env.DB.put("system:logs", JSON.stringify(logs));
+  } catch (e) {
+    console.error('Error saving log to KV:', e);
+  }
+
+  // ارسال به کانال لاگ (قبلی)
   const logChannel = await getLogChannel(env);
   if (!logChannel || !logChannel.id) return;
 
@@ -2916,11 +2943,13 @@ DNS: ${dnsValue}
         
         // Get IPv6 country info if different from IPv4
         let ipv6CountryInfo = '';
+        let logIpv6Info = '';
         if (ipv6Addresses && ipv6CountryCode !== code) {
           const ipv6Rec = await getDNS6(env, ipv6CountryCode);
           const ipv6CountryNameFa = getCountryNameFA(ipv6CountryCode) || ipv6Rec?.country || ipv6CountryCode;
           const ipv6Flag = flagFromCode(ipv6CountryCode);
           ipv6CountryInfo = ` + ${ipv6Flag}${ipv6CountryNameFa}`;
+          logIpv6Info = `\n🌐 IPv6: ${ipv6Flag} ${ipv6CountryNameFa}`;
         }
         
         const filename = ipv6Addresses ? `${countryNameEn}_WG6.conf` : `${countryNameEn}_WG.conf`;
@@ -2948,7 +2977,7 @@ DNS: ${dnsValue}
             await incQuota(env, user, "wg6");
           }
           // Log activity for non-admin users
-          const activityDetails = ipv6Addresses ? `اپراتور: ${operatorName} (IPv6: ${ipv6CountryCode})` : `اپراتور: ${operatorName}`;
+          const activityDetails = ipv6Addresses ? `اپراتور: ${operatorName}${logIpv6Info}` : `اپراتور: ${operatorName}`;
           await logActivity(token, env, user, 'wg', code, activityDetails);
         }
         // Track VIP usage
@@ -3618,6 +3647,32 @@ const app = {
 
       await deleteProKey(env, keyCode);
       return jsonResponse({ ok: true });
+    }
+
+    // Logs API endpoints
+    if (path === "/api/logs" && method === "GET") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      try {
+        const logsRaw = await env.DB.get("system:logs");
+        const logs = logsRaw ? JSON.parse(logsRaw) : [];
+        return jsonResponse({ logs });
+      } catch (e) {
+        console.error("Error loading logs:", e);
+        return jsonResponse({ logs: [] });
+      }
+    }
+
+    if (path === "/api/logs" && method === "DELETE") {
+      if (!isAdminReq(request, env))
+        return new Response("forbidden", { status: 403 });
+      try {
+        await env.DB.delete("system:logs");
+        return jsonResponse({ ok: true });
+      } catch (e) {
+        console.error("Error deleting logs:", e);
+        return jsonResponse({ error: "Failed to delete logs" }, 500);
+      }
     }
 
     return new Response("Not found", { status: 404 });
