@@ -2629,23 +2629,29 @@ DNS: ${dnsValue}
       // wg IPv6 country selected: wg6country:IPV4CODE:OP:DNS:ct:IPV6CODE
       // این باید قبل از wg6select قرار بگیره تا اول پردازش بشه
       if (data.startsWith("wg6country:") && data.includes(":ct:")) {
-        // Use :ct: as separator to handle DNS with colons (e.g., IPv6 DNS)
-        const ctIndex = data.lastIndexOf(":ct:");
-        const beforeCt = data.substring(0, ctIndex); // wg6country:IPV4CODE:OP:DNS
-        const ipv6Code = data.substring(ctIndex + 4); // after :ct:
-        
-        // Parse the part before :ct:
-        const firstParts = beforeCt.split(":");
-        const ipv4Code = firstParts[1];
-        const op = firstParts[2];
-        // DNS is everything from index 3 onwards (may contain colons)
-        const dns = firstParts.slice(3).join(":");
-        
-        // مستقیماً پردازش wgfinal را انجام می‌دهیم
-        if (!user) {
-          await sendMsg(token, chatId, "کاربر نامشخص");
-          return;
-        }
+        try {
+          // Use :ct: as separator to handle DNS with colons (e.g., IPv6 DNS)
+          const ctIndex = data.lastIndexOf(":ct:");
+          const beforeCt = data.substring(0, ctIndex); // wg6country:IPV4CODE:OP:DNS
+          const ipv6Code = data.substring(ctIndex + 4); // after :ct:
+          
+          // Parse the part before :ct:
+          const firstParts = beforeCt.split(":");
+          const ipv4Code = firstParts[1];
+          const op = firstParts[2];
+          // DNS is everything from index 3 onwards (may contain colons)
+          const dns = firstParts.slice(3).join(":");
+          
+          // مستقیماً پردازش wgfinal را انجام می‌دهیم
+          if (!user) {
+            await sendMsg(token, chatId, "کاربر نامشخص");
+            return;
+          }
+          
+          if (!ipv4Code || !op || !ipv6Code) {
+            await sendMsg(token, chatId, "❌ اطلاعات ناقص است. لطفاً دوباره تلاش کنید.");
+            return;
+          }
         const q = await getQuota(env, user);
         const isAdmin = String(user) === adminId;
         if (!isAdmin && q.wgLeft <= 0) {
@@ -2689,7 +2695,7 @@ DNS: ${dnsValue}
           operatorAddress += `, ${v6Addr}`;
         }
 
-        const iface = buildWireGuardConfig({
+        const iface = buildInterfaceOnlyConfig({
           privateKey: priv,
           address: "10.66.66.2/32",
           mtu,
@@ -2747,6 +2753,10 @@ DNS: ${dnsValue}
           await env.DB.put(histKey, JSON.stringify(h));
         } catch (e) {
           console.error("history save err", e);
+        }
+        } catch (error) {
+          console.error("IPv6 country selection error:", error);
+          await sendMsg(token, chatId, "❌ خطایی در پردازش درخواست رخ داد. لطفاً دوباره تلاش کنید.");
         }
         return;
       }
