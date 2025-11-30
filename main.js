@@ -259,23 +259,23 @@ function getCountryNameEN(code) {
 
 // User-selectable operators with their address ranges (IPv4 and IPv6)
 const OPERATORS = {
-  irancell: {
-    title: "ایرانسل",
+  irancell: { 
+    title: "ایرانسل", 
     addresses: ["2.144.0.0/16"],
     addressesV6: ["2001:4860:4860::8888/128", "2001:4860:4860::8844/128"]
   },
-  mci: {
-    title: "همراه اول",
+  mci: { 
+    title: "همراه اول", 
     addresses: ["5.52.0.0/16"],
     addressesV6: ["2606:4700:4700::1111/128", "2606:4700:4700::1001/128"]
   },
-  tci: {
-    title: "مخابرات",
+  tci: { 
+    title: "مخابرات", 
     addresses: ["2.176.0.0/15", "2.190.0.0/15"],
     addressesV6: ["2620:fe::fe/128", "2620:fe::9/128"]
   },
-  rightel: {
-    title: "رایتل",
+  rightel: { 
+    title: "رایتل", 
     addresses: ["37.137.128.0/17", "95.162.0.0/17"],
     addressesV6: ["2001:67c:2b0::1/128", "2001:67c:2b0::2/128"]
   },
@@ -1082,9 +1082,9 @@ function ipv6OptionKeyboard(code, op, dns, wg6Left = 0, wg6Limit = 1) {
       { text: "🌐 فقط IPv4", callback_data: `wgfinal:${code}:${op}:${dns}:no` },
     ],
     [
-      {
-        text: hasQuota ? `📡 IPv4 + IPv6 ${quotaText}` : `❌ IPv6 ${quotaText}`,
-        callback_data: hasQuota ? `wg6select:${code}:${op}:${dns}` : `noop:noquota`
+      { 
+        text: hasQuota ? `📡 IPv4 + IPv6 ${quotaText}` : `❌ IPv6 ${quotaText}`, 
+        callback_data: hasQuota ? `wg6select:${code}:${op}:${dns}` : `noop:noquota` 
       },
     ],
     [{ text: "🔙 بازگشت", callback_data: `choose:${code}:${op}:${dns}` }],
@@ -1913,7 +1913,7 @@ ${wgBar}
       if (data === "fj_add") {
         if (String(user) !== adminId) return;
         await env.DB.put(`awaitForcedJoinAdd:${adminId}`, "1");
-        await sendMsg(token, chatId,
+        await sendMsg(token, chatId, 
           "📡 <b>افزودن کانال جویین اجباری</b>\n\nآیدی یا یوزرنیم کانال را ارسال کنید:\n\n💡 مثال:\n<code>@channel_username</code>\nیا\n<code>-1001234567890</code>\n\n⚠️ توجه: ربات باید ادمین کانال باشد.", {
           reply_markup: {
             inline_keyboard: [[{ text: "❌ انصراف", callback_data: "settings_forced_join" }]]
@@ -2005,7 +2005,7 @@ ${wgBar}
         await editMsg(token, chatId, callback.message.message_id, text, {
           reply_markup: {
             inline_keyboard: [
-              logChannel
+              logChannel 
                 ? [{ text: "✏️ تغییر کانال", callback_data: "log_channel_set" }, { text: "🗑 حذف", callback_data: "log_channel_delete" }]
                 : [{ text: "➕ تنظیم کانال گزارش", callback_data: "log_channel_set" }],
               [{ text: "🔙 بازگشت", callback_data: "menu_service_settings" }]
@@ -2568,7 +2568,7 @@ ${wgBar}
         const countryName = getCountryNameFA(code) || code;
         const operatorData = OPERATORS[op];
         const operatorName = operatorData ? operatorData.title : op;
-
+        
         // Show IPv6 option
         await editMsg(
           token,
@@ -2593,11 +2593,11 @@ DNS: ${dnsValue}
         const ipv4Code = parts[1];
         const op = parts[2];
         const dnsValue = parts.slice(3).join(":");
-
+        
         if (!user) return;
         const q = await getQuota(env, user);
         const isAdmin = String(user) === adminId;
-
+        
         if (!isAdmin && q.wg6Left <= 0) {
           await sendMsg(token, chatId, `محدودیت روزانه IPv6 شما به پایان رسیده است.\nباقی‌مانده: ${q.wg6Left}/${q.wg6Limit}`);
           return;
@@ -2625,19 +2625,6 @@ DNS: ${dnsValue}
           { reply_markup: countriesKeyboard(mapped, 0, `wg6country:${ipv4Code}:${op}:${dnsValue}`) },
         );
         return;
-      }
-
-      // wg IPv6 country selected: wg6country:IPV4CODE:OP:DNS:ct:IPV6CODE
-      if (data.startsWith("wg6country:")) {
-        const parts = data.split(":");
-        const ipv4Code = parts[1];
-        const op = parts[2];
-        const dns = parts[3];
-        const ipv6Code = parts[5]; // after "ct:"
-
-        // Redirect to final config with IPv6 code
-        callback.data = `wgfinal:${ipv4Code}:${op}:${dns}:${ipv6Code}`;
-        // Continue to wgfinal handler below
       }
 
       // wg IPv6 country selection: wg6select:CODE:OP:DNS
@@ -2646,11 +2633,11 @@ DNS: ${dnsValue}
         const ipv4Code = parts[1];
         const op = parts[2];
         const dnsValue = parts.slice(3).join(":");
-
+        
         if (!user) return;
         const q = await getQuota(env, user);
         const isAdmin = String(user) === adminId;
-
+        
         if (!isAdmin && q.wg6Left <= 0) {
           await sendMsg(token, chatId, `محدودیت روزانه IPv6 شما به پایان رسیده است.\nباقی‌مانده: ${q.wg6Left}/${q.wg6Limit}`);
           return;
@@ -2686,11 +2673,13 @@ DNS: ${dnsValue}
         const ipv4Code = parts[1];
         const op = parts[2];
         const dns = parts[3];
+        // parts[4] is "ct:"
         const ipv6Code = parts[5]; // after "ct:"
-
-        // Redirect to final config with IPv6 code
+        
+        // Now process the final config with both IPv4 and IPv6 codes
+        // Change callback.data and let it fall through to wgfinal handler
         callback.data = `wgfinal:${ipv4Code}:${op}:${dns}:${ipv6Code}`;
-        // Continue to wgfinal handler below
+        // Don't return here - let it fall through to wgfinal
       }
 
       // wg final: wgfinal:CODE:OP:DNS:IPV6CODE -> allocate IP, build config, send file
@@ -2700,11 +2689,11 @@ DNS: ${dnsValue}
         const op = parts[2];
         const dnsValue = parts[3];
         const ipv6CodeOrFlag = parts[4];
-
+        
         // Check if IPv6 is enabled (either "yes" for old format or country code for new format)
         const includeIPv6 = ipv6CodeOrFlag && ipv6CodeOrFlag !== "no";
         const ipv6CountryCode = (ipv6CodeOrFlag && ipv6CodeOrFlag !== "no" && ipv6CodeOrFlag !== "yes") ? ipv6CodeOrFlag : code;
-
+        
         if (!user) {
           await sendMsg(token, chatId, "کاربر نامشخص");
           return;
@@ -2805,7 +2794,7 @@ DNS: ${dnsValue}
           getCountryNameFA(code) || recBefore?.country || code;
         const countryNameEn = getCountryNameEN(code) || code;
         const operatorName = operatorData ? operatorData.title : op;
-
+        
         // Get IPv6 country info if different from IPv4
         let ipv6CountryInfo = '';
         if (ipv6Addresses && ipv6CountryCode !== code) {
@@ -2814,7 +2803,7 @@ DNS: ${dnsValue}
           const ipv6Flag = flagFromCode(ipv6CountryCode);
           ipv6CountryInfo = ` + ${ipv6Flag}${ipv6CountryNameFa}`;
         }
-
+        
         const filename = ipv6Addresses ? `${countryNameEn}_WG6.conf` : `${countryNameEn}_WG.conf`;
         const flag = flagFromCode(code);
 
@@ -3273,7 +3262,7 @@ const app = {
         // Update record with new code
         rec.code = newCode.toUpperCase();
         if (body.country) rec.country = body.country;
-
+        
         // Generate new flag
         if (newCode.length === 2) {
           rec.flag = String.fromCodePoint(...newCode.toUpperCase().split('').map(c => c.charCodeAt(0) + 127397));
