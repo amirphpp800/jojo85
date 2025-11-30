@@ -1060,6 +1060,50 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="edit-dns6-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-edit"></i>
+                    <span>ویرایش کشور IPv6</span>
+                </div>
+                <button class="modal-close" id="close-edit-dns6-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="note">
+                    <i class="fas fa-info-circle"></i>
+                    با تغییر کد کشور، تمام آدرس‌ها به کشور جدید منتقل می‌شوند. تنظیمات ربات نیز به‌روزرسانی خواهند شد.
+                </div>
+                <div class="form-group">
+                    <label class="form-label">کد کشور فعلی</label>
+                    <input type="text" id="edit-dns6-old-code" readonly
+                        style="background: var(--dark); color: var(--light);">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">کد کشور جدید (2 حرف انگلیسی)</label>
+                    <input type="text" id="edit-dns6-new-code" maxlength="2" style="text-transform: uppercase;"
+                        placeholder="مثلا: US, DE, IR">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">نام کشور</label>
+                    <input type="text" id="edit-dns6-country" placeholder="نام کشور به فارسی یا انگلیسی">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancel-edit-dns6-modal">
+                    <i class="fas fa-times"></i>
+                    <span>انصراف</span>
+                </button>
+                <button class="btn btn-primary" id="submit-edit-dns6-modal">
+                    <i class="fas fa-save"></i>
+                    <span>ذخیره تغییرات</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="layout">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-brand">
@@ -1711,13 +1755,21 @@
                         var flag = r.flag || '';
                         var country = r.country || r.code;
                         var actualStock = (r.addresses && r.addresses.length) ? r.addresses.length : 0;
-                        return '<tr><td><span class="country-flag">' + flag + '</span> <strong>' + (r.code || '') + '</strong></td><td>' + country + '</td><td><span class="badge badge-info">' + actualStock + '</span></td><td><button data-code="' + (r.code || '') + '" class="btn btn-danger del6">حذف</button></td></tr>';
+                        return '<tr><td><span class="country-flag">' + flag + '</span> <strong>' + (r.code || '') + '</strong></td><td>' + country + '</td><td><span class="badge badge-info">' + actualStock + '</span></td><td><button data-code="' + (r.code || '') + '" data-country="' + country + '" class="btn edit6" style="margin-left: 8px; background: var(--info); color: white;">ویرایش</button><button data-code="' + (r.code || '') + '" class="btn btn-danger del6">حذف</button></td></tr>';
                     }).join('');
                     document.getElementById('dns6-list').innerHTML = '<table><thead><tr><th>کد</th><th>کشور</th><th class="sortable-header" id="dns6-stock-header" style="cursor: pointer;">موجودی ' + sortIcon + '</th><th>عملیات</th></tr></thead><tbody>' + rows + '</tbody></table>';
 
                     document.getElementById('dns6-stock-header').addEventListener('click', function () {
                         dns6SortOrder = dns6SortOrder === 'desc' ? 'asc' : 'desc';
                         loadDNS6();
+                    });
+
+                    document.querySelectorAll('.edit6').forEach(function (b) {
+                        b.addEventListener('click', function (e) {
+                            var code = e.target.getAttribute('data-code');
+                            var country = e.target.getAttribute('data-country');
+                            openEditDns6Modal(code, country);
+                        });
                     });
 
                     document.querySelectorAll('.del6').forEach(function (b) {
@@ -1734,6 +1786,91 @@
                     document.getElementById('dns6-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">خطا در بارگذاری اطلاعات</div></div>';
                 }
             }
+
+            function openEditDns6Modal(code, country) {
+                var modal = document.getElementById('edit-dns6-modal');
+                document.getElementById('edit-dns6-old-code').value = code;
+                document.getElementById('edit-dns6-new-code').value = code;
+                document.getElementById('edit-dns6-country').value = country || code;
+                modal.classList.add('active');
+            }
+
+            (function initEditDns6Modal() {
+                var modal = document.getElementById('edit-dns6-modal');
+                var closeBtn = document.getElementById('close-edit-dns6-modal');
+                var cancelBtn = document.getElementById('cancel-edit-dns6-modal');
+                var submitBtn = document.getElementById('submit-edit-dns6-modal');
+
+                function closeModal() {
+                    modal.classList.remove('active');
+                }
+
+                closeBtn.addEventListener('click', closeModal);
+                cancelBtn.addEventListener('click', closeModal);
+
+                modal.addEventListener('click', function (e) {
+                    if (e.target === modal) closeModal();
+                });
+
+                submitBtn.addEventListener('click', async function () {
+                    var oldCode = document.getElementById('edit-dns6-old-code').value.trim().toUpperCase();
+                    var newCode = document.getElementById('edit-dns6-new-code').value.trim().toUpperCase();
+                    var country = document.getElementById('edit-dns6-country').value.trim();
+
+                    if (!newCode || newCode.length !== 2) {
+                        alert('کد کشور باید دقیقا 2 حرف باشد');
+                        return;
+                    }
+
+                    if (!country) {
+                        alert('نام کشور را وارد کنید');
+                        return;
+                    }
+
+                    try {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال ذخیره...';
+
+                        if (oldCode !== newCode) {
+                            await fetch('/api/dns6/rename/' + oldCode + '/' + newCode + '?code=' + ADMIN, {
+                                method: 'POST',
+                                headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                                body: JSON.stringify({ country: country })
+                            });
+                        } else {
+                            var existingRec = await fetchJson('/api/dns6/' + oldCode).catch(function () { return null; });
+                            var addresses = (existingRec && existingRec.addresses) ? existingRec.addresses : [];
+                            var flag = '';
+                            if (newCode.length === 2) {
+                                flag = String.fromCodePoint.apply(null, newCode.split('').map(function (c) {
+                                    return c.charCodeAt(0) + 127397;
+                                }));
+                            }
+                            await fetch('/api/dns6/' + newCode + '?code=' + ADMIN, {
+                                method: 'PUT',
+                                headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                                body: JSON.stringify({
+                                    code: newCode,
+                                    country: country,
+                                    addresses: addresses,
+                                    flag: flag
+                                })
+                            });
+                        }
+
+                        closeModal();
+                        loadDNS6();
+                        loadCountries();
+                        alert('تغییرات با موفقیت ذخیره شد');
+                    } catch (e) {
+                        console.error('Error saving changes:', e);
+                        alert('خطا در ذخیره تغییرات');
+                    } finally {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<i class="fas fa-save"></i> <span>ذخیره تغییرات</span>';
+                    }
+                });
+            })();
 
             async function loadUsers() {
                 try {
