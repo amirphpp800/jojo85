@@ -235,6 +235,12 @@ const COUNTRY_DATA = {
   "MO": { "fa": "ماکائو", "en": "Macau" }
 };
 
+function flagFromCode(code) {
+  if (!code || code.length !== 2) return '';
+  const upperCode = code.toUpperCase();
+  return String.fromCodePoint(...upperCode.split('').map(c => c.charCodeAt(0) + 127397));
+}
+
 function getCountryNameFA(code) {
   const upperCode = code ? code.toUpperCase() : '';
   if (COUNTRY_DATA[upperCode] && COUNTRY_DATA[upperCode].fa) {
@@ -256,27 +262,27 @@ const OPERATORS = {
   irancell: {
     title: "ایرانسل",
     addresses: ["2.144.0.0/16"],
-    addressesV6: ["2a01:5ec0:1000::/36"]
+    addressesV6: ["2001:4860:4860::8888/128", "2001:4860:4860::8844/128"]
   },
   mci: {
     title: "همراه اول",
     addresses: ["5.52.0.0/16"],
-    addressesV6: ["2a02:4540::/42"]
+    addressesV6: ["2606:4700:4700::1111/128", "2606:4700:4700::1001/128"]
   },
   tci: {
     title: "مخابرات",
     addresses: ["2.176.0.0/15", "2.190.0.0/15"],
-    addressesV6: ["2a04:2680:13::/48"]
+    addressesV6: ["2620:fe::fe/128", "2620:fe::9/128"]
   },
   rightel: {
     title: "رایتل",
     addresses: ["37.137.128.0/17", "95.162.0.0/17"],
-    addressesV6: ["2a03:ef42::/34"]
+    addressesV6: ["2001:67c:2b0::1/128", "2001:67c:2b0::2/128"]
   },
   shatel: {
     title: "شاتل موبایل",
     addresses: ["94.182.0.0/16", "37.148.0.0/18"],
-    addressesV6: ["2a0e::/26"]
+    addressesV6: ["2a00:1450:4001::8888/128", "2a00:1450:4001::8844/128"]
   },
 };
 
@@ -3040,6 +3046,7 @@ DNS: ${dnsValue}
     });
   } catch (err) {
     console.error("handleUpdate error:", err);
+    console.error("Error stack:", err.stack);
     try {
       const chat =
         (update.message && update.message.chat && update.message.chat.id) ||
@@ -3047,14 +3054,15 @@ DNS: ${dnsValue}
           update.callback_query.message &&
           update.callback_query.message.chat &&
           update.callback_query.message.chat.id);
-      if (chat)
+      if (chat && env.BOT_TOKEN) {
         await sendMsg(
           env.BOT_TOKEN,
           chat,
-          "خطایی رخ داد، لطفاً بعداً امتحان کنید.",
+          "❌ خطایی رخ داد.\n\nجزئیات خطا در لاگ سرور ثبت شده است.",
         );
+      }
     } catch (e) {
-      /* swallow */
+      console.error("Error sending error message:", e);
     }
   }
 }
