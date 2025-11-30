@@ -522,16 +522,22 @@ async function getQuota(env, id) {
   const d = DATE_YYYYMMDD();
   const dns = parseInt(await env.DB.get(`q:dns:${id}:${d}`)) || 0;
   const wg = parseInt(await env.DB.get(`q:wg:${id}:${d}`)) || 0;
+  const wg6 = parseInt(await env.DB.get(`q:wg6:${id}:${d}`)) || 0;
 
   // VIP and Pro users get 10 limit, regular users get 3 limit
   const dnsLimit = (isVIP || isPro) ? 10 : 3;
   const wgLimit = (isVIP || isPro) ? 10 : 3;
+  // WG IPv6 limit: Pro/VIP: 5/day, Free: 1/day
+  const wg6Limit = (isVIP || isPro) ? 5 : 1;
 
   return {
     dnsUsed: dns,
     wgUsed: wg,
+    wg6Used: wg6,
     dnsLeft: Math.max(0, dnsLimit - dns),
     wgLeft: Math.max(0, wgLimit - wg),
+    wg6Left: Math.max(0, wg6Limit - wg6),
+    wg6Limit: wg6Limit,
     isVIP: isVIP,
     isPro: isPro,
     dailyLimit: (isVIP || isPro) ? 10 : 3
@@ -806,6 +812,7 @@ async function resetAllQuotas(env) {
     try {
       await env.DB.delete(`q:dns:${userId}:${d}`);
       await env.DB.delete(`q:wg:${userId}:${d}`);
+      await env.DB.delete(`q:wg6:${userId}:${d}`);
       count++;
     } catch (e) {
       console.error(`Error resetting quota for user ${userId}:`, e);
@@ -1045,6 +1052,24 @@ function dnsChoiceKeyboard(code, op) {
     rows.push(row);
   }
   rows.push([{ text: "🔙 بازگشت", callback_data: `op:${code}` }]);
+  return { inline_keyboard: rows };
+}
+
+function ipv6OptionKeyboard(code, op, dns, wg6Left = 0, wg6Limit = 1) {
+  const hasQuota = wg6Left > 0;
+  const quotaText = hasQuota ? `(${wg6Left}/${wg6Limit} باقی‌مانده)` : '(سهمیه تمام شده)';
+  const rows = [
+    [
+      { text: "🌐 فقط IPv4", callback_data: `wgfinal:${code}:${op}:${dns}:no` },
+    ],
+    [
+      {
+        text: hasQuota ? `📡 IPv4 + IPv6 ${quotaText}` : `❌ IPv6 ${quotaText}`,
+        callback_data: hasQuota ? `wgfinal:${code}:${op}:${dns}:yes` : `noop:noquota`
+      },
+    ],
+    [{ text: "🔙 بازگشت", callback_data: `op:${code}:${op}` }],
+  ];
   return { inline_keyboard: rows };
 }
 
@@ -1869,7 +1894,7 @@ ${wgBar}
       if (data === "fj_add") {
         if (String(user) !== adminId) return;
         await env.DB.put(`awaitForcedJoinAdd:${adminId}`, "1");
-        await sendMsg(token, chatId, 
+        await sendMsg(token, chatId,
           "📡 <b>افزودن کانال جویین اجباری</b>\n\nآیدی یا یوزرنیم کانال را ارسال کنید:\n\n💡 مثال:\n<code>@channel_username</code>\nیا\n<code>-1001234567890</code>\n\n⚠️ توجه: ربات باید ادمین کانال باشد.", {
           reply_markup: {
             inline_keyboard: [[{ text: "❌ انصراف", callback_data: "settings_forced_join" }]]
@@ -1961,7 +1986,7 @@ ${wgBar}
         await editMsg(token, chatId, callback.message.message_id, text, {
           reply_markup: {
             inline_keyboard: [
-              logChannel 
+              logChannel
                 ? [{ text: "✏️ تغییر کانال", callback_data: "log_channel_set" }, { text: "🗑 حذف", callback_data: "log_channel_delete" }]
                 : [{ text: "➕ تنظیم کانال گزارش", callback_data: "log_channel_set" }],
               [{ text: "🔙 بازگشت", callback_data: "menu_service_settings" }]
@@ -2499,8 +2524,8 @@ ${wgBar}
         return;
       }
 
-      // wg final: choose:CODE:OP:DNS -> allocate IP, build config, send file
-      if (data.startsWith("choose:")) {
+      // wg step 3: choose:CODE:OP:DNS -> show IPv6 option
+      if (data.startsWith("choose:") && !data.includes(":vip")) {
         const parts = data.split(":");
         const code = parts[1];
         const op = parts[2];
@@ -2516,6 +2541,60 @@ ${wgBar}
             token,
             chatId,
             `محدودیت روزانه WireGuard شما به پایان رسیده است.\nباقی‌مانده: ${q.wgLeft}`,
+          );
+          return;
+        }
+
+        const flag = flagFromCode(code);
+        const countryName = getCountryNameFA(code) || code;
+        const operatorData = OPERATORS[op];
+        const operatorName = operatorData ? operatorData.title : op;
+
+        // Show IPv6 option
+        await editMsg(
+          token,
+          chatId,
+          callback.message.message_id,
+          `${flag} <b>${countryName}</b> - ${operatorName}
+DNS: ${dnsValue}
+
+📡 آیا می‌خواهید آدرس IPv6 نیز در کانفیگ اضافه شود؟
+
+💡 <i>نکته: IPv6 می‌تواند در برخی شبکه‌ها عملکرد بهتری داشته باشد</i>`,
+          { reply_markup: ipv6OptionKeyboard(code, op, dnsValue, q.wg6Left, q.wg6Limit) },
+        );
+        return;
+      }
+
+      // wg final: wgfinal:CODE:OP:DNS:IPV6 -> allocate IP, build config, send file
+      if (data.startsWith("wgfinal:")) {
+        const parts = data.split(":");
+        const code = parts[1];
+        const op = parts[2];
+        const dnsValue = parts[3];
+        const includeIPv6 = parts[4] === "yes";
+
+        if (!user) {
+          await sendMsg(token, chatId, "کاربر نامشخص");
+          return;
+        }
+        const q = await getQuota(env, user);
+        const isAdmin = String(user) === adminId;
+        if (!isAdmin && q.wgLeft <= 0) {
+          await sendMsg(
+            token,
+            chatId,
+            `محدودیت روزانه WireGuard شما به پایان رسیده است.\nباقی‌مانده: ${q.wgLeft}`,
+          );
+          return;
+        }
+
+        // Check IPv6 quota if requested
+        if (includeIPv6 && !isAdmin && q.wg6Left <= 0) {
+          await sendMsg(
+            token,
+            chatId,
+            `محدودیت روزانه IPv6 شما به پایان رسیده است.\nباقی‌مانده: ${q.wg6Left}/${q.wg6Limit}`,
           );
           return;
         }
@@ -2536,23 +2615,43 @@ ${wgBar}
           return;
         }
 
+        // IPv6 allocation if requested
+        let ipv6Addresses = null;
+        if (includeIPv6) {
+          ipv6Addresses = await allocateAddress6(env, code);
+          if (!ipv6Addresses) {
+            // If no IPv6 available, continue without it
+            ipv6Addresses = null;
+          }
+        }
+
         const mtu = pickRandom(WG_MTUS);
         const userDns = dnsValue || pickRandom(WG_FIXED_DNS);
         const priv = randBase64(32);
 
         // DNS: location DNS first, then user selected DNS
-        const combinedDns = locationDns
+        let combinedDns = locationDns
           ? `${locationDns}, ${userDns}`
           : userDns;
 
+        // If IPv6 addresses available, add them to DNS
+        if (ipv6Addresses && ipv6Addresses.length > 0) {
+          combinedDns += `, ${ipv6Addresses.join(', ')}`;
+        }
+
         // Address: از اپراتور انتخابی
         const operatorData = OPERATORS[op];
-        const operatorAddress =
+        let operatorAddress =
           operatorData &&
             operatorData.addresses &&
             operatorData.addresses.length
             ? pickRandom(operatorData.addresses)
             : "10.66.66.2/32";
+
+        // If IPv6 is enabled, add IPv6 address to interface address
+        if (ipv6Addresses && ipv6Addresses.length > 0) {
+          operatorAddress = `${operatorAddress}, fd00::2/128`;
+        }
 
         const iface = buildInterfaceOnlyConfig({
           privateKey: priv,
@@ -2567,18 +2666,19 @@ ${wgBar}
           getCountryNameFA(code) || recBefore?.country || code;
         const countryNameEn = getCountryNameEN(code) || code;
         const operatorName = operatorData ? operatorData.title : op;
-        const filename = `${countryNameEn}_WG.conf`;
+        const filename = ipv6Addresses ? `${countryNameEn}_WG6.conf` : `${countryNameEn}_WG.conf`;
         const flag = flagFromCode(code);
 
         // Get updated stock after allocation
         const recAfter = await getDNS(env, code);
         const currentStock = recAfter?.stock || 0;
 
+        const ipv6Status = ipv6Addresses ? `\n📡 IPv6: فعال (${ipv6Addresses.length} آدرس)` : '';
         const caption = `${flag} <b>${countryNameFa}</b>
 
 ━━━━━━━━━━━━━━━━━━━━
 📱 اپراتور: ${operatorName}
-🌐 DNS: ${combinedDns}
+🌐 DNS: ${userDns}${ipv6Status}
 📡 موجودی: ${currentStock}
 📈 سهمیه: ${q.wgUsed + 1}/${MAX_WG_PER_DAY}
 ━━━━━━━━━━━━━━━━━━━━
@@ -2588,8 +2688,12 @@ ${wgBar}
         await sendFile(token, chatId, filename, iface, caption);
         if (!isAdmin) {
           await incQuota(env, user, "wg");
+          if (ipv6Addresses) {
+            await incQuota(env, user, "wg6");
+          }
           // Log activity for non-admin users
-          await logActivity(token, env, user, 'wg', code, `اپراتور: ${operatorName}`);
+          const activityDetails = ipv6Addresses ? `اپراتور: ${operatorName} (IPv6 فعال)` : `اپراتور: ${operatorName}`;
+          await logActivity(token, env, user, 'wg', code, activityDetails);
         }
         // Track VIP usage
         if (q.isVIP) await updateVIPUsage(env, user, "wg");
@@ -2598,12 +2702,13 @@ ${wgBar}
           const raw = await env.DB.get(histKey);
           const h = raw ? JSON.parse(raw) : [];
           h.unshift({
-            type: "wg",
+            type: ipv6Addresses ? "wg6" : "wg",
             country: code,
             at: new Date().toISOString(),
             endpoint,
             operator: op,
             dns: combinedDns,
+            ipv6: ipv6Addresses || null,
           });
           if (h.length > 20) h.splice(20);
           await env.DB.put(histKey, JSON.stringify(h));
