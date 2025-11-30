@@ -262,27 +262,27 @@ const OPERATORS = {
   irancell: { 
     title: "ایرانسل", 
     addresses: ["2.144.0.0/16"],
-    addressesV6: ["2001:4860:4860::8888/128", "2001:4860:4860::8844/128"]
+    addressesV6: ["2a01:5ec0:1000::1/128", "2a01:5ec0:1000::2/128"]
   },
   mci: { 
     title: "همراه اول", 
     addresses: ["5.52.0.0/16"],
-    addressesV6: ["2606:4700:4700::1111/128", "2606:4700:4700::1001/128"]
+    addressesV6: ["2a02:4540::1/128", "2a02:4540::2/128"]
   },
   tci: { 
     title: "مخابرات", 
     addresses: ["2.176.0.0/15", "2.190.0.0/15"],
-    addressesV6: ["2620:fe::fe/128", "2620:fe::9/128"]
+    addressesV6: ["2a04:2680:13::1/128", "2a04:2680:13::2/128"]
   },
   rightel: { 
     title: "رایتل", 
     addresses: ["37.137.128.0/17", "95.162.0.0/17"],
-    addressesV6: ["2001:67c:2b0::1/128", "2001:67c:2b0::2/128"]
+    addressesV6: ["2a03:ef42::1/128", "2a03:ef42::2/128"]
   },
   shatel: {
     title: "شاتل موبایل",
     addresses: ["94.182.0.0/16", "37.148.0.0/18"],
-    addressesV6: ["2a00:1450:4001::8888/128", "2a00:1450:4001::8844/128"]
+    addressesV6: ["2a0e::1/128", "2a0e::2/128"]
   },
 };
 
@@ -2629,12 +2629,17 @@ DNS: ${dnsValue}
       // wg IPv6 country selected: wg6country:IPV4CODE:OP:DNS:ct:IPV6CODE
       // این باید قبل از wg6select قرار بگیره تا اول پردازش بشه
       if (data.startsWith("wg6country:") && data.includes(":ct:")) {
-        const parts = data.split(":");
-        const ipv4Code = parts[1];
-        const op = parts[2];
-        const dns = parts[3];
-        // parts[4] is "ct"
-        const ipv6Code = parts[5]; // after "ct:"
+        // Use :ct: as separator to handle DNS with colons (e.g., IPv6 DNS)
+        const ctIndex = data.lastIndexOf(":ct:");
+        const beforeCt = data.substring(0, ctIndex); // wg6country:IPV4CODE:OP:DNS
+        const ipv6Code = data.substring(ctIndex + 4); // after :ct:
+        
+        // Parse the part before :ct:
+        const firstParts = beforeCt.split(":");
+        const ipv4Code = firstParts[1];
+        const op = firstParts[2];
+        // DNS is everything from index 3 onwards (may contain colons)
+        const dns = firstParts.slice(3).join(":");
         
         // مستقیماً پردازش wgfinal را انجام می‌دهیم
         if (!user) {
