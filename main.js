@@ -2627,8 +2627,23 @@ DNS: ${dnsValue}
         return;
       }
 
+      // wg IPv6 country selected: wg6country:IPV4CODE:OP:DNS:ct:IPV6CODE
+      // این باید قبل از wg6select قرار بگیره تا اول پردازش بشه
+      if (data.startsWith("wg6country:")) {
+        const parts = data.split(":");
+        const ipv4Code = parts[1];
+        const op = parts[2];
+        const dns = parts[3];
+        // parts[4] is "ct:"
+        const ipv6Code = parts[5]; // after "ct:"
+        
+        // تغییر callback.data و ادامه به wgfinal
+        data = `wgfinal:${ipv4Code}:${op}:${dns}:${ipv6Code}`;
+        // عمداً return نمی‌کنیم تا به wgfinal برسه
+      }
+
       // wg IPv6 country selection: wg6select:CODE:OP:DNS
-      if (data.startsWith("wg6select:")) {
+      if (data.startsWith("wg6select:") && !data.startsWith("wg6country:")) {
         const parts = data.split(":");
         const ipv4Code = parts[1];
         const op = parts[2];
@@ -2665,21 +2680,6 @@ DNS: ${dnsValue}
           { reply_markup: countriesKeyboard(mapped, 0, `wg6country:${ipv4Code}:${op}:${dnsValue}`) },
         );
         return;
-      }
-
-      // wg IPv6 country selected: wg6country:IPV4CODE:OP:DNS:ct:IPV6CODE
-      if (data.startsWith("wg6country:")) {
-        const parts = data.split(":");
-        const ipv4Code = parts[1];
-        const op = parts[2];
-        const dns = parts[3];
-        // parts[4] is "ct:"
-        const ipv6Code = parts[5]; // after "ct:"
-        
-        // Now process the final config with both IPv4 and IPv6 codes
-        // Change callback.data and let it fall through to wgfinal handler
-        callback.data = `wgfinal:${ipv4Code}:${op}:${dns}:${ipv6Code}`;
-        // Don't return here - let it fall through to wgfinal
       }
 
       // wg final: wgfinal:CODE:OP:DNS:IPV6CODE -> allocate IP, build config, send file
