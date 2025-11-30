@@ -1736,8 +1736,10 @@
 
             async function loadDNS6() {
                 try {
-                    var list = await fetchJson('/api/dns6');
-                    if (!list || list.length === 0) {
+                    const data = await fetchJson('/api/dns6');
+                    const list = Array.isArray(data) ? data : [];
+
+                    if (list.length === 0) {
                         document.getElementById('dns6-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div class="empty-state-text">هیچ کشور IPv6 ثبت نشده است</div></div>';
                         return;
                     }
@@ -1874,8 +1876,9 @@
 
             async function loadUsers() {
                 try {
-                    var j = await fetchJson('/api/users');
-                    var users = j.users || [];
+                    const data = await fetchJson('/api/users');
+                    const users = Array.isArray(data) ? data : (data.users || []);
+
                     if (users.length === 0) {
                         document.getElementById('users-stat').innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><div class="empty-state-text">هنوز هیچ کاربری ثبت نشده است</div></div>';
                         return;
@@ -2580,8 +2583,8 @@
 
             async function loadVIPUsers() {
                 try {
-                    var j = await fetchJson('/api/vip');
-                    var vipUsers = j.vipUsers || [];
+                    const data = await fetchJson('/api/vip');
+                    const vipUsers = Array.isArray(data) ? data : (data.vipUsers || []);
                     loadVIPStats();
 
                     if (vipUsers.length === 0) {
@@ -2716,16 +2719,8 @@
 
             async function loadProKeys() {
                 try {
-                    const res = await fetch('/api/prokeys', {
-                        headers: authHeaders()
-                    });
-                    if (!res.ok) {
-                        console.error('Pro keys API error:', res.status);
-                        document.getElementById('prokeys-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">خطا در بارگذاری کدها</div></div>';
-                        return;
-                    }
-                    const data = await res.json();
-                    const keys = Array.isArray(data.keys) ? data.keys : [];
+                    const data = await fetchJson('/api/prokeys');
+                    const keys = Array.isArray(data) ? data : (data.keys || []);
 
                     if (keys.length === 0) {
                         document.getElementById('prokeys-list').innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔑</div><div class="empty-state-text">هیچ کد پرو ایجاد نشده است</div></div>';
