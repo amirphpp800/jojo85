@@ -1,0 +1,617 @@
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>لاگ‌های ربات WireGuard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-light: #eef2ff;
+            --success: #10b981;
+            --success-light: #d1fae5;
+            --warning: #f59e0b;
+            --warning-light: #fef3c7;
+            --danger: #ef4444;
+            --danger-light: #fee2e2;
+            --info: #3b82f6;
+            --info-light: #dbeafe;
+
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f1f5f9;
+
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+
+            --border: #e2e8f0;
+            --border-light: #f1f5f9;
+
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+            --radius-sm: 6px;
+            --radius: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Vazirmatn', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .stat-card-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .stat-card-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .controls {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex: 1;
+        }
+
+        select, input {
+            padding: 10px 14px;
+            font-size: 14px;
+            font-family: inherit;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-width: 150px;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .logs-container {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+
+        .logs-header {
+            padding: 16px 20px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logs-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .logs-body {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-light);
+            transition: background 0.15s ease;
+        }
+
+        .log-entry:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .log-type {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .log-type.dns-ipv4 {
+            background: var(--info-light);
+            color: #1d4ed8;
+        }
+
+        .log-type.dns-ipv6 {
+            background: var(--info-light);
+            color: #1d4ed8;
+        }
+
+        .log-type.wg {
+            background: var(--success-light);
+            color: #047857;
+        }
+
+        .log-type.dns-ipv4-vip {
+            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+            color: #000;
+        }
+
+        .log-type.dns-ipv6-vip {
+            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+            color: #000;
+        }
+
+        .log-type.wg-vip {
+            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+            color: #000;
+        }
+
+        .log-time {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-family: 'SF Mono', 'Consolas', monospace;
+        }
+
+        .log-details {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px 16px;
+            font-size: 14px;
+        }
+
+        .log-label {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .log-value {
+            color: var(--text-primary);
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 13px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+            gap: 12px;
+            color: var(--text-muted);
+        }
+
+        .loading i {
+            font-size: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .access-denied {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .access-card {
+            background: var(--bg-secondary);
+            padding: 48px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            max-width: 440px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .access-icon {
+            font-size: 64px;
+            margin-bottom: 24px;
+        }
+
+        .access-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .access-text {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container" id="app">
+        <div class="header">
+            <h1>📋 لاگ‌های فعالیت ربات</h1>
+            <p>تمام فعالیت‌های کاربران در ربات WireGuard</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-card-label">کل لاگ‌ها</div>
+                <div class="stat-card-value" id="total-logs">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-label">DNS IPv4</div>
+                <div class="stat-card-value" id="dns4-count">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-label">DNS IPv6</div>
+                <div class="stat-card-value" id="dns6-count">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-label">WireGuard</div>
+                <div class="stat-card-value" id="wg-count">-</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="filter-group">
+                <select id="filter-type">
+                    <option value="">همه انواع</option>
+                    <option value="dns-ipv4">DNS IPv4</option>
+                    <option value="dns-ipv6">DNS IPv6</option>
+                    <option value="wg">WireGuard</option>
+                    <option value="dns-ipv4-vip">DNS IPv4 VIP</option>
+                    <option value="dns-ipv6-vip">DNS IPv6 VIP</option>
+                    <option value="wg-vip">WireGuard VIP</option>
+                </select>
+                <input type="text" id="filter-user" placeholder="جستجوی کاربر (ID)">
+                <input type="text" id="filter-country" placeholder="جستجوی کشور">
+            </div>
+            <button class="btn btn-primary" id="refresh-btn">
+                <i class="fas fa-sync-alt"></i>
+                <span>بروزرسانی</span>
+            </button>
+            <button class="btn btn-danger" id="clear-btn">
+                <i class="fas fa-trash-alt"></i>
+                <span>پاک کردن همه</span>
+            </button>
+        </div>
+
+        <div class="logs-container">
+            <div class="logs-header">
+                <h3>لاگ‌های اخیر</h3>
+                <span class="log-time" id="last-update">آخرین بروزرسانی: -</span>
+            </div>
+            <div class="logs-body" id="logs-body">
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <span>در حال بارگذاری...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            const ADMIN = new URL(location).searchParams.get('admin') || '';
+
+            if (!ADMIN) {
+                document.body.innerHTML = '<div class="access-denied"><div class="access-card"><div class="access-icon">🔒</div><h2 class="access-title">دسترسی محدود</h2><p class="access-text">این صفحه تنها برای مدیران سیستم قابل دسترسی است.<br><br>لطفاً با مدیر سیستم تماس بگیرید.</p></div></div>';
+                return;
+            }
+
+            let allLogs = [];
+            let filteredLogs = [];
+
+            function authHeaders() {
+                return ADMIN ? { 'x-admin-id': ADMIN } : {};
+            }
+
+            async function fetchJson(path, opts = {}) {
+                opts.headers = Object.assign({}, opts.headers || {}, authHeaders());
+                const res = await fetch(path, opts);
+                if (!res.ok) throw new Error('خطا ' + res.status);
+                return res.json();
+            }
+
+            function getTypeIcon(type) {
+                if (type === 'dns-ipv4' || type === 'dns-ipv4-vip') return '🌐';
+                if (type === 'dns-ipv6' || type === 'dns-ipv6-vip') return '🌐';
+                if (type === 'wg' || type === 'wg-vip') return '🛡️';
+                return '📦';
+            }
+
+            function getTypeName(type) {
+                const names = {
+                    'dns-ipv4': 'DNS IPv4',
+                    'dns-ipv6': 'DNS IPv6',
+                    'wg': 'WireGuard',
+                    'dns-ipv4-vip': 'DNS IPv4 VIP',
+                    'dns-ipv6-vip': 'DNS IPv6 VIP',
+                    'wg-vip': 'WireGuard VIP'
+                };
+                return names[type] || type;
+            }
+
+            function formatDateTime(isoString) {
+                const date = new Date(isoString);
+                const persianDate = date.toLocaleDateString('fa-IR');
+                const time = date.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+                return { date: persianDate, time };
+            }
+
+            function maskUserId(userId) {
+                const idStr = String(userId);
+                if (idStr.length <= 3) return '***';
+                const start = Math.floor((idStr.length - 3) / 2);
+                return idStr.slice(0, start) + '***' + idStr.slice(start + 3);
+            }
+
+            function renderLogs() {
+                const logsBody = document.getElementById('logs-body');
+
+                if (filteredLogs.length === 0) {
+                    logsBody.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div>هیچ لاگی یافت نشد</div></div>';
+                    return;
+                }
+
+                let html = '';
+                filteredLogs.forEach(log => {
+                    const { date, time } = formatDateTime(log.timestamp);
+                    const icon = getTypeIcon(log.type);
+                    const typeName = getTypeName(log.type);
+                    const maskedUser = maskUserId(log.userId);
+
+                    html += `
+                        <div class="log-entry">
+                            <div class="log-header">
+                                <span class="log-type ${log.type}">${icon} ${typeName}</span>
+                                <span class="log-time">${date} • ${time}</span>
+                            </div>
+                            <div class="log-details">
+                                <span class="log-label">👤 کاربر:</span>
+                                <span class="log-value">${maskedUser}</span>
+                                ${log.country ? `
+                                    <span class="log-label">${log.flag || '🌍'} کشور:</span>
+                                    <span class="log-value">${log.country}</span>
+                                ` : ''}
+                                ${log.details ? `
+                                    <span class="log-label">📝 جزئیات:</span>
+                                    <span class="log-value">${log.details}</span>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                logsBody.innerHTML = html;
+            }
+
+            function updateStats() {
+                document.getElementById('total-logs').textContent = allLogs.length;
+                document.getElementById('dns4-count').textContent = allLogs.filter(l => l.type === 'dns-ipv4' || l.type === 'dns-ipv4-vip').length;
+                document.getElementById('dns6-count').textContent = allLogs.filter(l => l.type === 'dns-ipv6' || l.type === 'dns-ipv6-vip').length;
+                document.getElementById('wg-count').textContent = allLogs.filter(l => l.type === 'wg' || l.type === 'wg-vip').length;
+            }
+
+            function applyFilters() {
+                const typeFilter = document.getElementById('filter-type').value;
+                const userFilter = document.getElementById('filter-user').value.trim();
+                const countryFilter = document.getElementById('filter-country').value.trim().toLowerCase();
+
+                filteredLogs = allLogs.filter(log => {
+                    if (typeFilter && log.type !== typeFilter) return false;
+                    if (userFilter && !String(log.userId).includes(userFilter)) return false;
+                    if (countryFilter && (!log.country || !log.country.toLowerCase().includes(countryFilter))) return false;
+                    return true;
+                });
+
+                renderLogs();
+            }
+
+            async function loadLogs() {
+                try {
+                    const data = await fetchJson('/api/logs');
+                    allLogs = data.logs || [];
+                    allLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    
+                    updateStats();
+                    applyFilters();
+                    
+                    document.getElementById('last-update').textContent = 
+                        'آخرین بروزرسانی: ' + new Date().toLocaleTimeString('fa-IR');
+                } catch (e) {
+                    console.error('خطا در بارگذاری لاگ‌ها:', e);
+                    document.getElementById('logs-body').innerHTML = 
+                        '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>خطا در بارگذاری لاگ‌ها</div></div>';
+                }
+            }
+
+            async function clearLogs() {
+                if (!confirm('آیا از پاک کردن تمام لاگ‌ها اطمینان دارید؟\n\nاین عمل غیرقابل بازگشت است!')) {
+                    return;
+                }
+
+                try {
+                    await fetchJson('/api/logs', {
+                        method: 'DELETE',
+                        headers: authHeaders()
+                    });
+                    await loadLogs();
+                    alert('✅ تمام لاگ‌ها با موفقیت پاک شدند');
+                } catch (e) {
+                    console.error('خطا در پاک کردن لاگ‌ها:', e);
+                    alert('❌ خطا در پاک کردن لاگ‌ها');
+                }
+            }
+
+            document.getElementById('refresh-btn').addEventListener('click', loadLogs);
+            document.getElementById('clear-btn').addEventListener('click', clearLogs);
+            document.getElementById('filter-type').addEventListener('change', applyFilters);
+            document.getElementById('filter-user').addEventListener('input', applyFilters);
+            document.getElementById('filter-country').addEventListener('input', applyFilters);
+
+            // بارگذاری اولیه
+            loadLogs();
+
+            // بروزرسانی خودکار هر 30 ثانیه
+            setInterval(loadLogs, 30000);
+        })();
+    </script>
+</body>
+
+</html>
