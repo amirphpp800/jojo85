@@ -1600,9 +1600,6 @@
                 return;
             }
 
-            console.log('Admin panel initialized with admin ID');
-            console.log('Testing authentication...');
-
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('overlay');
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
@@ -2188,19 +2185,27 @@
                         var newAddresses = addressesText.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
                         if (newAddresses.length === 0) return;
 
+                        function isIPv6(addr) {
+                            return addr.indexOf(':') !== -1;
+                        }
+
+                        var ipv4Addresses = newAddresses.filter(function(addr) { return !isIPv6(addr); });
+                        var ipv6Addresses = newAddresses.filter(function(addr) { return isIPv6(addr); });
+
                         try {
                             var rec4 = await fetchJson('/api/dns/' + currentCountryCode).catch(() => null);
                             var rec6 = await fetchJson('/api/dns6/' + currentCountryCode).catch(() => null);
 
-                            var addedCount = 0;
+                            var addedIPv4 = 0;
+                            var addedIPv6 = 0;
                             var duplicateCount = 0;
 
-                            if (rec4 && rec4.addresses) {
+                            if (ipv4Addresses.length > 0 && rec4 && rec4.addresses) {
                                 var oldCount = rec4.addresses.length;
-                                var combined = rec4.addresses.concat(newAddresses);
+                                var combined = rec4.addresses.concat(ipv4Addresses);
                                 rec4.addresses = Array.from(new Set(combined));
                                 rec4.stock = rec4.addresses.length;
-                                addedCount += (rec4.addresses.length - oldCount);
+                                addedIPv4 = rec4.addresses.length - oldCount;
                                 duplicateCount += (combined.length - rec4.addresses.length);
                                 await fetch('/api/dns/' + currentCountryCode, {
                                     method: 'PUT',
@@ -2208,12 +2213,12 @@
                                     body: JSON.stringify(rec4)
                                 });
                             }
-                            if (rec6 && rec6.addresses) {
+                            if (ipv6Addresses.length > 0 && rec6 && rec6.addresses) {
                                 var oldCount = rec6.addresses.length;
-                                var combined = rec6.addresses.concat(newAddresses);
+                                var combined = rec6.addresses.concat(ipv6Addresses);
                                 rec6.addresses = Array.from(new Set(combined));
                                 rec6.stock = rec6.addresses.length;
-                                addedCount += (rec6.addresses.length - oldCount);
+                                addedIPv6 = rec6.addresses.length - oldCount;
                                 duplicateCount += (combined.length - rec6.addresses.length);
                                 await fetch('/api/dns6/' + currentCountryCode, {
                                     method: 'PUT',
@@ -2231,9 +2236,17 @@
 
                             var successMsg = '✅ آدرس‌ها با موفقیت اضافه شدند!\n\n';
                             successMsg += '📊 آمار:\n';
-                            successMsg += '• آدرس‌های جدید: ' + addedCount + '\n';
+                            if (addedIPv4 > 0) {
+                                successMsg += '• آدرس‌های IPv4 جدید: ' + addedIPv4 + '\n';
+                            }
+                            if (addedIPv6 > 0) {
+                                successMsg += '• آدرس‌های IPv6 جدید: ' + addedIPv6 + '\n';
+                            }
                             if (duplicateCount > 0) {
                                 successMsg += '• تکراری‌های حذف شده: ' + duplicateCount;
+                            }
+                            if (addedIPv4 === 0 && addedIPv6 === 0 && duplicateCount === 0) {
+                                successMsg = '⚠️ هیچ آدرسی اضافه نشد.\n\nمطمئن شوید که کشور مورد نظر برای IPv4 یا IPv6 قبلاً ایجاد شده است.';
                             }
                             alert(successMsg);
                         } catch (err) {
