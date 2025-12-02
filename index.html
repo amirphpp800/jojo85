@@ -397,6 +397,19 @@
             background: #dc2626;
         }
 
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+            padding: 8px 16px;
+            font-size: 13px;
+            width: auto;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+        }
+
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -1114,7 +1127,7 @@
             <nav class="sidebar-nav">
                 <div class="nav-section">
                     <div class="nav-section-title">مدیریت DNS عادی</div>
-                    <button class="nav-item active" data-tab="ipv4">
+                    <button class="nav-item" data-tab="ipv4">
                         <span class="nav-item-icon"><i class="fas fa-globe"></i></span>
                         <span>مدیریت IPv4</span>
                     </button>
@@ -1122,7 +1135,7 @@
                         <span class="nav-item-icon"><i class="fas fa-network-wired"></i></span>
                         <span>مدیریت IPv6</span>
                     </button>
-                    <button class="nav-item" data-tab="countries">
+                    <button class="nav-item active" data-tab="countries">
                         <span class="nav-item-icon"><i class="fas fa-flag"></i></span>
                         <span>آدرس‌های کشورها</span>
                     </button>
@@ -1214,7 +1227,7 @@
                 </div>
             </div>
 
-            <div class="tab-content active" id="ipv4">
+            <div class="tab-content" id="ipv4">
                 <div class="content-grid">
                     <div class="card">
                         <div class="card-header">
@@ -1401,14 +1414,41 @@
                 </div>
             </div>
 
-            <div class="tab-content" id="countries">
-                <div class="card" style="grid-column: 1 / -1;">
-                    <div class="card-header">
-                        <div class="card-header-icon"><i class="fas fa-flag"></i></div>
-                        <h3 class="card-title">آدرس‌های کشورها</h3>
+            <div class="tab-content active" id="countries">
+                <div class="content-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon"
+                                style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);"><i
+                                    class="fas fa-tools"></i></div>
+                            <h3 class="card-title">ابزارها</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="note"
+                                style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #92400e; border-right-color: #f59e0b;">
+                                <i class="fas fa-info-circle"></i>
+                                ابزارهای مفید برای مدیریت آدرس‌ها
+                            </div>
+                            <div style="margin-top: 16px;">
+                                <button id="remove-duplicates-btn" class="btn btn-warning"
+                                    style="width: 100%; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                                    <i class="fas fa-filter"></i>
+                                    <span>حذف آدرس‌های تکراری (IPv4 & IPv6)</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div id="countries-list">در حال بارگذاری...</div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon"
+                                style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);"><i
+                                    class="fas fa-globe-americas"></i></div>
+                            <h3 class="card-title">لیست کشورها (IPv4)</h3>
+                        </div>
+                        <div class="card-body scrollable">
+                            <div id="countries-list">در حال بارگذاری...</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1672,7 +1712,16 @@
                     var users = await fetchJson('/api/users').catch((e) => { console.error('Users fetch error:', e.message || e); return { users: [] }; });
                     var vipData = await fetchJson('/api/vip').catch((e) => { console.error('VIP fetch error:', e.message || e); return { vipUsers: [] }; });
 
-                    var totalCountries = (dns4 ? dns4.length : 0) + (dns6 ? dns6.length : 0);
+                    // شمارش منحصربفرد کشورها - کشوری که هم IPv4 و هم IPv6 داره فقط یکبار شمارش بشه
+                    var uniqueCountries = new Set();
+                    (dns4 || []).forEach(function (r) {
+                        if (r.code) uniqueCountries.add(r.code.toUpperCase());
+                    });
+                    (dns6 || []).forEach(function (r) {
+                        if (r.code) uniqueCountries.add(r.code.toUpperCase());
+                    });
+                    var totalCountries = uniqueCountries.size;
+
                     var totalIPv4 = (dns4 || []).reduce(function (sum, r) {
                         return sum + (r.addresses ? r.addresses.length : 0);
                     }, 0);
@@ -2433,7 +2482,8 @@
                                 loadDNS6();
                                 updateStats();
 
-                                alert('✅ تمام آدرس‌ها حذف شدند!\n\nتعداد: ' + totalDeleted + ' آدرس');
+                                alert('✅ تمام آدرس‌ها حذف شدند!\n\n' +
+                                    'تعداد: ' + totalDeleted + ' آدرس');
                             } catch (err) {
                                 alert('خطا در حذف آدرس‌ها');
                                 console.error(err);
@@ -2830,7 +2880,12 @@
                 }
             });
 
-
+            // Helper function to reload DNS lists and update stats
+            async function loadDNS() {
+                await loadDNS4();
+                await loadDNS6();
+                await updateStats();
+            }
 
             loadDNS4();
             loadDNS6();
@@ -2847,6 +2902,83 @@
             // Log page button handler
             document.getElementById('log-page-btn').addEventListener('click', function () {
                 window.open('/log.html?admin=' + ADMIN, '_blank');
+            });
+
+            // Event listener for the remove duplicates button
+            document.getElementById('remove-duplicates-btn').addEventListener('click', async function (e) {
+                if (!confirm('⚠️ آیا از حذف آدرس‌های تکراری در همه کشورها اطمینان دارید؟\n\nاین عملیات برای IPv4 و IPv6 اعمال خواهد شد.')) {
+                    return;
+                }
+
+                try {
+                    e.target.disabled = true;
+                    e.target.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال پردازش...';
+
+                    var totalRemoved = 0;
+                    var processedCountries = 0;
+
+                    // Process IPv4
+                    var ipv4List = await fetchJson('/api/dns');
+                    for (var i = 0; i < ipv4List.length; i++) {
+                        var rec = ipv4List[i];
+                        if (rec.addresses && Array.isArray(rec.addresses)) {
+                            var originalLength = rec.addresses.length;
+                            var uniqueAddresses = Array.from(new Set(rec.addresses));
+                            var removed = originalLength - uniqueAddresses.length;
+
+                            if (removed > 0) {
+                                rec.addresses = uniqueAddresses;
+                                rec.stock = uniqueAddresses.length;
+                                await fetch('/api/dns/' + rec.code, {
+                                    method: 'PUT',
+                                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                                    body: JSON.stringify(rec)
+                                });
+                                totalRemoved += removed;
+                                processedCountries++;
+                            }
+                        }
+                    }
+
+                    // Process IPv6
+                    var ipv6List = await fetchJson('/api/dns6');
+                    for (var j = 0; j < ipv6List.length; j++) {
+                        var rec6 = ipv6List[j];
+                        if (rec6.addresses && Array.isArray(rec6.addresses)) {
+                            var originalLength6 = rec6.addresses.length;
+                            var uniqueAddresses6 = Array.from(new Set(rec6.addresses));
+                            var removed6 = originalLength6 - uniqueAddresses6.length;
+
+                            if (removed6 > 0) {
+                                rec6.addresses = uniqueAddresses6;
+                                rec6.stock = uniqueAddresses6.length;
+                                await fetch('/api/dns6/' + rec6.code, {
+                                    method: 'PUT',
+                                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                                    body: JSON.stringify(rec6)
+                                });
+                                totalRemoved += removed6;
+                                processedCountries++;
+                            }
+                        }
+                    }
+
+                    e.target.disabled = false;
+                    e.target.innerHTML = '<i class="fas fa-filter"></i> حذف آدرس‌های تکراری (IPv4 & IPv6)';
+
+                    await loadDNS(); // Reloads both IPv4 and IPv6 lists
+                    await loadCountries(); // Reload countries list to reflect changes
+                    await updateStats(); // Update overall stats
+
+                    alert('✅ آدرس‌های تکراری حذف شدند!\n\n' +
+                        '📊 کشورهای پردازش شده: ' + processedCountries + '\n' +
+                        '🗑️ تعداد آدرس‌های حذف شده: ' + totalRemoved);
+                } catch (err) {
+                    e.target.disabled = false;
+                    e.target.innerHTML = '<i class="fas fa-filter"></i> حذف آدرس‌های تکراری (IPv4 & IPv6)';
+                    alert('❌ خطا در حذف آدرس‌های تکراری: ' + (err.message || err));
+                    console.error('Remove duplicates error:', err);
+                }
             });
         })();
     </script>
