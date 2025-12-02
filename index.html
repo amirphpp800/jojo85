@@ -2189,8 +2189,8 @@
                             return addr.indexOf(':') !== -1;
                         }
 
-                        var ipv4Addresses = newAddresses.filter(function(addr) { return !isIPv6(addr); });
-                        var ipv6Addresses = newAddresses.filter(function(addr) { return isIPv6(addr); });
+                        var ipv4Addresses = newAddresses.filter(function (addr) { return !isIPv6(addr); });
+                        var ipv6Addresses = newAddresses.filter(function (addr) { return isIPv6(addr); });
 
                         try {
                             var rec4 = await fetchJson('/api/dns/' + currentCountryCode).catch(() => null);
@@ -2318,8 +2318,8 @@
                         updateDeleteSelectedButton(countryCode);
                     });
 
-                    // Handle delete selected button clicks
-                    document.addEventListener('click', async function (e) {
+                    // Handle delete selected button clicks (with delegation to prevent duplicates)
+                    const deleteSelectedHandler = async function (e) {
                         if (!e.target.closest('.btn-delete-selected')) return;
 
                         const btn = e.target.closest('.btn-delete-selected');
@@ -2386,7 +2386,12 @@
                             alert('خطا در حذف آدرس‌ها');
                             console.error(err);
                         }
-                    });
+                    };
+
+                    // Remove any existing listener to prevent duplicates
+                    document.removeEventListener('click', deleteSelectedHandler);
+                    // Add the listener once
+                    document.addEventListener('click', deleteSelectedHandler);
 
                     document.querySelectorAll('.btn-delete-all-addresses').forEach(function (btn) {
                         btn.addEventListener('click', async function (e) {
@@ -2840,7 +2845,7 @@
             loadProKeys();
 
             // Log page button handler
-            document.getElementById('log-page-btn').addEventListener('click', function() {
+            document.getElementById('log-page-btn').addEventListener('click', function () {
                 window.open('/log.html?admin=' + ADMIN, '_blank');
             });
         })();
