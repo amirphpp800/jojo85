@@ -1145,6 +1145,22 @@ function buildInterfaceOnlyConfig({
     ].join("\n");
 }
 
+/* ---------------------- Cooldown System ---------------------- */
+const userCooldowns = new Map();
+const COOLDOWN_MS = 2000; // 2 seconds cooldown
+
+function checkCooldown(userId) {
+    const now = Date.now();
+    const lastAction = userCooldowns.get(userId);
+
+    if (lastAction && (now - lastAction) < COOLDOWN_MS) {
+        return false; // Still in cooldown
+    }
+
+    userCooldowns.set(userId, now);
+    return true; // OK to proceed
+}
+
 /* ---------------------- Telegram webhook handler ---------------------- */
 export async function handleUpdate(update, env, { waitUntil } = {}) {
     const token = env.BOT_TOKEN;
@@ -1384,6 +1400,17 @@ ${feedbackText}
         // handle callback_query first (button-based UX)
         if (callback) {
             const data = callback.data || "";
+
+            // Check cooldown (admin exempt)
+            if (String(user) !== adminId && !checkCooldown(user)) {
+                tg(token, "answerCallbackQuery", {
+                    callback_query_id: callback.id,
+                    text: "⏳ لطفاً کمی صبر کنید...",
+                    show_alert: false,
+                }).catch(() => { });
+                return;
+            }
+
             // answer callback to remove loading spinner
             tg(token, "answerCallbackQuery", {
                 callback_query_id: callback.id,
