@@ -1482,6 +1482,51 @@
                         </div>
                     </div>
                 </div>
+                <div class="content-grid" style="margin-top: 24px;">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);"><i class="fas fa-plus-circle"></i></div>
+                            <h3 class="card-title">افزودن ایدی به لیست KV</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="note" style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); color: #065f46; border-right-color: #10b981;">
+                                <i class="fas fa-info-circle"></i>
+                                ایدی‌های عددی را وارد کنید تا به لیست allusers در KV اضافه شوند
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">ایدی‌های عددی (هر خط یک ایدی)</label>
+                                <textarea id="kv-user-ids" rows="8" placeholder="123456789&#10;987654321&#10;..."></textarea>
+                            </div>
+                            <button type="button" id="add-to-kv-btn" class="btn btn-primary" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                                <i class="fas fa-database"></i>
+                                <span>افزودن به KV</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-header-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);"><i class="fas fa-search"></i></div>
+                            <h3 class="card-title">بررسی کامل لیست کاربران</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="note" style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); color: #1e40af; border-right-color: #3b82f6;">
+                                <i class="fas fa-info-circle"></i>
+                                مقایسه و بررسی کاربران در سیستم‌های مختلف (user:*, allusers)
+                            </div>
+                            <button type="button" id="check-users-btn" class="btn btn-primary" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+                                <i class="fas fa-sync-alt"></i>
+                                <span>بررسی لیست کاربران</span>
+                            </button>
+                            <div id="users-check-result" style="margin-top: 16px; display: none;">
+                                <div class="card" style="background: var(--bg-tertiary); border: none;">
+                                    <div class="card-body" style="padding: 16px;">
+                                        <div id="users-check-content"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="tab-content" id="vip">
@@ -2902,6 +2947,133 @@
             // Log page button handler
             document.getElementById('log-page-btn').addEventListener('click', function () {
                 window.open('/log.html?admin=' + ADMIN, '_blank');
+            });
+
+            // Add to KV button handler
+            document.getElementById('add-to-kv-btn').addEventListener('click', async function () {
+                const userIdsText = document.getElementById('kv-user-ids').value.trim();
+                if (!userIdsText) {
+                    alert('لطفاً ایدی‌های عددی را وارد کنید');
+                    return;
+                }
+
+                const userIds = userIdsText.split('\n')
+                    .map(id => id.trim())
+                    .filter(id => id && /^\d+$/.test(id));
+
+                if (userIds.length === 0) {
+                    alert('هیچ ایدی معتبری یافت نشد');
+                    return;
+                }
+
+                if (!confirm(`آیا از افزودن ${userIds.length} ایدی به لیست KV اطمینان دارید؟`)) {
+                    return;
+                }
+
+                try {
+                    const btn = document.getElementById('add-to-kv-btn');
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال افزودن...';
+
+                    const response = await fetch('/api/users/kv/add', {
+                        method: 'POST',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                        body: JSON.stringify({ userIds: userIds })
+                    });
+
+                    const result = await response.json();
+
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-database"></i> <span>افزودن به KV</span>';
+
+                    if (result.ok) {
+                        document.getElementById('kv-user-ids').value = '';
+                        alert(`✅ عملیات موفق!\n\n📊 گزارش:\n• کل ایدی‌ها: ${result.total}\n• اضافه شده: ${result.added}\n• قبلاً موجود: ${result.skipped}`);
+                        loadUsers();
+                    } else {
+                        alert('❌ خطا در افزودن به KV: ' + (result.error || 'خطای نامشخص'));
+                    }
+                } catch (e) {
+                    console.error('Add to KV error:', e);
+                    alert('❌ خطا در افزودن به KV');
+                    const btn = document.getElementById('add-to-kv-btn');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-database"></i> <span>افزودن به KV</span>';
+                }
+            });
+
+            // Check users button handler
+            document.getElementById('check-users-btn').addEventListener('click', async function () {
+                try {
+                    const btn = document.getElementById('check-users-btn');
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> در حال بررسی...';
+
+                    const response = await fetch('/api/users/check', {
+                        method: 'GET',
+                        headers: authHeaders()
+                    });
+
+                    const result = await response.json();
+
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-sync-alt"></i> <span>بررسی لیست کاربران</span>';
+
+                    if (result.ok) {
+                        const resultDiv = document.getElementById('users-check-result');
+                        const contentDiv = document.getElementById('users-check-content');
+
+                        let html = '<div style="font-size: 14px;">';
+                        html += '<div style="margin-bottom: 16px;">';
+                        html += '<strong style="color: var(--primary); font-size: 16px;">📊 آمار کلی</strong><br>';
+                        html += `<div style="margin-top: 8px; padding: 12px; background: var(--bg-primary); border-radius: var(--radius); border-right: 3px solid var(--primary);">`;
+                        html += `کل کاربران در user:*: <strong>${result.userPrefix}</strong><br>`;
+                        html += `کل کاربران در allusers: <strong>${result.allUsers}</strong><br>`;
+                        html += `کاربران فقط در user:*: <strong>${result.onlyInUserPrefix}</strong><br>`;
+                        html += `کاربران فقط در allusers: <strong>${result.onlyInAllUsers}</strong><br>`;
+                        html += `کاربران در هر دو: <strong>${result.inBoth}</strong>`;
+                        html += '</div></div>';
+
+                        if (result.missingInAllUsers && result.missingInAllUsers.length > 0) {
+                            html += '<div style="margin-bottom: 16px;">';
+                            html += '<strong style="color: var(--warning); font-size: 16px;">⚠️ کاربران موجود در user:* ولی نه در allusers:</strong><br>';
+                            html += '<div style="margin-top: 8px; padding: 12px; background: var(--warning-light); border-radius: var(--radius); max-height: 200px; overflow-y: auto;">';
+                            html += result.missingInAllUsers.slice(0, 50).map(id => `<code>${id}</code>`).join(', ');
+                            if (result.missingInAllUsers.length > 50) {
+                                html += `<br><em>... و ${result.missingInAllUsers.length - 50} ایدی دیگر</em>`;
+                            }
+                            html += '</div></div>';
+                        }
+
+                        if (result.missingInUserPrefix && result.missingInUserPrefix.length > 0) {
+                            html += '<div style="margin-bottom: 16px;">';
+                            html += '<strong style="color: var(--info); font-size: 16px;">ℹ️ کاربران موجود در allusers ولی نه در user:*:</strong><br>';
+                            html += '<div style="margin-top: 8px; padding: 12px; background: var(--info-light); border-radius: var(--radius); max-height: 200px; overflow-y: auto;">';
+                            html += result.missingInUserPrefix.slice(0, 50).map(id => `<code>${id}</code>`).join(', ');
+                            if (result.missingInUserPrefix.length > 50) {
+                                html += `<br><em>... و ${result.missingInUserPrefix.length - 50} ایدی دیگر</em>`;
+                            }
+                            html += '</div></div>';
+                        }
+
+                        html += '<div style="margin-top: 16px; padding: 12px; background: var(--success-light); border-radius: var(--radius); border-right: 3px solid var(--success); font-size: 13px;">';
+                        html += '<i class="fas fa-check-circle"></i> <strong>نکته:</strong> برای همگام‌سازی، می‌توانید ایدی‌های گم‌شده را به لیست مورد نظر اضافه کنید.';
+                        html += '</div>';
+
+                        html += '</div>';
+
+                        contentDiv.innerHTML = html;
+                        resultDiv.style.display = 'block';
+                    } else {
+                        alert('❌ خطا در بررسی کاربران: ' + (result.error || 'خطای نامشخص'));
+                    }
+                } catch (e) {
+                    console.error('Check users error:', e);
+                    alert('❌ خطا در بررسی کاربران');
+                    const btn = document.getElementById('check-users-btn');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-sync-alt"></i> <span>بررسی لیست کاربران</span>';
+                }
             });
 
             // Event listener for the remove duplicates button
