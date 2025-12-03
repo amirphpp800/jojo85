@@ -358,15 +358,19 @@ async function getDNS(env, code) {
 async function listDNS(env) {
     const res = await env.DB.list({ prefix: "dns:", limit: 1000 });
     const out = [];
-    for (const k of res.keys || []) {
+    
+    // استفاده از Promise.all برای بارگذاری موازی
+    const promises = (res.keys || []).map(async (k) => {
         try {
             const raw = await env.DB.get(k.name);
-            if (raw) out.push(JSON.parse(raw));
+            if (raw) return JSON.parse(raw);
         } catch (e) {
-            /* skip */
+            return null;
         }
-    }
-    return out;
+    });
+    
+    const results = await Promise.all(promises);
+    return results.filter(r => r !== null);
 }
 
 async function updateDNS(env, code, obj) {
@@ -482,16 +486,19 @@ async function getDNS6(env, code) {
 
 async function listDNS6(env) {
     const res = await env.DB.list({ prefix: "dns6:", limit: 1000 });
-    const out = [];
-    for (const k of res.keys || []) {
+    
+    // استفاده از Promise.all برای بارگذاری موازی
+    const promises = (res.keys || []).map(async (k) => {
         try {
             const raw = await env.DB.get(k.name);
-            if (raw) out.push(JSON.parse(raw));
+            if (raw) return JSON.parse(raw);
         } catch (e) {
-            /* skip */
+            return null;
         }
-    }
-    return out;
+    });
+    
+    const results = await Promise.all(promises);
+    return results.filter(r => r !== null);
 }
 
 async function updateDNS6(env, code, obj) {
@@ -1686,65 +1693,103 @@ ${feedbackText}
             if (data.startsWith("proto:")) {
                 const protocol = data.slice(6);
                 if (protocol === "ipv4") {
-                    const list = await listDNS(env);
-                    if (!list || list.length === 0) {
-                        await editMsg(token, chatId, callback.message.message_id, "فعلاً رکوردی موجود نیست.", {
+                    try {
+                        const list = await listDNS(env);
+                        
+                        if (!Array.isArray(list) || list.length === 0) {
+                            await editMsg(token, chatId, callback.message.message_id, 
+                                "❌ در حال حاضر هیچ کشور IPv4 موجود نیست.\n\n💡 لطفاً با مدیر تماس بگیرید.", {
+                                reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: "back" }]] }
+                            });
+                            return;
+                        }
+                        
+                        // پردازش سریع‌تر لیست
+                        const mapped = list
+                            .map((r) => ({
+                                code: (r.code || "").toUpperCase(),
+                                country: r.country || r.code,
+                                stock: (r.addresses && Array.isArray(r.addresses)) ? r.addresses.length : 0,
+                                flag: r.flag || flagFromCode(r.code)
+                            }))
+                            .filter(r => r.stock > 0)
+                            .sort((a, b) => b.stock - a.stock);
+
+                        if (mapped.length === 0) {
+                            await editMsg(token, chatId, callback.message.message_id, 
+                                "❌ در حال حاضر هیچ آدرس IPv4 موجود نیست.\n\n💡 لطفاً بعداً تلاش کنید.", {
+                                reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: "back" }]] }
+                            });
+                            return;
+                        }
+
+                        await editMsg(
+                            token,
+                            chatId,
+                            callback.message.message_id,
+                            `🌐 دریافت DNS IPv4\n\n📊 ${mapped.length} کشور موجود\n\n🟢 موجود | 🟡 کم | 🔴 تمام`,
+                            {
+                                reply_markup: countriesKeyboard(mapped, 0, "dns4"),
+                            },
+                        );
+                    } catch (e) {
+                        console.error('Error loading IPv4 countries:', e);
+                        await editMsg(token, chatId, callback.message.message_id, 
+                            "❌ خطا در بارگذاری لیست کشورها\n\n💡 لطفاً دوباره تلاش کنید.", {
                             reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: "back" }]] }
                         });
-                        return;
                     }
-                    const mapped = list
-                        .map((r) => {
-                            const code = (r.code || "").toUpperCase();
-                            return {
-                                code: code,
-                                country: r.country || r.code,
-                                stock: r.stock || 0,
-                                flag: r.flag || flagFromCode(code)
-                            };
-                        })
-                        .sort((a, b) => b.stock - a.stock);
-
-                    // ادیت پیام به جای ارسال جدید
-                    await editMsg(
-                        token,
-                        chatId,
-                        callback.message.message_id,
-                        "🌐 دریافت DNS IPv4 - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام",
-                        {
-                            reply_markup: countriesKeyboard(mapped, 0, "dns4"),
-                        },
-                    );
                 } else if (protocol === "ipv6") {
-                    const list = await listDNS6(env);
-                    if (!list || list.length === 0) {
-                        await editMsg(token, chatId, callback.message.message_id, "فعلاً رکوردی IPv6 موجود نیست.", {
+                    try {
+                        const list = await listDNS6(env);
+                        
+                        if (!Array.isArray(list) || list.length === 0) {
+                            await editMsg(token, chatId, callback.message.message_id, 
+                                "❌ در حال حاضر هیچ کشور IPv6 موجود نیست.\n\n💡 لطفاً با مدیر تماس بگیرید.", {
+                                reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: "back" }]] }
+                            });
+                            return;
+                        }
+                        
+                        const mapped = list
+                            .map((r) => {
+                                const code = (r.code || "").toUpperCase();
+                                const actualStock = (r.addresses && Array.isArray(r.addresses)) ? r.addresses.length : 0;
+                                return {
+                                    code: code,
+                                    country: r.country || r.code,
+                                    stock: actualStock,
+                                    flag: r.flag || flagFromCode(code)
+                                };
+                            })
+                            .filter(r => r.stock > 0)
+                            .sort((a, b) => b.stock - a.stock);
+
+                        if (mapped.length === 0) {
+                            await editMsg(token, chatId, callback.message.message_id, 
+                                "❌ در حال حاضر هیچ آدرس IPv6 موجود نیست.\n\n💡 لطفاً بعداً تلاش کنید.", {
+                                reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: "back" }]] }
+                            });
+                            return;
+                        }
+
+                        // ادیت پیام به جای ارسال جدید
+                        await editMsg(
+                            token,
+                            chatId,
+                            callback.message.message_id,
+                            `🌐 دریافت DNS IPv6\n\n📊 ${mapped.length} کشور موجود\n\n🟢 موجود | 🟡 کم | 🔴 تمام`,
+                            {
+                                reply_markup: countriesKeyboard(mapped, 0, "dns6"),
+                            },
+                        );
+                    } catch (e) {
+                        console.error('Error loading IPv6 countries:', e);
+                        await editMsg(token, chatId, callback.message.message_id, 
+                            "❌ خطا در بارگذاری لیست کشورها\n\n💡 لطفاً دوباره تلاش کنید.", {
                             reply_markup: { inline_keyboard: [[{ text: "🔙 بازگشت", callback_data: "back" }]] }
                         });
-                        return;
                     }
-                    const mapped = list
-                        .map((r) => {
-                            const code = (r.code || "").toUpperCase();
-                            return {
-                                code: code,
-                                country: r.country || r.code,
-                                stock: r.stock || 0,
-                                flag: r.flag || flagFromCode(code)
-                            };
-                        })
-                        .sort((a, b) => b.stock - a.stock);
-
-                    // ادیت پیام به جای ارسال جدید
-                    await editMsg(
-                        token,
-                        chatId,
-                        callback.message.message_id,
-                        "🌐 دریافت DNS IPv6 - کشور مورد نظر را انتخاب کنید:\n\n🟢 موجود | 🟡 کم | 🔴 تمام",
-                        {
-                            reply_markup: countriesKeyboard(mapped, 0, "dns6"),
-                        },
-                    );
                 }
                 return;
             }
