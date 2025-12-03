@@ -16,7 +16,7 @@ const DATE_YYYYMMDD = () =>
     new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
 // Random MTU selection list
-const WG_MTUS = [1280, 1320, 1360, 1380, 1400, 1420, 1440, 1480, 1500];
+const WG_MTUS = [1280, 1360, 1380, 1400, 1420, 1440, 1480, 1500];
 
 // User-selectable DNS options
 const WG_FIXED_DNS = [
@@ -3696,6 +3696,103 @@ const app = {
                 return new Response("forbidden", { status: 403 });
             const us = await allUsers(env);
             return jsonResponse({ users: us });
+        }
+
+        // Add user IDs to allusers KV list
+        if (path === "/api/users/kv/add" && method === "POST") {
+            if (!isAdminReq(request, env))
+                return new Response("forbidden", { status: 403 });
+            try {
+                const body = await request.json();
+                const userIds = body.userIds;
+                if (!userIds || !Array.isArray(userIds)) {
+                    return jsonResponse({ error: "missing or invalid userIds array" }, 400);
+                }
+
+                // Get current allusers list
+                const allUsersRaw = await env.DB.get("allusers");
+                const allUsersList = allUsersRaw ? JSON.parse(allUsersRaw) : [];
+
+                let added = 0;
+                let skipped = 0;
+
+                for (const userId of userIds) {
+                    if (!allUsersList.includes(userId)) {
+                        allUsersList.push(userId);
+                        added++;
+                    } else {
+                        skipped++;
+                    }
+                }
+
+                // Save updated list
+                await env.DB.put("allusers", JSON.stringify(allUsersList));
+
+                return jsonResponse({ 
+                    ok: true, 
+                    total: userIds.length,
+                    added: added,
+                    skipped: skipped
+                });
+            } catch (e) {
+                console.error("Add to KV error:", e);
+                return jsonResponse({ error: "invalid request" }, 400);
+            }
+        }
+
+        // Check and compare users in different systems
+        if (path === "/api/users/check" && method === "GET") {
+            if (!isAdminReq(request, env))
+                return new Response("forbidden", { status: 403 });
+            try {
+                // Get users from user:* prefix
+                const userPrefixList = [];
+                let cursor = undefined;
+                
+                do {
+                    const result = await env.DB.list({ 
+                        prefix: "user:", 
+                        limit: 1000,
+                        cursor: cursor 
+                    });
+                    
+                    for (const key of result.keys || []) {
+                        const userId = key.name.replace('user:', '');
+                        if (userId) {
+                            userPrefixList.push(userId);
+                        }
+                    }
+                    
+                    cursor = result.cursor;
+                } while (cursor);
+
+                // Get users from allusers
+                const allUsersRaw = await env.DB.get("allusers");
+                const allUsersList = allUsersRaw ? JSON.parse(allUsersRaw) : [];
+
+                // Convert to sets for comparison
+                const userPrefixSet = new Set(userPrefixList);
+                const allUsersSet = new Set(allUsersList);
+
+                // Find differences
+                const missingInAllUsers = userPrefixList.filter(id => !allUsersSet.has(id));
+                const missingInUserPrefix = allUsersList.filter(id => !userPrefixSet.has(id));
+                const inBoth = userPrefixList.filter(id => allUsersSet.has(id));
+
+                return jsonResponse({
+                    ok: true,
+                    userPrefix: userPrefixList.length,
+                    allUsers: allUsersList.length,
+                    onlyInUserPrefix: missingInAllUsers.length,
+                    onlyInAllUsers: missingInUserPrefix.length,
+                    inBoth: inBoth.length,
+                    missingInAllUsers: missingInAllUsers,
+                    missingInUserPrefix: missingInUserPrefix
+                });
+            } catch (e) {
+                console.error("Check users error:", e);
+                return jsonResponse({ error: "check failed" }, 500);
+            }
         }
 
         // Add endpoint to fetch user info
