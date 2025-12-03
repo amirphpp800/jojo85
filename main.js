@@ -849,20 +849,39 @@ async function incQuota(env, id, type) {
 async function resetAllQuotas(env) {
     const d = DATE_YYYYMMDD();
     const users = await allUsers(env);
-    let count = 0;
+    let successCount = 0;
+    let failCount = 0;
 
-    for (const userId of users) {
+    // پردازش موازی با Promise.allSettled برای سرعت بالا
+    const promises = users.map(async (userId) => {
         try {
-            await env.DB.delete(`q:dns:${userId}:${d}`);
-            await env.DB.delete(`q:wg:${userId}:${d}`);
-            await env.DB.delete(`q:wg6:${userId}:${d}`);
-            count++;
+            await Promise.all([
+                env.DB.delete(`q:dns:${userId}:${d}`),
+                env.DB.delete(`q:wg:${userId}:${d}`),
+                env.DB.delete(`q:wg6:${userId}:${d}`)
+            ]);
+            return { success: true, userId };
         } catch (e) {
             console.error(`Error resetting quota for user ${userId}:`, e);
+            return { success: false, userId, error: e.message };
         }
-    }
+    });
 
-    return count;
+    const results = await Promise.allSettled(promises);
+    
+    results.forEach(result => {
+        if (result.status === 'fulfilled' && result.value.success) {
+            successCount++;
+        } else {
+            failCount++;
+        }
+    });
+
+    return { 
+        total: users.length,
+        success: successCount, 
+        failed: failCount 
+    };
 }
 
 /* ---------------------- UI Elements (inline keyboards) ---------------------- */
@@ -2033,28 +2052,45 @@ ${wgBar}
             if (data === "confirm_reset_quota") {
                 if (String(user) !== adminId) return;
 
-                await sendMsg(token, chatId, "⏳ در حال ریست کردن محدودیت کاربران...");
+                const startTime = Date.now();
+                await sendMsg(token, chatId, "⏳ در حال ریست کردن محدودیت کاربران...\n\n🔄 لطفاً صبر کنید...");
 
-                const resetCount = await resetAllQuotas(env);
+                // ریست محدودیت‌ها
+                const resetResult = await resetAllQuotas(env);
                 const users = await allUsers(env);
 
                 const giftMessage = `🎁 خبر خوش!\n\n✨ محدودیت روزانه شما به عنوان هدیه ریست شد!\n\n🔄 می‌توانید مجدداً از سرویس‌های زیر استفاده کنید:\n🌐 DNS: ${MAX_DNS_PER_DAY} بار\n🛡️ WireGuard: ${MAX_WG_PER_DAY} بار\n\n💚 از استفاده شما متشکریم!`;
 
+                // ارسال پیام به کاربران به صورت موازی
                 let sentCount = 0;
-                for (const u of users) {
+                let failedMessages = 0;
+                const messagePromises = users.map(async (u) => {
                     try {
                         await sendMsg(token, u, giftMessage);
-                        sentCount++;
+                        return { success: true };
                     } catch (e) {
                         console.error(`Error sending gift message to user ${u}:`, e);
+                        return { success: false };
                     }
-                }
+                });
+
+                const messageResults = await Promise.allSettled(messagePromises);
+                messageResults.forEach(result => {
+                    if (result.status === 'fulfilled' && result.value.success) {
+                        sentCount++;
+                    } else {
+                        failedMessages++;
+                    }
+                });
+
+                const endTime = Date.now();
+                const duration = ((endTime - startTime) / 1000).toFixed(1);
 
                 const adminVIP = await isVIPUser(env, user);
                 await sendMsg(
                     token,
                     chatId,
-                    `✅ عملیات با موفقیت انجام شد!\n\n📊 گزارش:\n👥 تعداد کاربران: ${users.length}\n🔄 محدودیت ریست شده: ${resetCount}\n📢 پیام ارسال شده: ${sentCount}`,
+                    `✅ عملیات با موفقیت انجام شد!\n\n━━━━━━━━━━━━━━━━━━━━\n📊 <b>گزارش کامل</b>\n\n👥 تعداد کاربران: <b>${resetResult.total}</b>\n\n🔄 <b>ریست محدودیت:</b>\n✅ موفق: <b>${resetResult.success}</b>\n❌ ناموفق: <b>${resetResult.failed}</b>\n\n📢 <b>ارسال پیام:</b>\n✅ ارسال شده: <b>${sentCount}</b>\n❌ ناموفق: <b>${failedMessages}</b>\n\n⏱ زمان انجام: <b>${duration} ثانیه</b>\n━━━━━━━━━━━━━━━━━━━━`,
                     {
                         reply_markup: mainMenuKeyboard(true, adminVIP),
                     },
