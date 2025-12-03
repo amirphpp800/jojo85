@@ -35,6 +35,7 @@ const WG_FIXED_DNS = [
 ];
 
 const COUNTRY_DATA = {
+  "EU": { "fa": "اتحادیه اروپا", "en": "European Union" },
   "AF": { "fa": "افغانستان", "en": "Afghanistan" },
   "AL": { "fa": "آلبانی", "en": "Albania" },
   "DZ": { "fa": "الجزایر", "en": "Algeria" },
