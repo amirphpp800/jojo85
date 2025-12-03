@@ -518,17 +518,52 @@ async function allocateAddress6(env, code) {
 }
 
 async function addUser(env, id) {
-    const raw = await env.DB.get("users:list");
-    const arr = raw ? JSON.parse(raw) : [];
-    if (!arr.includes(id)) {
-        arr.push(id);
-        await env.DB.put("users:list", JSON.stringify(arr));
+    // ذخیره هر کاربر در یک کلید جداگانه با prefix
+    const key = `user:${id}`;
+    const exists = await env.DB.get(key);
+    if (!exists) {
+        await env.DB.put(key, JSON.stringify({
+            id: id,
+            addedAt: new Date().toISOString()
+        }));
+        
+        // افزودن به لیست allusers
+        const allUsersRaw = await env.DB.get("allusers");
+        const allUsersList = allUsersRaw ? JSON.parse(allUsersRaw) : [];
+        
+        if (!allUsersList.includes(id)) {
+            allUsersList.push(id);
+            await env.DB.put("allusers", JSON.stringify(allUsersList));
+        }
     }
 }
 
 async function allUsers(env) {
-    const raw = await env.DB.get("users:list");
-    return raw ? JSON.parse(raw) : [];
+    // دریافت همه کاربران با pagination
+    const users = [];
+    let cursor = undefined;
+    
+    do {
+        const result = await env.DB.list({ 
+            prefix: "user:", 
+            limit: 1000,
+            cursor: cursor 
+        });
+        
+        for (const key of result.keys || []) {
+            // استخراج user ID از نام کلید (user:123456 -> 123456)
+            const userId = key.name.replace('user:', '');
+            if (userId) {
+                users.push(userId);
+            }
+        }
+        
+        cursor = result.cursor;
+        
+        // ادامه تا زمانی که cursor وجود داشته باشد (یعنی صفحات بیشتری باقی مانده)
+    } while (cursor);
+    
+    return users;
 }
 
 /* ---------------------- Quota System ---------------------- */
