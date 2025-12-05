@@ -1,5 +1,5 @@
 
-const MIGRATION_URL = 'https://free-config.pages.dev/';
+const MIGRATION_URL = 'https://rootleaker.pages.dev';
 const FORCED_CHANNEL = '@ROOTLeaker';
 
 async function tg(token, method, body) {
