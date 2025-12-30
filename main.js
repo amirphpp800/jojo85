@@ -1,6 +1,5 @@
-
 const MIGRATION_URL = 'https://rootleaker.pages.dev';
-const FORCED_CHANNEL = '@ROOTLeaker';
+const FORCED_CHANNELS = ['@ROOTLeaker', '@redo9ion'];
 
 async function tg(token, method, body) {
     const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
@@ -41,6 +40,14 @@ async function checkUserMembership(token, userId, channelId) {
     }
 }
 
+async function checkAllMembership(token, userId) {
+    for (const channel of FORCED_CHANNELS) {
+        const ok = await checkUserMembership(token, userId, channel);
+        if (!ok) return false;
+    }
+    return true;
+}
+
 export async function handleUpdate(update, env) {
     const token = env.BOT_TOKEN;
     if (!token) {
@@ -74,7 +81,7 @@ export async function handleUpdate(update, env) {
             }).catch(() => {});
 
             if (data === "check_membership") {
-                const isMember = await checkUserMembership(token, user, FORCED_CHANNEL);
+                const isMember = await checkAllMembership(token, user);
 
                 if (isMember) {
                     await sendMsg(token, chatId,
@@ -108,13 +115,13 @@ export async function handleUpdate(update, env) {
                     });
                 } else {
                     await sendMsg(token, chatId,
-                        "❌ هنوز در کانال عضو نشده‌اید!\n\nلطفاً ابتدا در کانال عضو شوید و سپس دوباره تلاش کنید.", {
+                        "❌ هنوز در تمام کانال‌ها عضو نشده‌اید!\n\nلطفاً ابتدا در کانال‌های زیر عضو شوید و سپس دوباره تلاش کنید.", {
                         reply_markup: {
                             inline_keyboard: [
-                                [{ 
-                                    text: "📢 عضویت در کانال", 
-                                    url: `https://t.me/${FORCED_CHANNEL.replace('@', '')}` 
-                                }],
+                                ...FORCED_CHANNELS.map(ch => [{
+                                    text: `📢 عضویت در ${ch}`,
+                                    url: `https://t.me/${ch.replace('@', '')}`
+                                }]),
                                 [{ 
                                     text: "✅ عضو شدم", 
                                     callback_data: "check_membership" 
@@ -131,7 +138,7 @@ export async function handleUpdate(update, env) {
         const text = message && message.text ? message.text.trim() : "";
 
         if (text === "/start") {
-            const isMember = await checkUserMembership(token, user, FORCED_CHANNEL);
+            const isMember = await checkAllMembership(token, user);
 
             if (isMember) {
                 await sendMsg(token, chatId,
@@ -168,20 +175,19 @@ export async function handleUpdate(update, env) {
                     `👋 <b>سلام!</b>
 
 ━━━━━━━━━━━━━━━━━━━━
+⚠️ برای استفاده از ربات، ابتدا باید در کانال‌های ما عضو شوید:
 
-⚠️ برای استفاده از ربات، ابتدا باید در کانال ما عضو شوید:
-
-📢 <b>کانال:</b> ${FORCED_CHANNEL}
+${FORCED_CHANNELS.map(c => `📢 ${c}`).join('\n')}
 
 ━━━━━━━━━━━━━━━━━━━━
 
 پس از عضویت، روی دکمه "✅ عضو شدم" کلیک کنید.`, {
                     reply_markup: {
                         inline_keyboard: [
-                            [{ 
-                                text: "📢 عضویت در کانال", 
-                                url: `https://t.me/${FORCED_CHANNEL.replace('@', '')}` 
-                            }],
+                            ...FORCED_CHANNELS.map(ch => [{
+                                text: `📢 عضویت در ${ch}`,
+                                url: `https://t.me/${ch.replace('@', '')}`
+                            }]),
                             [{ 
                                 text: "✅ عضو شدم", 
                                 callback_data: "check_membership" 
